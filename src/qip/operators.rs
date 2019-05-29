@@ -1,24 +1,59 @@
+extern crate num;
 use super::qubits::*;
 use super::state_ops::*;
-use crate::qip::state_ops::QubitOp::{ControlOp, MatrixOp};
-use crate::qip::qubits::Parent::Owned;
-
-type MeasuredResultReference = u32;
+use super::pipeline::*;
+use super::pipeline::MeasuredResultReference;
+use num::complex::Complex;
 
 pub trait NonUnitaryBuilder {
     // Things like measure go here
-
     fn measure(&mut self, q: Qubit) -> MeasuredResultReference;
-
 }
 
 pub trait UnitaryBuilder {
-    // Things like X, Y, Z/NOT, H, SWAP, ... go here
+    // Things like X, Y, Z, NOT, H, SWAP, ... go here
 
-    fn make_builder_with_context(&self, q: Qubit) -> Result<ConditionalContextBuilder, String>;
+    fn with_context(&self, q: Qubit) -> ConditionalContextBuilder;
 
-    fn not(&mut self, q: Qubit) -> Qubit;
-    fn not_op(&self, q: &Qubit) -> QubitOp;
+    fn mat(&mut self, q: Qubit, mat: &[Complex<f64>]) -> Qubit;
+
+    fn real_mat(&mut self, q: Qubit, mat: &[f64]) -> Qubit {
+        self.mat(q, from_reals(mat).as_slice())
+    }
+
+    fn not(&mut self, q: Qubit) -> Qubit {
+        self.x(q)
+    }
+
+    fn x(&mut self, q: Qubit) -> Qubit {
+        self.real_mat(q, &[0.0, 1.0, 1.0, 0.0])
+    }
+
+    fn y(&mut self, q: Qubit) -> Qubit {
+        self.mat(q, from_tuples(&[(0.0,0.0), (0.0, -1.0), (0.0, 0.0), (0.0, 1.0)])
+            .as_slice())
+    }
+
+    fn z(&mut self, q: Qubit) -> Qubit {
+        self.real_mat(q, &[1.0, 0.0, 0.0, -1.0])
+    }
+
+    fn hadamard(&mut self, q: Qubit) -> Qubit {
+        self.real_mat(q, &[1.0, 1.0, -1.0, 1.0])
+    }
+
+    fn swap(&mut self, qa: Qubit, qb: Qubit) -> (Qubit, Qubit) {
+        unimplemented!()
+    }
+
+    fn make_mat_op(&self, q: &Qubit, data: Vec<Complex<f64>>) -> QubitOp {
+        QubitOp::MatrixOp(q.indices.len(), data)
+    }
+
+    // Swap can be optimized so have that as an option.
+    fn make_swap_op(&self, qa: &Qubit, qb: &Qubit) -> QubitOp {
+        QubitOp::SwapOp(qa.indices.clone(), qb.indices.clone())
+    }
 }
 
 pub struct OpBuilder {
@@ -32,40 +67,29 @@ impl OpBuilder {
 }
 
 impl NonUnitaryBuilder for OpBuilder {
-    fn measure(&mut self, q: Qubit) -> u32 {
+    fn measure(&mut self, q: Qubit) -> MeasuredResultReference {
         unimplemented!()
     }
 }
 
 impl UnitaryBuilder for OpBuilder {
-    fn make_builder_with_context(&self, q: Qubit) -> Result<ConditionalContextBuilder, String> {
-        if q.indices.len() == 1 {
-            let indx = q.indices[0];
-            Result::Ok(ConditionalContextBuilder {
-                parent_builder: self,
-                conditioned_qubit: Some(q),
-                conditioned_index: indx
-            })
-        } else {
-            Result::Err(String::from("Conditional qubit must have n=1"))
+    fn with_context(&self, q: Qubit) -> ConditionalContextBuilder {
+        ConditionalContextBuilder {
+            parent_builder: self,
+            conditioned_qubit: Some(q)
         }
     }
 
-    fn not(&mut self, q: Qubit) -> Qubit {
-        let op = self.not_op(&q);
+    fn mat(&mut self, q: Qubit, mat: &[Complex<f64>]) -> Qubit {
+        let op = self.make_mat_op(&q, mat.to_vec());
         let op_fn = make_op_fn(op);
-        Qubit::merge_with_fn(vec![q], op_fn)
-    }
-
-    fn not_op(&self, q: &Qubit) -> QubitOp {
-        MatrixOp(q.indices.len(), to_complex(&[0.0, 1.0, 1.0, 0.0]))
+        Qubit::merge_with_fn(vec![q], Some(op_fn))
     }
 }
 
 pub struct ConditionalContextBuilder<'a> {
     parent_builder: &'a UnitaryBuilder,
     conditioned_qubit: Option<Qubit>,
-    conditioned_index: u64,
 }
 
 impl<'a> ConditionalContextBuilder<'a> {
@@ -75,34 +99,47 @@ impl<'a> ConditionalContextBuilder<'a> {
             None => panic!("Conditional context builder failed to populate qubit.")
         }
     }
+
+    fn get_conditional_qubit(&mut self) -> Qubit {
+        self.conditioned_qubit.take().unwrap()
+    }
+
+    fn set_conditional_qubit(&mut self, cq: Qubit) {
+        self.conditioned_qubit = Some(cq);
+    }
 }
 
 impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
-    fn make_builder_with_context(&self, q: Qubit) -> Result<ConditionalContextBuilder, String> {
-        if q.indices.len() == 1 {
-            let indx = q.indices[0];
-            Result::Ok(ConditionalContextBuilder {
-                parent_builder: self,
-                conditioned_qubit: Some(q),
-                conditioned_index: indx
-            })
-        } else {
-            Result::Err(String::from("Conditional qubit must have n=1"))
+
+    fn with_context(&self, q: Qubit) -> ConditionalContextBuilder {
+        ConditionalContextBuilder {
+            parent_builder: self,
+            conditioned_qubit: Some(q)
         }
     }
 
-    fn not(&mut self, q: Qubit) -> Qubit {
-        let op = self.not_op(&q);
+    fn mat(&mut self, q: Qubit, mat: &[Complex<f64>]) -> Qubit {
+        let op = self.make_mat_op(&q, mat.to_vec());
         let op_fn = make_op_fn(op);
-        let cq = self.conditioned_qubit.take().unwrap();
-        let q = Qubit::merge_with_fn(vec![cq, q], op_fn);
-        let (cq, q) = Qubit::split(q, vec![self.conditioned_index]);
-        self.conditioned_qubit = Some(cq);
+
+        let cq = self.get_conditional_qubit();
+        let cq_indices = cq.indices.clone();
+        let q = Qubit::merge_with_fn(vec![cq, q], Some(op_fn));
+        let (cq, q) = Qubit::split(q, cq_indices);
+
+        self.set_conditional_qubit(cq);
         q
     }
 
-    fn not_op(&self, q: &Qubit) -> QubitOp {
-        ControlOp(self.conditioned_index,
-                  Box::new(self.parent_builder.not_op(q)))
+    fn make_mat_op(&self, q: &Qubit, data: Vec<Complex<f64>>) -> QubitOp {
+        match &self.conditioned_qubit {
+            Some(cq) => QubitOp::ControlOp(cq.indices.clone(),
+                                          Box::new(self.parent_builder.make_mat_op(q, data))),
+            None => panic!("Conditional context builder failed to populate qubit.")
+        }
+    }
+
+    fn make_swap_op(&self, qa: &Qubit, qb: &Qubit) -> QubitOp {
+        unimplemented!()
     }
 }
