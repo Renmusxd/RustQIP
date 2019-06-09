@@ -1,5 +1,4 @@
 extern crate num;
-use super::pipeline::*;
 use num::complex::Complex;
 
 pub fn from_reals(data: &[f64]) -> Vec<Complex<f64>> {
