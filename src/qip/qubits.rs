@@ -1,20 +1,20 @@
-use super::pipeline::*;
-use super::state_ops::*;
-use std::rc::Rc;
-use crate::qip::qubits::Parent::{Owned, Shared};
 use std::fmt;
+use std::rc::Rc;
 
 use num::complex::Complex;
 
+use super::pipeline::*;
+use super::state_ops::*;
+
 pub enum Parent {
     Owned(Vec<Qubit>, Option<QubitOp>),
-    Shared(Rc<Qubit>)
+    Shared(Rc<Qubit>),
 }
 
 pub struct Qubit {
     pub indices: Vec<u64>,
     pub parent: Option<Parent>,
-    pub id: u64
+    pub id: u64,
 }
 
 impl Qubit {
@@ -22,7 +22,7 @@ impl Qubit {
         Qubit {
             indices,
             parent: None,
-            id
+            id,
         }
     }
 
@@ -36,8 +36,8 @@ impl Qubit {
 
         Qubit {
             indices: all_indices,
-            parent: Some(Owned(qubits, operator)),
-            id
+            parent: Some(Parent::Owned(qubits, operator)),
+            id,
         }
     }
 
@@ -50,19 +50,17 @@ impl Qubit {
 
         (Qubit {
             indices: selected_indices,
-            parent: Some(Shared(shared_parent.clone())),
-            id: ida
+            parent: Some(Parent::Shared(shared_parent.clone())),
+            id: ida,
         }, Qubit {
             indices: remaining,
-            parent: Some(Shared(shared_parent.clone())),
-            id: idb
+            parent: Some(Parent::Shared(shared_parent.clone())),
+            id: idb,
         })
     }
 }
 
-impl std::cmp::Eq for Qubit {
-
-}
+impl std::cmp::Eq for Qubit {}
 
 impl std::cmp::PartialEq for Qubit {
     fn eq(&self, other: &Qubit) -> bool {
@@ -117,7 +115,7 @@ pub trait UnitaryBuilder {
     }
 
     fn y(&mut self, q: Qubit) -> Qubit {
-        self.mat(q, from_tuples(&[(0.0,0.0), (0.0, -1.0), (0.0, 0.0), (0.0, 1.0)])
+        self.mat(q, from_tuples(&[(0.0, 0.0), (0.0, -1.0), (0.0, 0.0), (0.0, 1.0)])
             .as_slice())
     }
 
@@ -126,7 +124,8 @@ pub trait UnitaryBuilder {
     }
 
     fn hadamard(&mut self, q: Qubit) -> Qubit {
-        self.real_mat(q, &[1.0, 1.0, -1.0, 1.0])
+        let inv_sqrt = 1.0 / 2.0_f64.sqrt();
+        self.real_mat(q, &[1.0 * inv_sqrt, 1.0 * inv_sqrt, 1.0 * inv_sqrt, -1.0 * inv_sqrt])
     }
 
     fn swap(&mut self, qa: Qubit, qb: Qubit) -> (Qubit, Qubit) {
@@ -137,7 +136,7 @@ pub trait UnitaryBuilder {
     }
 
     fn make_mat_op(&self, q: &Qubit, data: Vec<Complex<f64>>) -> QubitOp {
-        QubitOp::MatrixOp(q.indices.len(), data)
+        QubitOp::MatrixOp(q.indices.clone(), data)
     }
 
     // Swap can be optimized so have that as an option.
@@ -154,14 +153,14 @@ pub trait UnitaryBuilder {
 
 pub struct OpBuilder {
     qubit_index: u64,
-    op_id: u64
+    op_id: u64,
 }
 
 impl OpBuilder {
     pub fn new() -> OpBuilder {
-        OpBuilder{
+        OpBuilder {
             qubit_index: 0,
-            op_id: 0
+            op_id: 0,
         }
     }
 
@@ -169,7 +168,7 @@ impl OpBuilder {
         let base_index = self.qubit_index;
         self.qubit_index = self.qubit_index + n;
 
-        Qubit::new(self.get_op_id(), (base_index .. self.qubit_index).collect())
+        Qubit::new(self.get_op_id(), (base_index..self.qubit_index).collect())
     }
 
     fn get_op_id(&mut self) -> u64 {
@@ -189,7 +188,7 @@ impl UnitaryBuilder for OpBuilder {
     fn with_context(&mut self, q: Qubit) -> ConditionalContextBuilder {
         ConditionalContextBuilder {
             parent_builder: self,
-            conditioned_qubit: Some(q)
+            conditioned_qubit: Some(q),
         }
     }
 
@@ -230,11 +229,10 @@ impl<'a> ConditionalContextBuilder<'a> {
 }
 
 impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
-
     fn with_context(&mut self, q: Qubit) -> ConditionalContextBuilder {
         ConditionalContextBuilder {
             parent_builder: self,
-            conditioned_qubit: Some(q)
+            conditioned_qubit: Some(q),
         }
     }
 

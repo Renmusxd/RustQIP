@@ -1,18 +1,14 @@
 extern crate num;
-use super::qubits::*;
+
+use std::collections::{BinaryHeap, VecDeque};
+
 use num::complex::Complex;
-use std::collections::{VecDeque, BinaryHeap};
+
+use super::qubits::*;
+use super::state_ops::{apply_matrices, QubitOp};
 
 pub type StateBuilder = fn(Vec<&Qubit>) -> Box<QuantumState>;
 pub type MeasuredResultReference = u32;
-
-#[derive(Debug)]
-pub enum QubitOp {
-    MatrixOp(usize, Vec<Complex<f64>>),
-    SwapOp(Vec<u64>, Vec<u64>),
-    ControlOp(Vec<u64>, Box<QubitOp>),
-}
-
 
 pub trait QuantumState {
     // Function to mutate self into the state with op applied.
@@ -21,27 +17,31 @@ pub trait QuantumState {
 
 struct LocalQuantumState {
     // A bundle with the quantum state data.
+    n: u64,
     state: Vec<Complex<f64>>,
     arena: Vec<Complex<f64>>,
 }
 
 impl LocalQuantumState {
-    fn new(n: usize) -> LocalQuantumState {
-        let range = 0..(1 >> n);
-        let cvec: Vec<Complex<f64>> = range.map(|i| Complex::<f64> {
+    fn new(n: u64) -> LocalQuantumState {
+        let mut cvec: Vec<Complex<f64>> = (0..(1 << n)).map(|_| Complex::<f64> {
             re: 0.0,
-            im: 0.0
+            im: 0.0,
         }).collect();
+        cvec[0].re = 1.0;
+
         LocalQuantumState {
+            n,
             state: cvec.clone(),
-            arena: cvec
+            arena: cvec,
         }
     }
 }
 
 impl QuantumState for LocalQuantumState {
     fn apply_op(&mut self, op: &QubitOp) {
-        // TODO add mutability code
+        apply_matrices(self.n, &vec![op], &self.state, &mut self.arena,
+                       0, 0);
         std::mem::swap(&mut self.state, &mut self.arena);
     }
 }
@@ -54,7 +54,7 @@ fn apply_op(mut s: Box<QuantumState>, op: &QubitOp) -> Box<QuantumState> {
 
 pub fn run(q: &Qubit) -> Box<QuantumState> {
     run_with_state(q, |qs| {
-        let n: usize = qs.iter().map(|q| q.indices.len()).sum();
+        let n: u64 = qs.iter().map(|q| q.indices.len() as u64).sum();
         Box::new(LocalQuantumState::new(n))
     })
 }
