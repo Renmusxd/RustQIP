@@ -7,7 +7,7 @@ use num::complex::Complex;
 use super::qubits::*;
 use super::state_ops::{apply_matrices, QubitOp};
 
-pub type StateBuilder = fn(Vec<&Qubit>) -> Box<QuantumState>;
+pub type StateBuilder<QS: QuantumState> = fn(Vec<&Qubit>) -> QS;
 pub type MeasuredResultReference = u32;
 
 pub trait QuantumState {
@@ -15,7 +15,7 @@ pub trait QuantumState {
     fn apply_op(&mut self, op: &QubitOp);
 }
 
-struct LocalQuantumState {
+pub struct LocalQuantumState {
     // A bundle with the quantum state data.
     n: u64,
     state: Vec<Complex<f64>>,
@@ -46,20 +46,19 @@ impl QuantumState for LocalQuantumState {
     }
 }
 
-fn apply_op(mut s: Box<QuantumState>, op: &QubitOp) -> Box<QuantumState> {
-    println!("Applying op: {:?}", op);
+fn apply_op<QS: QuantumState>(mut s: QS, op: &QubitOp) -> QS {
     s.apply_op(op);
     s
 }
 
-pub fn run(q: &Qubit) -> Box<QuantumState> {
+pub fn run(q: &Qubit) -> LocalQuantumState {
     run_with_state(q, |qs| {
         let n: u64 = qs.iter().map(|q| q.indices.len() as u64).sum();
-        Box::new(LocalQuantumState::new(n))
+        LocalQuantumState::new(n)
     })
 }
 
-pub fn run_with_state(q: &Qubit, state_builder: StateBuilder) -> Box<QuantumState> {
+pub fn run_with_state<QS: QuantumState>(q: &Qubit, state_builder: StateBuilder<QS>) -> QS {
     let (frontier, ops) = get_opfns_and_frontier(q);
     let initial_state = state_builder(frontier);
     ops.into_iter().fold(initial_state, apply_op)

@@ -1,5 +1,3 @@
-#![macro_use]
-extern crate bencher;
 extern crate num;
 extern crate rayon;
 
@@ -13,6 +11,7 @@ pub enum QubitOp {
     ControlOp(Vec<u64>, Box<QubitOp>),
 }
 
+/// Make a vector of complex numbers whose reals are given by `data`
 pub fn from_reals(data: &[f64]) -> Vec<Complex<f64>> {
     data.into_iter().map(|x| Complex::<f64> {
         re: x.clone(),
@@ -20,6 +19,8 @@ pub fn from_reals(data: &[f64]) -> Vec<Complex<f64>> {
     }).collect()
 }
 
+/// Make a vector of complex numbers whose reals are given by the first tuple entry in `data` and
+/// whose imaginaries are from the second.
 pub fn from_tuples(data: &[(f64, f64)]) -> Vec<Complex<f64>> {
     data.into_iter().map(|x| -> Complex<f64> {
         let (r, i) = x;
@@ -30,6 +31,14 @@ pub fn from_tuples(data: &[(f64, f64)]) -> Vec<Complex<f64>> {
     }).collect()
 }
 
+/// Set the `bit_index` bit in `num` to `value`.
+///
+/// # Example
+/// ```
+/// use qip::state_ops::set_bit;
+/// let n = set_bit(0, 1, true);
+/// assert_eq!(n, 2);
+/// ```
 pub fn set_bit(num: u64, bit_index: u64, value: bool) -> u64 {
     let v = 1 << bit_index;
     if value {
@@ -39,6 +48,14 @@ pub fn set_bit(num: u64, bit_index: u64, value: bool) -> u64 {
     }
 }
 
+/// Get the `bit_index` bit value from `num`.
+///
+/// # Example
+/// ```
+/// use qip::state_ops::get_bit;
+/// let n = get_bit(2, 1);
+/// assert_eq!(n, true);
+/// ```
 pub fn get_bit(num: u64, bit_index: u64) -> bool {
     ((num >> bit_index) & 1) != 0
 }
@@ -48,6 +65,7 @@ fn get_flat_index(nindices: u64, i: u64, j: u64) -> u64 {
     (i * mat_side) + j
 }
 
+/// If `op` were a matrix, get the value of M(i,j)
 fn get_mat_entry(nindices: u64, i: u64, j: u64, op: &QubitOp) -> Complex<f64> {
     match &op {
         QubitOp::MatrixOp(_, dat) => {
@@ -101,6 +119,7 @@ fn get_mat_entry(nindices: u64, i: u64, j: u64, op: &QubitOp) -> Complex<f64> {
     }
 }
 
+/// Get the number of indices represented by `op`
 fn num_indices(op: &QubitOp) -> usize {
     match &op {
         QubitOp::MatrixOp(indices, _) => indices.len(),
@@ -109,6 +128,7 @@ fn num_indices(op: &QubitOp) -> usize {
     }
 }
 
+/// Get the `i`th qubit index for `op`
 fn get_index(op: &QubitOp, i: usize) -> u64 {
     match &op {
         QubitOp::MatrixOp(indices, _) => indices[i],
@@ -164,6 +184,7 @@ fn multiply_matrix_entries_with_indices(n: u64, row: u64, col: u64, matrices: &V
     p
 }
 
+/// Calculate the indices for each op in `matrices` and call `multiply_matrix_entries_with_indices`
 fn multiply_matrix_entries(n: u64, row: u64, col: u64, matrices: &Vec<&QubitOp>) -> Complex<f64> {
     let mat_indices: Vec<Vec<u64>> = matrices.iter().map(|op| -> Vec<u64> {
         (0..num_indices(op)).map(|i| get_index(op, i)).collect()
@@ -172,6 +193,7 @@ fn multiply_matrix_entries(n: u64, row: u64, col: u64, matrices: &Vec<&QubitOp>)
     multiply_matrix_entries_with_indices(n, row, col, &mats_and_indices)
 }
 
+// TODO doc
 pub fn apply_matrices(n: u64, matrices: &Vec<&QubitOp>,
                       input: &Vec<Complex<f64>>, output: &mut Vec<Complex<f64>>,
                       input_offset: u64, output_offset: u64) {
@@ -224,6 +246,8 @@ pub fn apply_matrices(n: u64, matrices: &Vec<&QubitOp>,
     });
 }
 
+/// Make the full op matrix from `ops`.
+/// Not very efficient, use only for debugging.
 pub fn make_op_matrix(n: u64, ops: &Vec<&QubitOp>) -> Vec<Vec<Complex<f64>>> {
     let zeros: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     (0..1 << n).map(|i| {
@@ -239,7 +263,7 @@ pub fn make_op_matrix(n: u64, ops: &Vec<&QubitOp>) -> Vec<Vec<Complex<f64>>> {
 }
 
 #[cfg(test)]
-mod tests {
+mod state_ops_tests {
     use super::*;
     use super::QubitOp::*;
 

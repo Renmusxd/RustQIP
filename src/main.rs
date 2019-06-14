@@ -26,5 +26,5 @@ fn main() {
 
     println!("Qs: {:?}", q4);
 
-    run(&q4);
+    let out = run(&q4);
 }
