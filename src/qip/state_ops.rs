@@ -4,11 +4,38 @@ extern crate rayon;
 use num::complex::Complex;
 use rayon::prelude::*;
 
+use super::state_ops::QubitOp::ControlOp;
+use super::utils::*;
+
 #[derive(Debug)]
 pub enum QubitOp {
+    // Indices, Matrix data
     MatrixOp(Vec<u64>, Vec<Complex<f64>>),
+    // A indices, B indices
     SwapOp(Vec<u64>, Vec<u64>),
-    ControlOp(Vec<u64>, Box<QubitOp>),
+    // Control indices, Op indices, Op
+    ControlOp(Vec<u64>, Vec<u64>, Box<QubitOp>),
+}
+
+/// Make a ControlOp
+///
+/// # Example
+/// ```
+/// use qip::state_ops::make_control_op;
+/// use qip::state_ops::QubitOp::{MatrixOp, ControlOp};
+/// let op = MatrixOp(vec![1], vec![]); // fake data
+/// let cop = make_control_op(vec![0], op);
+///
+/// if let ControlOp(c_indices, o_indices, _) = cop {
+///     assert_eq!(c_indices, vec![0]);
+///     assert_eq!(o_indices, vec![1]);
+/// } else {
+///     panic!()
+/// }
+/// ```
+pub fn make_control_op(c_indices: Vec<u64>, op: QubitOp) -> QubitOp {
+    let o_indices = (0..num_indices(&op)).map(|i| get_index(&op, i)).collect();
+    ControlOp(c_indices, o_indices, Box::new(op))
 }
 
 /// Make a vector of complex numbers whose reals are given by `data`
@@ -29,40 +56,6 @@ pub fn from_tuples(data: &[(f64, f64)]) -> Vec<Complex<f64>> {
             im: i.clone(),
         }
     }).collect()
-}
-
-/// Set the `bit_index` bit in `num` to `value`.
-///
-/// # Example
-/// ```
-/// use qip::state_ops::set_bit;
-/// let n = set_bit(0, 1, true);
-/// assert_eq!(n, 2);
-/// ```
-pub fn set_bit(num: u64, bit_index: u64, value: bool) -> u64 {
-    let v = 1 << bit_index;
-    if value {
-        num | v
-    } else {
-        num & !v
-    }
-}
-
-/// Get the `bit_index` bit value from `num`.
-///
-/// # Example
-/// ```
-/// use qip::state_ops::get_bit;
-/// let n = get_bit(2, 1);
-/// assert_eq!(n, true);
-/// ```
-pub fn get_bit(num: u64, bit_index: u64) -> bool {
-    ((num >> bit_index) & 1) != 0
-}
-
-fn get_flat_index(nindices: u64, i: u64, j: u64) -> u64 {
-    let mat_side = 1 << nindices;
-    (i * mat_side) + j
 }
 
 /// If `op` were a matrix, get the value of M(i,j)
@@ -94,9 +87,8 @@ fn get_mat_entry(nindices: u64, i: u64, j: u64, op: &QubitOp) -> Complex<f64> {
                 }
             }
         }
-        QubitOp::ControlOp(cqs, op) => {
-            let num_op_indices = nindices - cqs.len() as u64;
-            let index_threshold = (1 << nindices) - (1 << num_op_indices);
+        QubitOp::ControlOp(cqs, oqs, op) => {
+            let index_threshold = (1 << nindices) - (1 << oqs.len() as u64);
             if i >= index_threshold && j >= index_threshold {
                 get_mat_entry(nindices - cqs.len() as u64,
                               i - index_threshold,
@@ -124,7 +116,7 @@ fn num_indices(op: &QubitOp) -> usize {
     match &op {
         QubitOp::MatrixOp(indices, _) => indices.len(),
         QubitOp::SwapOp(a, b) => a.len() + b.len(),
-        QubitOp::ControlOp(cs, op) => cs.len() + num_indices(op)
+        QubitOp::ControlOp(cs, os, _) => cs.len() + os.len()
     }
 }
 
@@ -139,11 +131,11 @@ fn get_index(op: &QubitOp, i: usize) -> u64 {
                 b[i - a.len()]
             }
         }
-        QubitOp::ControlOp(cs, op) => {
+        QubitOp::ControlOp(cs, os, op) => {
             if i < cs.len() {
                 cs[i]
             } else {
-                get_index(op, i - cs.len())
+                os[i - cs.len()]
             }
         }
     }
@@ -214,8 +206,7 @@ pub fn apply_matrices(n: u64, matrices: &Vec<&QubitOp>,
     let mats_and_indices = mat_indices.iter().zip(matrices.iter().cloned()).collect();
 
     // Generate output for each output row
-    output.par_iter_mut().enumerate().for_each(|entry| {
-        let (outputrow, outputloc) = entry;
+    output.par_iter_mut().enumerate().for_each(|(outputrow, outputloc)| {
         let row = output_offset + (outputrow as u64);
 
         // Get value for row and assign
@@ -399,7 +390,7 @@ mod state_ops_tests {
     #[test]
     fn test_get_index_condition() {
         let mop = MatrixOp(vec![2, 3], vec![]);
-        let op = ControlOp(vec![0, 1], Box::new(mop));
+        let op = make_control_op(vec![0, 1], mop);
         assert_eq!(num_indices(&op), 4);
         assert_eq!(get_index(&op, 0), 0);
         assert_eq!(get_index(&op, 1), 1);

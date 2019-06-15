@@ -170,7 +170,6 @@ pub trait UnitaryBuilder {
 
     /// Merge qubits using a generic state processing function.
     fn merge_with_fn(&mut self, qs: Vec<Qubit>, operator: Option<QubitOp>) -> Qubit;
-
 }
 
 /// A basic builder for unitary and non-unitary ops.
@@ -279,16 +278,14 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
 
     fn make_mat_op(&self, q: &Qubit, data: Vec<Complex<f64>>) -> QubitOp {
         match &self.conditioned_qubit {
-            Some(cq) => QubitOp::ControlOp(cq.indices.clone(),
-                                           Box::new(self.parent_builder.make_mat_op(q, data))),
+            Some(cq) => make_control_op(cq.indices.clone(), self.parent_builder.make_mat_op(q, data)),
             None => panic!("Conditional context builder failed to populate qubit.")
         }
     }
 
     fn make_swap_op(&self, qa: &Qubit, qb: &Qubit) -> QubitOp {
         match &self.conditioned_qubit {
-            Some(cq) => QubitOp::ControlOp(cq.indices.clone(),
-                                           Box::new(self.parent_builder.make_swap_op(qa, qb))),
+            Some(cq) => make_control_op(cq.indices.clone(), self.parent_builder.make_swap_op(qa, qb)),
             None => panic!("Conditional context builder failed to populate qubit.")
         }
     }

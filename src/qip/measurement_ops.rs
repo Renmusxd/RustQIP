@@ -2,10 +2,11 @@ extern crate num;
 extern crate rand;
 extern crate rayon;
 
+use std::cmp::{max, min};
+
 use num::complex::Complex;
-use rayon::prelude::*;
 use rand::prelude::*;
-use std::cmp::{min, max};
+use rayon::prelude::*;
 
 /// Get total magnitude of state.
 fn prob_magnitude(input: &Vec<Complex<f64>>) -> f64 {
@@ -39,15 +40,14 @@ fn prob_magnitude(input: &Vec<Complex<f64>>) -> f64 {
 /// assert_eq!(p, 1.0);
 /// ```
 pub fn measure_prob(n: u64, measured: u64, indices: &Vec<u64>, input: &Vec<Complex<f64>>, input_offset: u64) -> f64 {
-    let template: u64 = indices.iter().cloned().enumerate().map(|item| -> u64 {
-        let (i, index) = item;
+    let template: u64 = indices.iter().cloned().enumerate().map(|(i, index)| -> u64 {
         let sel_bit = (measured >> i as u64) & 1;
         sel_bit << index
     }).sum();
-    let remaining_indices: Vec<u64> = (0 .. n).filter(|i| !indices.contains(i)).collect();
+    let remaining_indices: Vec<u64> = (0..n).filter(|i| !indices.contains(i)).collect();
 
     // No parallel iterators available for u64 ranges.
-    (0 .. 1 << n - indices.len() as u64).map(|remaining_index_bits: u64| -> f64 {
+    (0..1 << n - indices.len() as u64).map(|remaining_index_bits: u64| -> f64 {
         let tmp_index: u64 = remaining_indices.iter().clone().enumerate().map(|item| -> u64 {
             let (i, index) = item;
             let sel_bit = (remaining_index_bits >> i as u64) & 1;
@@ -69,7 +69,7 @@ pub fn measure_prob(n: u64, measured: u64, indices: &Vec<u64>, input: &Vec<Compl
 /// Sample from qubits at `indices` and return bits as u64 in order given by `indices`. See
 /// `measure_prob` for details.
 fn soft_measure(n: u64, indices: &Vec<u64>, input: &Vec<Complex<f64>>, input_offset: u64) -> u64 {
-    let mut r= rand::random::<f64>() *
+    let mut r = rand::random::<f64>() *
         if input.len() < (1 << n) as usize {
             prob_magnitude(input)
         } else {
@@ -83,9 +83,8 @@ fn soft_measure(n: u64, indices: &Vec<u64>, input: &Vec<Complex<f64>>, input_off
             break;
         }
     }
-    indices.iter().cloned().enumerate().map(|item| -> u64 {
-        let (i, index) = item;
-        let sel_bit = (measured_indx >> index) & 1 ;
+    indices.iter().cloned().enumerate().map(|(i, index)| -> u64 {
+        let sel_bit = (measured_indx >> index) & 1;
         sel_bit << i as u64
     }).sum()
 }
@@ -115,35 +114,44 @@ pub fn measure_state(n: u64, indices: &Vec<u64>, measured: u64, measured_prob: f
         let row_mask: u64 = indices.iter().map(|index| {
             1 << *index
         }).sum();
-        let measured_mask: u64 = indices.iter().enumerate().map(|item| {
-            let (i, index) = item;
+        let measured_mask: u64 = indices.iter().enumerate().map(|(i, index)| {
             let sel_bit = (measured >> i as u64) & 1;
             sel_bit << index
         }).sum();
 
-        let lower = max(input_offset, output_offset) - output_offset;
+        let lower = max(input_offset, output_offset);
         let upper = min(input_offset + input.len() as u64,
-                             output_offset + output.len() as u64) - output_offset;
-        output[lower as usize .. upper as usize].par_iter_mut().enumerate().for_each(|item| {
-            let (i, out) = item;
-            let i = i as u64;
-            let row = i + output_offset;
-            if ((row & row_mask) ^ measured_mask) != 0 {
-                *out = Complex::<f64> {
-                    re: 0.0,
-                    im: 0.0
+                        output_offset + output.len() as u64);
+        let input_lower = (lower - input_offset) as usize;
+        let input_upper = (upper - input_offset) as usize;
+        let output_lower = (lower - output_offset) as usize;
+        let output_upper = (upper - output_offset) as usize;
+        let input_iter = input[input_lower..input_upper].par_iter();
+        let output_iter = output[output_lower..output_upper].par_iter_mut();
+        input_iter.zip(output_iter).enumerate().for_each(
+            |(i, (input, output))| {
+                // Calculate the actual row we are on:
+                let row = i as u64 + lower;
+                if ((row & row_mask) ^ measured_mask) != 0 {
+                    // This is not a valid measurement, zero out the entry.
+                    *output = Complex::<f64> {
+                        re: 0.0,
+                        im: 0.0,
+                    }
+                } else {
+                    // Otherwise scale the entry.
+                    *output = (*input) * p_mult;
                 }
-            } else {
-                *out = input[(row - input_offset) as usize] * p_mult;
             }
-        });
+        );
     }
 }
 
 #[cfg(test)]
 mod measurement_tests {
-    use super::*;
     use crate::state_ops::from_reals;
+
+    use super::*;
 
     #[test]
     fn test_measure_state() {
@@ -156,7 +164,7 @@ mod measurement_tests {
         let mut output = input.clone();
         measure_state(n, &vec![0], m, p, &input, &mut output, 0, 0);
 
-        let half: f64 = 1.0/2.0;
+        let half: f64 = 1.0 / 2.0;
         assert_eq!(output, from_reals(&vec![half.sqrt(), 0.0, half.sqrt(), 0.0]));
     }
 
@@ -171,8 +179,7 @@ mod measurement_tests {
         let mut output = input.clone();
         measure_state(n, &vec![0], m, p, &input, &mut output, 0, 0);
 
-        let half: f64 = 1.0/2.0;
+        let half: f64 = 1.0 / 2.0;
         assert_eq!(output, from_reals(&vec![0.0, half.sqrt(), 0.0, half.sqrt()]));
     }
-
 }

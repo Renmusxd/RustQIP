@@ -30,7 +30,7 @@ fn bench_cidentity(b: &mut Bencher) {
     let n = 3;
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
-    let op = ControlOp((0..n - 1).collect(), Box::new(MatrixOp(vec![n - 1], mat)));
+    let op = make_control_op((0..n - 1).collect(), MatrixOp(vec![n - 1], mat));
 
     let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
@@ -62,7 +62,7 @@ fn bench_cidentity_larger(b: &mut Bencher) {
     let n = 8;
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
-    let op = ControlOp((0..n - 1).collect(), Box::new(MatrixOp(vec![n - 1], mat)));
+    let op = make_control_op((0..n - 1).collect(), MatrixOp(vec![n - 1], mat));
 
     let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
@@ -75,7 +75,7 @@ fn bench_cidentity_giant(b: &mut Bencher) {
     let n = 16;
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
-    let op = ControlOp(vec![0], Box::new(MatrixOp(vec![n - 1], mat)));
+    let op = make_control_op(vec![0], MatrixOp(vec![n - 1], mat));
 
     let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
