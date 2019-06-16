@@ -4,8 +4,11 @@ extern crate rayon;
 use num::complex::Complex;
 use rayon::prelude::*;
 
-use super::state_ops::QubitOp::ControlOp;
+use super::state_ops::QubitOp::*;
+use super::qubit_iterators::{ControlledOpIterator, SwapOpIterator};
 use super::utils::*;
+use crate::qubit_iterators::MatrixOpIterator;
+pub const PARALLEL_THRESHOLD: u64 = 12;
 
 #[derive(Debug)]
 pub enum QubitOp {
@@ -33,9 +36,17 @@ pub enum QubitOp {
 ///     panic!()
 /// }
 /// ```
-pub fn make_control_op(c_indices: Vec<u64>, op: QubitOp) -> QubitOp {
-    let o_indices = (0..num_indices(&op)).map(|i| get_index(&op, i)).collect();
-    ControlOp(c_indices, o_indices, Box::new(op))
+pub fn make_control_op(mut c_indices: Vec<u64>, op: QubitOp) -> QubitOp {
+    match op {
+        ControlOp(oc_indices, oo_indices, op) => {
+            c_indices.extend(oc_indices);
+            ControlOp(c_indices, oo_indices, op)
+        }
+        op => {
+            let o_indices = (0..num_indices(&op)).map(|i| get_index(&op, i)).collect();
+            ControlOp(c_indices, o_indices, Box::new(op))
+        }
+    }
 }
 
 /// Make a vector of complex numbers whose reals are given by `data`
@@ -58,80 +69,27 @@ pub fn from_tuples(data: &[(f64, f64)]) -> Vec<Complex<f64>> {
     }).collect()
 }
 
-/// If `op` were a matrix, get the value of M(i,j)
-fn get_mat_entry(nindices: u64, i: u64, j: u64, op: &QubitOp) -> Complex<f64> {
-    match &op {
-        QubitOp::MatrixOp(_, dat) => {
-            let flat_index = get_flat_index(nindices, i, j) as usize;
-            dat[flat_index]
-        }
-        QubitOp::SwapOp(_, _) => {
-            let n = nindices >> 1;
-            let lower_mask: u64 = !(std::u64::MAX << n);
-
-            let row_select = i & lower_mask;
-            let row_criteria = row_select == (j >> n);
-
-            let col_select = j & lower_mask;
-            let col_criteria = col_select == (i >> n);
-
-            if row_criteria && col_criteria {
-                Complex::<f64> {
-                    re: 1.0,
-                    im: 0.0,
-                }
-            } else {
-                Complex::<f64> {
-                    re: 0.0,
-                    im: 0.0,
-                }
-            }
-        }
-        QubitOp::ControlOp(cqs, oqs, op) => {
-            let index_threshold = (1 << nindices) - (1 << oqs.len() as u64);
-            if i >= index_threshold && j >= index_threshold {
-                get_mat_entry(nindices - cqs.len() as u64,
-                              i - index_threshold,
-                              j - index_threshold,
-                              op)
-            } else {
-                if i == j {
-                    Complex::<f64> {
-                        re: 1.0,
-                        im: 0.0,
-                    }
-                } else {
-                    Complex::<f64> {
-                        re: 0.0,
-                        im: 0.0,
-                    }
-                }
-            }
-        }
-    }
-}
-
 /// Get the number of indices represented by `op`
-fn num_indices(op: &QubitOp) -> usize {
+pub fn num_indices(op: &QubitOp) -> usize {
     match &op {
-        QubitOp::MatrixOp(indices, _) => indices.len(),
-        QubitOp::SwapOp(a, b) => a.len() + b.len(),
-        QubitOp::ControlOp(cs, os, _) => cs.len() + os.len()
+        MatrixOp(indices, _) => indices.len(),
+        SwapOp(a, b) => a.len() + b.len(),
+        ControlOp(cs, os, _) => cs.len() + os.len()
     }
 }
 
 /// Get the `i`th qubit index for `op`
-fn get_index(op: &QubitOp, i: usize) -> u64 {
+pub fn get_index(op: &QubitOp, i: usize) -> u64 {
     match &op {
-        QubitOp::MatrixOp(indices, _) => indices[i],
-        QubitOp::SwapOp(a, b) => {
+        MatrixOp(indices, _) => indices[i],
+        SwapOp(a, b) => {
             if i < a.len() {
                 a[i]
             } else {
                 b[i - a.len()]
             }
         }
-        QubitOp::ControlOp(cs, os, op) => {
+        ControlOp(cs, os, op) => {
             if i < cs.len() {
                 cs[i]
             } else {
@@ -141,105 +99,125 @@ fn get_index(op: &QubitOp, i: usize) -> u64 {
     }
 }
 
-/// Multiply the matrix entries
-/// This acts the same as kron product between all the matrices with ones(2^m, 2^m) occupying
-/// the space of all missing indices m = n - len(all_indices).
-/// This function allows the op indices to be passed in manually to reduce recomputation.
-fn multiply_matrix_entries_with_indices(n: u64, row: u64, col: u64, matrices: &Vec<(&Vec<u64>, &QubitOp)>) -> Complex<f64> {
-    let mut p = Complex::<f64> {
-        re: 1.0,
-        im: 0.0,
-    };
-    for i in 0..matrices.len() {
-        let (indices, mat) = &matrices[i];
-        let nindices = indices.len() as u64;
-
-        let (x, y) = (0..nindices).fold((0, 0), |acc, j| -> (u64, u64) {
-            let (x, y) = acc;
-            let indx = indices[j as usize];
-            let rowbit = get_bit(row, n - 1 - indx);
-            let colbit = get_bit(col, n - 1 - indx);
-            let x = set_bit(x, nindices - 1 - j, rowbit);
-            let y = set_bit(y, nindices - 1 - j, colbit);
-            (x, y)
-        });
-
-        let mat_entry = get_mat_entry(nindices, x, y, mat);
-        if mat_entry.re == 0.0 && mat_entry.im == 0.0 {
-            return Complex::<f64> {
-                re: 0.0,
-                im: 0.0,
-            };
-        }
-        p = p * mat_entry;
-    }
-    p
+/// Given the full matrix `row` and `col`, find the given op's row and column using the full `n`,
+/// the op's `nindices`, the op's `indices'.
+pub fn select_matrix_coords(n: u64, nindices: u64, indices: &Vec<u64>, row: u64, col: u64) -> (u64, u64) {
+    (0..nindices).fold((0, 0), |acc, j| -> (u64, u64) {
+        let (x, y) = acc;
+        let indx = indices[j as usize];
+        let rowbit = get_bit(row, n - 1 - indx);
+        let colbit = get_bit(col, n - 1 - indx);
+        let x = set_bit(x, nindices - 1 - j, rowbit);
+        let y = set_bit(y, nindices - 1 - j, colbit);
+        (x, y)
+    })
 }
 
-/// Calculate the indices for each op in `matrices` and call `multiply_matrix_entries_with_indices`
-fn multiply_matrix_entries(n: u64, row: u64, col: u64, matrices: &Vec<&QubitOp>) -> Complex<f64> {
-    let mat_indices: Vec<Vec<u64>> = matrices.iter().map(|op| -> Vec<u64> {
-        (0..num_indices(op)).map(|i| get_index(op, i)).collect()
-    }).collect();
-    let mats_and_indices = mat_indices.iter().zip(matrices.iter().cloned()).collect();
-    multiply_matrix_entries_with_indices(n, row, col, &mats_and_indices)
+pub fn select_matrix_row(n: u64, nindices: u64, indices: &Vec<u64>, row: u64) -> u64 {
+    (0..nindices).fold(0, |x, j| -> u64 {
+        let indx = indices[j as usize];
+        let rowbit = get_bit(row, n - 1 - indx);
+        let x = set_bit(x, nindices - 1 - j, rowbit);
+        x
+    })
+}
+
+pub fn select_matrix_col(n: u64, nindices: u64, indices: &Vec<u64>, col: u64) -> u64 {
+    (0..nindices).fold(0, |y, j| -> u64 {
+        let indx = indices[j as usize];
+        let colbit = get_bit(col, n - 1 - indx);
+        let y = set_bit(y, nindices - 1 - j, colbit);
+        y
+    })
+}
+
+/// Using the function `f` which maps from a column and `row` to a complex value for the op matrix,
+/// sums for all nonzero entries for a given `op` more efficiently than trying each column between
+/// 0 and 2^nindices.
+/// This really needs to be cleaned up, but runs in a tight loop. This makes it hard since Box
+/// is unfeasible and the iterator types aren't the same size.
+fn sum_for_op_cols(nindices: u64, row: u64, op: &QubitOp, f: &Fn((u64, Complex<f64>)) -> Complex<f64>) -> Complex<f64> {
+    match op {
+        MatrixOp(_,data) => MatrixOpIterator::new(row, nindices, data).map(f).sum(),
+        SwapOp(_, _) => SwapOpIterator::new(row, nindices).map(f).sum(),
+        ControlOp(c_indices, o_indices, op) => {
+            let n_control_indices = c_indices.len() as u64;
+            let n_op_indices = o_indices.len() as u64;
+            // Get reference to boxed op
+            match &**op {
+                MatrixOp(_, data) => {
+                    let iter_builder = |row: u64| MatrixOpIterator::new(row, n_op_indices, data);
+                    let it = ControlledOpIterator::new(row, n_control_indices, n_op_indices, iter_builder);
+                    it.map(f).sum()
+                }
+                SwapOp(_, _) => {
+                    let iter_builder = |row: u64| SwapOpIterator::new(row, nindices);
+                    let it = ControlledOpIterator::new(row, n_control_indices, n_op_indices, iter_builder);
+                    it.map(f).sum()
+                }
+                ControlOp(_, _, _) => {
+                    unimplemented!()
+                }
+            }
+        }
+    }
 }
 
 // TODO doc
-pub fn apply_matrices(n: u64, matrices: &Vec<&QubitOp>,
-                      input: &Vec<Complex<f64>>, output: &mut Vec<Complex<f64>>,
-                      input_offset: u64, output_offset: u64) {
-    let mut flat_indices: Vec<u64> = matrices.iter().map(|item| -> Vec<u64> {
-        (0..num_indices(item)).map(|i| -> u64 {
-            let indx = get_index(item, i);
-            assert!(indx < n);
-            indx
-        }).collect()
-    }).flatten().collect();
+pub fn apply_op(n: u64, op: &QubitOp,
+               input: &Vec<Complex<f64>>, output: &mut Vec<Complex<f64>>,
+               input_offset: u64, output_offset: u64, multi_core: bool) {
+    let mat_indices: Vec<u64> = (0 .. num_indices(op)).map(|i| get_index(op, i)).collect();
+    let mut flat_indices = mat_indices.clone();
     flat_indices.sort();
     let flat_indices = flat_indices;
-    let nindices: u64 = flat_indices.len() as u64;
+    let nindices = mat_indices.len() as u64;
 
-    let mat_indices: Vec<Vec<u64>> = matrices.iter().map(|op| -> Vec<u64> {
-        (0..num_indices(op)).map(|i| get_index(op, i)).collect()
-    }).collect();
-    let mats_and_indices = mat_indices.iter().zip(matrices.iter().cloned()).collect();
-
-    // Generate output for each output row
-    output.par_iter_mut().enumerate().for_each(|(outputrow, outputloc)| {
+    let row_fn  = |(outputrow, outputloc): (usize, &mut Complex<f64>)| {
         let row = output_offset + (outputrow as u64);
-
-        // Get value for row and assign
-        *outputloc = (0..1 << nindices).map(|i| -> Complex<f64> {
+        let matrow = select_matrix_row(n, nindices, &mat_indices, row);
+        // Maps from a op matrix column (from 0 to 2^nindices) to the value at that column
+        // for the row calculated above.
+        let f = |item: (u64, Complex<f64>)| -> Complex<f64> {
+            let (i, val) = item;
             let colbits = (0..nindices).fold(row as u64, |acc, j| {
                 let indx = flat_indices[j as usize];
                 let bit_val = get_bit(i, nindices - 1 - j);
                 set_bit(acc, n - 1 - indx, bit_val)
             });
             if colbits < input_offset {
-                return Complex::<f64> {
+                Complex::<f64> {
                     re: 0.0,
                     im: 0.0,
-                };
+                }
+            } else {
+                let vecrow = colbits - input_offset;
+                if vecrow >= input.len() as u64 {
+                    Complex::<f64> {
+                        re: 0.0,
+                        im: 0.0,
+                    }
+                } else {
+                    val * input[vecrow as usize]
+                }
             }
-            let vecrow = colbits - input_offset;
+        };
 
-            if vecrow >= input.len() as u64 {
-                return Complex::<f64> {
-                    re: 0.0,
-                    im: 0.0,
-                };
-            }
+        // Get value for row and assign
+        *outputloc = sum_for_op_cols(nindices, matrow, op, &f);
+    };
 
-            let p = multiply_matrix_entries_with_indices(n, row, colbits, &mats_and_indices);
-            p * input[vecrow as usize]
-        }).sum();
-    });
+    // Generate output for each output row
+    if multi_core {
+        output.par_iter_mut().enumerate().for_each(row_fn);
+    } else {
+        output.iter_mut().enumerate().for_each(row_fn);
+    }
 }
 
 /// Make the full op matrix from `ops`.
 /// Not very efficient, use only for debugging.
-pub fn make_op_matrix(n: u64, ops: &Vec<&QubitOp>) -> Vec<Vec<Complex<f64>>> {
+pub fn make_op_matrix(n: u64, op: &QubitOp) -> Vec<Vec<Complex<f64>>> {
     let zeros: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     (0..1 << n).map(|i| {
         let mut input = from_reals(&zeros);
@@ -248,7 +226,7 @@ pub fn make_op_matrix(n: u64, ops: &Vec<&QubitOp>) -> Vec<Vec<Complex<f64>>> {
             re: 1.0,
             im: 0.0,
         };
-        apply_matrices(n, ops, &input, &mut output, 0, 0);
+        apply_op(n, op, &input, &mut output, 0, 0, n > PARALLEL_THRESHOLD);
         output.clone()
     }).collect()
 }
@@ -269,114 +247,6 @@ mod state_ops_tests {
         assert_eq!(set_bit(1, 0, true), 1);
         assert_eq!(set_bit(1, 1, true), 3);
     }
-
-    #[test]
-    fn test_multiply_matrix_entries_single() {
-        let mut mat_vec = vec![];
-        let mat = from_reals(&vec![1.0, 2.0, 3.0, 4.0]);
-        mat_vec.push(MatrixOp(vec![0], mat));
-
-        let mat_ref = mat_vec.iter().collect();
-
-        assert_eq!(multiply_matrix_entries(1, 0, 0, &mat_ref), Complex::<f64> {
-            re: 1.0,
-            im: 0.0,
-        });
-
-        assert_eq!(multiply_matrix_entries(1, 0, 1, &mat_ref), Complex::<f64> {
-            re: 2.0,
-            im: 0.0,
-        });
-
-        assert_eq!(multiply_matrix_entries(1, 1, 0, &mat_ref), Complex::<f64> {
-            re: 3.0,
-            im: 0.0,
-        });
-
-        assert_eq!(multiply_matrix_entries(1, 1, 1, &mat_ref), Complex::<f64> {
-            re: 4.0,
-            im: 0.0,
-        });
-    }
-
-    #[test]
-    fn test_multiply_matrix_entries_multi() {
-        let mut mat_vec = vec![];
-        let mat = from_reals(&vec![1.0, 2.0, 3.0, 4.0]);
-        mat_vec.push(MatrixOp(vec![0], mat));
-
-        let mat = from_reals(&vec![1.0, 10.0, 100.0, 1000.0]);
-        let mults = mat.clone();
-        mat_vec.push(MatrixOp(vec![1], mat));
-
-        let mat_ref = mat_vec.iter().collect();
-
-        for i in 0..2 {
-            for j in 0..2 {
-                let mult = mults[get_flat_index(1, i, j) as usize].re;
-
-                assert_eq!(multiply_matrix_entries(2, 0 + i, 0 + j, &mat_ref), Complex::<f64> {
-                    re: 1.0 * mult,
-                    im: 0.0,
-                });
-
-                assert_eq!(multiply_matrix_entries(2, 0 + i, 2 + j, &mat_ref), Complex::<f64> {
-                    re: 2.0 * mult,
-                    im: 0.0,
-                });
-
-                assert_eq!(multiply_matrix_entries(2, 2 + i, 0 + j, &mat_ref), Complex::<f64> {
-                    re: 3.0 * mult,
-                    im: 0.0,
-                });
-
-                assert_eq!(multiply_matrix_entries(2, 2 + i, 2 + j, &mat_ref), Complex::<f64> {
-                    re: 4.0 * mult,
-                    im: 0.0,
-                });
-            }
-        }
-    }
-
-    #[test]
-    fn test_multiply_matrix_entries_multi_rev() {
-        let mut mat_vec = vec![];
-        let mat = from_reals(&vec![1.0, 10.0, 100.0, 1000.0]);
-        let mults = mat.clone();
-        mat_vec.push(MatrixOp(vec![1], mat));
-
-        let mat = from_reals(&vec![1.0, 2.0, 3.0, 4.0]);
-        mat_vec.push(MatrixOp(vec![0], mat));
-
-        let mat_ref = mat_vec.iter().collect();
-
-        for i in 0..2 {
-            for j in 0..2 {
-                let mult = mults[get_flat_index(1, i, j) as usize].re;
-
-                assert_eq!(multiply_matrix_entries(2, 0 + i, 0 + j, &mat_ref), Complex::<f64> {
-                    re: 1.0 * mult,
-                    im: 0.0,
-                });
-
-                assert_eq!(multiply_matrix_entries(2, 0 + i, 2 + j, &mat_ref), Complex::<f64> {
-                    re: 2.0 * mult,
-                    im: 0.0,
-                });
-
-                assert_eq!(multiply_matrix_entries(2, 2 + i, 0 + j, &mat_ref), Complex::<f64> {
-                    re: 3.0 * mult,
-                    im: 0.0,
-                });
-
-                assert_eq!(multiply_matrix_entries(2, 2 + i, 2 + j, &mat_ref), Complex::<f64> {
-                    re: 4.0 * mult,
-                    im: 0.0,
-                });
-            }
-        }
-    }
-
 
     #[test]
     fn test_get_index_simple() {
@@ -413,7 +283,7 @@ mod state_ops_tests {
         let op = MatrixOp(vec![0], from_reals(&vec![1.0, 0.0, 0.0, 1.0]));
         let input = from_reals(&vec![1.0, 0.0]);
         let mut output = from_reals(&vec![0.0, 0.0]);
-        apply_matrices(1, &vec![&op], &input, &mut output, 0, 0);
+        apply_op(1, &op, &input, &mut output, 0, 0, false);
 
         assert_eq!(input, output);
     }
@@ -423,7 +293,7 @@ mod state_ops_tests {
         let op = MatrixOp(vec![0], from_reals(&vec![0.0, 1.0, 1.0, 0.0]));
         let mut input = from_reals(&vec![1.0, 0.0]);
         let mut output = from_reals(&vec![0.0, 0.0]);
-        apply_matrices(1, &vec![&op], &input, &mut output, 0, 0);
+        apply_op(1, &op, &input, &mut output, 0, 0, false);
 
         input.reverse();
         assert_eq!(input, output);
@@ -434,14 +304,14 @@ mod state_ops_tests {
         let op = MatrixOp(vec![0], from_reals(&vec![0.0, 1.0, 1.0, 0.0]));
         let input = from_reals(&vec![1.0, 0.0, 0.0, 0.0]);
         let mut output = from_reals(&vec![0.0, 0.0, 0.0, 0.0]);
-        apply_matrices(2, &vec![&op], &input, &mut output, 0, 0);
+        apply_op(2, &op, &input, &mut output, 0, 0, false);
 
         let expected = from_reals(&vec![0.0, 0.0, 1.0, 0.0]);
         assert_eq!(expected, output);
 
         let op = MatrixOp(vec![1], from_reals(&vec![0.0, 1.0, 1.0, 0.0]));
         let mut output = from_reals(&vec![0.0, 0.0, 0.0, 0.0]);
-        apply_matrices(2, &vec![&op], &input, &mut output, 0, 0);
+        apply_op(2, &op, &input, &mut output, 0, 0, false);
 
         let expected = from_reals(&vec![0.0, 1.0, 0.0, 0.0]);
         assert_eq!(expected, output);

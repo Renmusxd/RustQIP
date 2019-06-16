@@ -7,8 +7,8 @@ fn main() {
     let mut builder = qip::qubits::OpBuilder::new();
 
     let q1 = builder.qubit(1);
-    let q2 = builder.qubit(5);
-    let q3 = builder.qubit(5);
+    let q2 = builder.qubit(13);
+    let q3 = builder.qubit(13);
 
     let q1 = builder.hadamard(q1);
 

@@ -5,7 +5,7 @@ use std::collections::{BinaryHeap, VecDeque};
 use num::complex::Complex;
 
 use super::qubits::*;
-use super::state_ops::{apply_matrices, QubitOp};
+use super::state_ops::*;
 
 pub type StateBuilder<QS: QuantumState> = fn(Vec<&Qubit>) -> QS;
 pub type MeasuredResultReference = u32;
@@ -40,13 +40,12 @@ impl LocalQuantumState {
 
 impl QuantumState for LocalQuantumState {
     fn apply_op(&mut self, op: &QubitOp) {
-        apply_matrices(self.n, &vec![op], &self.state, &mut self.arena,
-                       0, 0);
+        apply_op(self.n, op, &self.state, &mut self.arena, 0, 0, self.n > PARALLEL_THRESHOLD);
         std::mem::swap(&mut self.state, &mut self.arena);
     }
 }
 
-fn apply_op<QS: QuantumState>(mut s: QS, op: &QubitOp) -> QS {
+fn fold_apply_op<QS: QuantumState>(mut s: QS, op: &QubitOp) -> QS {
     s.apply_op(op);
     s
 }
@@ -61,7 +60,7 @@ pub fn run(q: &Qubit) -> LocalQuantumState {
 pub fn run_with_state<QS: QuantumState>(q: &Qubit, state_builder: StateBuilder<QS>) -> QS {
     let (frontier, ops) = get_opfns_and_frontier(q);
     let initial_state = state_builder(frontier);
-    ops.into_iter().fold(initial_state, apply_op)
+    ops.into_iter().fold(initial_state, fold_apply_op)
 }
 
 fn get_opfns_and_frontier(q: &Qubit) -> (Vec<&Qubit>, Vec<&QubitOp>) {
