@@ -19,30 +19,42 @@ fn prob_magnitude(input: &Vec<Complex<f64>>) -> f64 {
 /// actual index of the lowest indexed entry in `input` in case it's split across multiple vectors
 /// (as for distributed computation)
 ///
-/// # Examples
+/// Keep in mind that qubits are big-endian to match kron product standards.
+/// |abc> means q0=a, q1=b, q2=c
 ///
+/// # Examples
 /// ```
 /// use qip::state_ops::from_reals;
 /// use qip::measurement_ops::measure_prob;
-/// // Make the state |10>, index 0 is always |0> and index 1 is always |1>
-/// // test that 0,1 is always |2> (or in other words |1,0>)
+///
+/// // Make the state |10>, index 0 is always |1> and index 1 is always |0>
 /// let input = from_reals(&vec![0.0, 0.0, 1.0, 0.0]);
-/// let p = measure_prob(2, 2, &vec![0, 1], &input, 0);
+///
+/// let p = measure_prob(2, 0, &vec![0], &input, 0);
+/// assert_eq!(p, 0.0);
+/// let p = measure_prob(2, 1, &vec![0], &input, 0);
 /// assert_eq!(p, 1.0);
 /// ```
 /// ```
 /// use qip::state_ops::from_reals;
 /// use qip::measurement_ops::measure_prob;
-/// // Make the state |10>, index 0 is always |0> and index 1 is always |1>
-/// // test that 1,0 is always |1> (or in other words |0,1>)
+/// // Make the state |10>, index 0 is always |1> and index 1 is always |0>
 /// let input = from_reals(&vec![0.0, 0.0, 1.0, 0.0]);
-/// let p = measure_prob(2, 1, &vec![1, 0], &input, 0);
+/// let p = measure_prob(2, 1, &vec![0, 1], &input, 0);
+/// assert_eq!(p, 1.0);
+/// ```
+/// ```
+/// use qip::state_ops::from_reals;
+/// use qip::measurement_ops::measure_prob;
+/// // Make the state |10>, index 0 is always |1> and index 1 is always |0>
+/// let input = from_reals(&vec![0.0, 0.0, 1.0, 0.0]);
+/// let p = measure_prob(2, 2, &vec![1, 0], &input, 0);
 /// assert_eq!(p, 1.0);
 /// ```
 pub fn measure_prob(n: u64, measured: u64, indices: &Vec<u64>, input: &Vec<Complex<f64>>, input_offset: u64) -> f64 {
     let template: u64 = indices.iter().cloned().enumerate().map(|(i, index)| -> u64 {
         let sel_bit = (measured >> i as u64) & 1;
-        sel_bit << index
+        sel_bit << (n - 1 - index)
     }).sum();
     let remaining_indices: Vec<u64> = (0..n).filter(|i| !indices.contains(i)).collect();
 
@@ -51,7 +63,7 @@ pub fn measure_prob(n: u64, measured: u64, indices: &Vec<u64>, input: &Vec<Compl
         let tmp_index: u64 = remaining_indices.iter().clone().enumerate().map(|item| -> u64 {
             let (i, index) = item;
             let sel_bit = (remaining_index_bits >> i as u64) & 1;
-            sel_bit << index
+            sel_bit << (n - 1 - index)
         }).sum();
         let index = tmp_index + template;
         if index < input_offset {
@@ -68,13 +80,30 @@ pub fn measure_prob(n: u64, measured: u64, indices: &Vec<u64>, input: &Vec<Compl
 /// Sample a measurement from a state `input`.
 /// Sample from qubits at `indices` and return bits as u64 in order given by `indices`. See
 /// `measure_prob` for details.
-fn soft_measure(n: u64, indices: &Vec<u64>, input: &Vec<Complex<f64>>, input_offset: u64) -> u64 {
+///
+/// Keep in mind that qubits are big-endian to match kron product standards.
+/// |abc> means q0=a, q1=b, q2=c
+/// /// # Examples
+/// ```
+/// use qip::state_ops::from_reals;
+/// use qip::measurement_ops::soft_measure;
+///
+/// // Make the state |10>, index 0 is always |1> and index 1 is always |0>
+/// let input = from_reals(&vec![0.0, 0.0, 1.0, 0.0]);
+///
+/// let m = soft_measure(2, &vec![0], &input, 0);
+/// assert_eq!(m, 1);
+/// let m = soft_measure(2, &vec![1], &input, 0);
+/// assert_eq!(m, 0);
+/// ```
+pub fn soft_measure(n: u64, indices: &Vec<u64>, input: &Vec<Complex<f64>>, input_offset: u64) -> u64 {
     let mut r = rand::random::<f64>() *
         if input.len() < (1 << n) as usize {
             prob_magnitude(input)
         } else {
             1.0
         };
+    println!("r: {:?}", r);
     let mut measured_indx = 0;
     for (i, c) in input.iter().enumerate() {
         r -= c.norm_sqr();
@@ -84,7 +113,7 @@ fn soft_measure(n: u64, indices: &Vec<u64>, input: &Vec<Complex<f64>>, input_off
         }
     }
     indices.iter().cloned().enumerate().map(|(i, index)| -> u64 {
-        let sel_bit = (measured_indx >> index) & 1;
+        let sel_bit = (measured_indx >> (n - 1 - index)) & 1;
         sel_bit << i as u64
     }).sum()
 }
@@ -112,11 +141,11 @@ pub fn measure_state(n: u64, indices: &Vec<u64>, measured: u64, measured_prob: f
         let p_mult = (1.0 / p).sqrt();
 
         let row_mask: u64 = indices.iter().map(|index| {
-            1 << *index
+            1 << (n - 1 - *index)
         }).sum();
         let measured_mask: u64 = indices.iter().enumerate().map(|(i, index)| {
             let sel_bit = (measured >> i as u64) & 1;
-            sel_bit << index
+            sel_bit << (n - 1 - index)
         }).sum();
 
         let lower = max(input_offset, output_offset);
@@ -165,7 +194,7 @@ mod measurement_tests {
         measure_state(n, &vec![0], m, p, &input, &mut output, 0, 0);
 
         let half: f64 = 1.0 / 2.0;
-        assert_eq!(output, from_reals(&vec![half.sqrt(), 0.0, half.sqrt(), 0.0]));
+        assert_eq!(output, from_reals(&vec![half.sqrt(), half.sqrt(), 0.0, 0.0]));
     }
 
     #[test]
@@ -180,6 +209,6 @@ mod measurement_tests {
         measure_state(n, &vec![0], m, p, &input, &mut output, 0, 0);
 
         let half: f64 = 1.0 / 2.0;
-        assert_eq!(output, from_reals(&vec![0.0, half.sqrt(), 0.0, half.sqrt()]));
+        assert_eq!(output, from_reals(&vec![0.0, 0.0, half.sqrt(), half.sqrt()]));
     }
 }

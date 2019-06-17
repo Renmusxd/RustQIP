@@ -9,12 +9,30 @@ use super::qubits::*;
 use super::state_ops::*;
 use crate::measurement_ops::measure;
 
-pub type StateBuilder<QS: QuantumState> = fn(Vec<&Qubit>) -> QS;
-
-
-pub enum StateModifier {
+pub enum StateModifierType {
     UnitaryOp(QubitOp),
     MeasureState(u64, Vec<u64>)
+}
+
+pub struct StateModifier {
+    name: String,
+    modifier: StateModifierType
+}
+
+impl StateModifier {
+    pub fn new_unitary(name: String, op: QubitOp) -> StateModifier {
+        StateModifier {
+            name,
+            modifier: StateModifierType::UnitaryOp(op)
+        }
+    }
+
+    pub fn new_measurement(name: String, id: u64, indices: Vec<u64>) -> StateModifier {
+        StateModifier {
+            name,
+            modifier: StateModifierType::MeasureState(id, indices)
+        }
+    }
 }
 
 pub struct MeasuredResults {
@@ -42,8 +60,8 @@ pub trait QuantumState {
 /// locally on the machine (plus an arena of equal size to work in).
 pub struct LocalQuantumState {
     // A bundle with the quantum state data.
-    n: u64,
-    state: Vec<Complex<f64>>,
+    pub n: u64,
+    pub state: Vec<Complex<f64>>,
     arena: Vec<Complex<f64>>,
 }
 
@@ -54,7 +72,7 @@ pub enum InitialState {
 
 impl LocalQuantumState {
     /// Build a new LocalQuantumState
-    fn new(n: u64) -> LocalQuantumState {
+    pub fn new(n: u64) -> LocalQuantumState {
         LocalQuantumState::new_from_initial_states(n, vec![])
     }
 
@@ -62,7 +80,15 @@ impl LocalQuantumState {
     ///
     /// # Example
     /// ```
-    /// // TODO fill in example
+    /// use qip::pipeline::{LocalQuantumState, InitialState};
+    /// use qip::state_ops::from_reals;
+    /// let inits = vec![
+    ///     (vec![0], InitialState::Index(1)),
+    ///     (vec![1, 2], InitialState::FullState(from_reals(&vec![0.5, 0.5, 0.5, 0.5])))
+    /// ];
+    /// let state = LocalQuantumState::new_from_initial_states(3, inits);
+    ///
+    /// assert_eq!(state.state, from_reals(&vec![0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 0.5]));
     /// ```
     pub fn new_from_initial_states(n: u64, states: Vec<(Vec<u64>, InitialState)>) -> LocalQuantumState {
         let mut cvec: Vec<Complex<f64>> = (0.. 1 << n).map(|_| Complex::<f64> {
@@ -82,10 +108,10 @@ impl LocalQuantumState {
         // Make the index template/base
         let template: u64 = states.iter().map(|(indices, state)| -> u64 {
             match state {
-                InitialState::Index(indx) => {
+                InitialState::Index(val_indx) => {
                     indices.iter().enumerate().map(|(i, indx)| {
-                        let bit = (indx >> i) & 1;
-                        bit << indx
+                        let bit = (val_indx >> i) & 1;
+                        bit << (n - 1 - indx)
                     }).sum()
                 }
                 _ => 0
@@ -111,15 +137,14 @@ impl LocalQuantumState {
 
                     let superindex_delta: u64 = indices.iter().enumerate().map(|(j,indx)| {
                         let bit = (val_index_bits >> j as u64) & 1u64;
-                        bit << indx
+                        bit << (n - 1 - indx)
                     }).sum();
-
                     (superindex_acc + superindex_delta, sub_index_offset + indices.len() as u64, val_acc)
                 } else {
                     acc
                 }
             });
-
+            cvec[(delta_index + template) as usize] = val;
         });
 
         LocalQuantumState {
@@ -146,9 +171,9 @@ impl QuantumState for LocalQuantumState {
 /// Apply an QubitOp to the state `s` and return the new state.
 fn fold_modify_state<QS: QuantumState>(mut acc: (QS, MeasuredResults), modifier: &StateModifier) -> (QS, MeasuredResults) {
     let (mut s, mut mr) = acc;
-    match modifier {
-        StateModifier::UnitaryOp(op) => s.apply_op(op),
-        StateModifier::MeasureState(id, indices) => {
+    match &modifier.modifier {
+        StateModifierType::UnitaryOp(op) => s.apply_op(op),
+        StateModifierType::MeasureState(id, indices) => {
             let result = s.measure(indices);
             mr.results.insert(id.clone(), result);
         }
@@ -164,7 +189,7 @@ pub fn run(q: &Qubit) -> (LocalQuantumState, MeasuredResults) {
     })
 }
 
-pub fn run_with_state<QS: QuantumState>(q: &Qubit, state_builder: StateBuilder<QS>) -> (QS, MeasuredResults) {
+pub fn run_with_state<QS: QuantumState, F: FnOnce(Vec<&Qubit>) -> QS>(q: &Qubit, state_builder: F) -> (QS, MeasuredResults) {
     let (frontier, ops) = get_opfns_and_frontier(q);
     let state = state_builder(frontier);
     ops.into_iter().fold((state, MeasuredResults::new()), fold_modify_state)
@@ -187,7 +212,7 @@ fn get_opfns_and_frontier(q: &Qubit) -> (Vec<&Qubit>, Vec<&StateModifier>) {
                             if let Some(modifier) = modifier {
                                 fn_queue.push_front(modifier);
                             }
-                            heap.extend(parents.iter());
+                            heap.extend(parents);
                         }
                         Parent::Shared(parent) => {
                             let parent = parent.as_ref();

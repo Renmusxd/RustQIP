@@ -90,7 +90,7 @@ impl fmt::Debug for Qubit {
             .map(|x| x.clone().to_string())
             .collect::<Vec<String>>();
 
-        write!(f, "Qubit[{}]", int_strings.join(", "))
+        write!(f, "Qubit[{}][{}]", self.id.to_string(), int_strings.join(", "))
     }
 }
 
@@ -213,7 +213,7 @@ impl OpBuilder {
 impl NonUnitaryBuilder for OpBuilder {
     fn measure(&mut self, q: Qubit) -> (Qubit, u64) {
         let id = self.get_op_id();
-        let modifier = StateModifier::MeasureState(id.clone(), q.indices.clone());
+        let modifier = StateModifier::new_measurement(String::from("measure"), id.clone(), q.indices.clone());
         let modifier = Some(modifier);
         let q = Qubit::merge_with_modifier(id.clone(), vec![q], modifier);
         (q, id)
@@ -238,7 +238,7 @@ impl UnitaryBuilder for OpBuilder {
     }
 
     fn merge_with_op(&mut self, qs: Vec<Qubit>, op: Option<QubitOp>) -> Qubit {
-        let modifier = op.map(|op|StateModifier::UnitaryOp(op));
+        let modifier = op.map(|op|StateModifier::new_unitary(String::from("unitary"), op));
         Qubit::merge_with_modifier(self.get_op_id(), qs, modifier)
     }
 }
@@ -284,6 +284,19 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
 
         self.set_conditional_qubit(cq);
         q
+    }
+
+    fn swap(&mut self, qa: Qubit, qb: Qubit) -> (Qubit, Qubit) {
+        let op = self.make_swap_op(&qa, &qb);
+        let cq = self.get_conditional_qubit();
+        let cq_indices = cq.indices.clone();
+        let qa_indices = qa.indices.clone();
+        let q = self.merge_with_op(vec![cq, qa, qb], Some(op));
+        let (cq, q) = self.split(q, cq_indices);
+        let (qa, qb) = self.split(q, qa_indices);
+
+        self.set_conditional_qubit(cq);
+        (qa, qb)
     }
 
     fn split(&mut self, q: Qubit, selected_indices: Vec<u64>) -> (Qubit, Qubit) {
