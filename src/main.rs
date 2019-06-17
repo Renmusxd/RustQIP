@@ -7,24 +7,20 @@ fn main() {
     let mut builder = qip::qubits::OpBuilder::new();
 
     let q1 = builder.qubit(1);
-    let q2 = builder.qubit(13);
-    let q3 = builder.qubit(13);
+    let q2 = builder.qubit(5);
+    let q3 = builder.qubit(5);
 
     let q1 = builder.hadamard(q1);
 
     let mut c = builder.with_context(q1);
-
-    let (q2, q3) = c.swap(q2, q3);
-
+    c.swap(q2, q3); // we don't need the output from here
     let q1 = c.release_qubit();
 
     let q1 = builder.hadamard(q1);
 
-    println!("Qs: {:?}, {:?}, {:?}", q1, q2, q3);
+    let (q1, handle) = builder.measure(q1);
 
-    let q4 = builder.merge(vec![q1, q2, q3]);
+    let (out, results) = run(&q1);
 
-    println!("Qs: {:?}", q4);
-
-    let out = run(&q4);
+    println!("Results: {:?}", results.results[&handle]);
 }

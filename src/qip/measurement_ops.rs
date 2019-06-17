@@ -79,7 +79,7 @@ fn soft_measure(n: u64, indices: &Vec<u64>, input: &Vec<Complex<f64>>, input_off
     for (i, c) in input.iter().enumerate() {
         r -= c.norm_sqr();
         if r <= 0.0 {
-            measured_indx = i as u64;
+            measured_indx = i as u64 + input_offset;
             break;
         }
     }

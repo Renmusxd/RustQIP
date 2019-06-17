@@ -27,6 +27,38 @@ pub fn get_bit(num: u64, bit_index: u64) -> bool {
     ((num >> bit_index) & 1) != 0
 }
 
+/// Mixes two bitstreams, `z_bits` and `o_bits`, takes one bit off the lowest position from
+/// each to construct the output, `selector` is used to choose which to use. 0 indices `z_bits` a
+///
+/// # Example
+/// ```
+/// use qip::utils::entwine_bits;
+///
+/// let n = 3;
+/// let off_bits = 0b01; // 2 bits from off
+/// let on_bits = 0b1;  // 1 bit from on
+/// let selector = 0b010; // first take from off, then on, then off
+/// assert_eq!(entwine_bits(n, selector, off_bits, on_bits), 0b011);
+/// ```
+pub fn entwine_bits(n: u64, mut selector: u64, mut off_bits: u64, mut on_bits: u64) -> u64{
+    let mut result = 0;
+
+    for i in 0 .. n {
+        if selector & 1 == 0 {
+            let bit = off_bits & 1;
+            off_bits >>= 1;
+            result |= bit << i;
+        } else {
+            let bit = on_bits & 1;
+            on_bits >>= 1;
+            result |= bit << i;
+        }
+        selector >>= 1;
+    }
+
+    result
+}
+
 pub fn get_flat_index(nindices: u64, i: u64, j: u64) -> u64 {
     let mat_side = 1 << nindices;
     (i * mat_side) + j

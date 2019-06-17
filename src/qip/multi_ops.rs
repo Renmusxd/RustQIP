@@ -1,3 +1,6 @@
+/// This whole module is sort of unused, in the pipeline we will only apply a single op
+/// at a time. This is here to help with some debugging and to double check incremental work.
+
 extern crate num;
 extern crate rayon;
 

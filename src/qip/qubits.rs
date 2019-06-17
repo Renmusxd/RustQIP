@@ -8,7 +8,7 @@ use super::state_ops::*;
 
 /// Possible relations to a parent qubit
 pub enum Parent {
-    Owned(Vec<Qubit>, Option<QubitOp>),
+    Owned(Vec<Qubit>, Option<StateModifier>),
     Shared(Rc<Qubit>),
 }
 
@@ -29,7 +29,7 @@ impl Qubit {
     }
 
     /// Merge qubits to for a new qubit object.
-    pub fn merge_with_fn(id: u64, qubits: Vec<Qubit>, operator: Option<QubitOp>) -> Qubit {
+    pub fn merge_with_modifier(id: u64, qubits: Vec<Qubit>, modifier: Option<StateModifier>) -> Qubit {
         let mut all_indices = Vec::new();
 
         for q in qubits.iter() {
@@ -39,7 +39,7 @@ impl Qubit {
 
         Qubit {
             indices: all_indices,
-            parent: Some(Parent::Owned(qubits, operator)),
+            parent: Some(Parent::Owned(qubits, modifier)),
             id,
         }
     }
@@ -96,8 +96,9 @@ impl fmt::Debug for Qubit {
 
 /// A builder which supports non-unitary operations
 pub trait NonUnitaryBuilder {
-    // Things like measure go here
-    fn measure(&mut self, q: Qubit) -> MeasuredResultReference;
+    /// Add a measure op to the pipeline for `q` and return a reference which can
+    /// later be used to access the measured value from the results of `pipeline::run`.
+    fn measure(&mut self, q: Qubit) -> (Qubit, u64);
 }
 
 /// A builder which support unitary operations
@@ -146,13 +147,13 @@ pub trait UnitaryBuilder {
     fn swap(&mut self, qa: Qubit, qb: Qubit) -> (Qubit, Qubit) {
         let op = self.make_swap_op(&qa, &qb);
         let qa_indices = qa.indices.clone();
-        let q = self.merge_with_fn(vec![qa, qb], Some(op));
+        let q = self.merge_with_op(vec![qa, qb], Some(op));
         self.split(q, qa_indices)
     }
 
     /// Merge the qubits in `qs` into a single qubit.
     fn merge(&mut self, qs: Vec<Qubit>) -> Qubit {
-        self.merge_with_fn(qs, None)
+        self.merge_with_op(qs, None)
     }
 
     /// Split the qubit `q` into two, one which `selected_indices` and one with the remaining.
@@ -169,7 +170,7 @@ pub trait UnitaryBuilder {
     }
 
     /// Merge qubits using a generic state processing function.
-    fn merge_with_fn(&mut self, qs: Vec<Qubit>, operator: Option<QubitOp>) -> Qubit;
+    fn merge_with_op(&mut self, qs: Vec<Qubit>, operator: Option<QubitOp>) -> Qubit;
 }
 
 /// A basic builder for unitary and non-unitary ops.
@@ -194,6 +195,14 @@ impl OpBuilder {
         Qubit::new(self.get_op_id(), (base_index..self.qubit_index).collect())
     }
 
+    /// Build a new qubit with `n` indices, return it plus a handle which can be
+    /// used for feeding in an initial state.
+    pub fn qubit_and_handle(&mut self, n: u64) -> (Qubit, Vec<u64>) {
+        let q = self.qubit(n);
+        let indices = q.indices.clone();
+        (q, indices)
+    }
+
     fn get_op_id(&mut self) -> u64 {
         let tmp = self.op_id;
         self.op_id += 1;
@@ -202,8 +211,12 @@ impl OpBuilder {
 }
 
 impl NonUnitaryBuilder for OpBuilder {
-    fn measure(&mut self, q: Qubit) -> MeasuredResultReference {
-        unimplemented!()
+    fn measure(&mut self, q: Qubit) -> (Qubit, u64) {
+        let id = self.get_op_id();
+        let modifier = StateModifier::MeasureState(id.clone(), q.indices.clone());
+        let modifier = Some(modifier);
+        let q = Qubit::merge_with_modifier(id.clone(), vec![q], modifier);
+        (q, id)
     }
 }
 
@@ -217,15 +230,16 @@ impl UnitaryBuilder for OpBuilder {
 
     fn mat(&mut self, q: Qubit, mat: &[Complex<f64>]) -> Qubit {
         let op = self.make_mat_op(&q, mat.to_vec());
-        self.merge_with_fn(vec![q], Some(op))
+        self.merge_with_op(vec![q], Some(op))
     }
 
     fn split(&mut self, q: Qubit, selected_indices: Vec<u64>) -> (Qubit, Qubit) {
         Qubit::split(self.get_op_id(), self.get_op_id(), q, selected_indices)
     }
 
-    fn merge_with_fn(&mut self, qs: Vec<Qubit>, op: Option<QubitOp>) -> Qubit {
-        Qubit::merge_with_fn(self.get_op_id(), qs, op)
+    fn merge_with_op(&mut self, qs: Vec<Qubit>, op: Option<QubitOp>) -> Qubit {
+        let modifier = op.map(|op|StateModifier::UnitaryOp(op));
+        Qubit::merge_with_modifier(self.get_op_id(), qs, modifier)
     }
 }
 
@@ -265,7 +279,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         let op = self.make_mat_op(&q, mat.to_vec());
         let cq = self.get_conditional_qubit();
         let cq_indices = cq.indices.clone();
-        let q = self.merge_with_fn(vec![cq, q], Some(op));
+        let q = self.merge_with_op(vec![cq, q], Some(op));
         let (cq, q) = self.split(q, cq_indices);
 
         self.set_conditional_qubit(cq);
@@ -290,7 +304,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         }
     }
 
-    fn merge_with_fn(&mut self, qs: Vec<Qubit>, op: Option<QubitOp>) -> Qubit {
-        self.parent_builder.merge_with_fn(qs, op)
+    fn merge_with_op(&mut self, qs: Vec<Qubit>, op: Option<QubitOp>) -> Qubit {
+        self.parent_builder.merge_with_op(qs, op)
     }
 }

@@ -26,14 +26,14 @@ pub enum QubitOp {
 /// ```
 /// use qip::state_ops::make_control_op;
 /// use qip::state_ops::QubitOp::{MatrixOp, ControlOp};
-/// let op = MatrixOp(vec![1], vec![]); // fake data
+/// let op = MatrixOp(vec![1], vec![/* ... */]);
 /// let cop = make_control_op(vec![0], op);
 ///
 /// if let ControlOp(c_indices, o_indices, _) = cop {
 ///     assert_eq!(c_indices, vec![0]);
 ///     assert_eq!(o_indices, vec![1]);
 /// } else {
-///     panic!()
+///     assert!(false);
 /// }
 /// ```
 pub fn make_control_op(mut c_indices: Vec<u64>, op: QubitOp) -> QubitOp {
@@ -89,7 +89,7 @@ pub fn get_index(op: &QubitOp, i: usize) -> u64 {
                 b[i - a.len()]
             }
         }
-        ControlOp(cs, os, op) => {
+        ControlOp(cs, os, _) => {
             if i < cs.len() {
                 cs[i]
             } else {
@@ -113,6 +113,7 @@ pub fn select_matrix_coords(n: u64, nindices: u64, indices: &Vec<u64>, row: u64,
     })
 }
 
+/// Get the row for a submatrix indexed by `indices` given the row for the larger 2^n by 2^n matrix.
 pub fn select_matrix_row(n: u64, nindices: u64, indices: &Vec<u64>, row: u64) -> u64 {
     (0..nindices).fold(0, |x, j| -> u64 {
         let indx = indices[j as usize];
@@ -122,6 +123,7 @@ pub fn select_matrix_row(n: u64, nindices: u64, indices: &Vec<u64>, row: u64) ->
     })
 }
 
+/// Get the col for a submatrix indexed by `indices` given the col for the larger 2^n by 2^n matrix.
 pub fn select_matrix_col(n: u64, nindices: u64, indices: &Vec<u64>, col: u64) -> u64 {
     (0..nindices).fold(0, |y, j| -> u64 {
         let indx = indices[j as usize];
@@ -234,7 +236,6 @@ pub fn make_op_matrix(n: u64, op: &QubitOp) -> Vec<Vec<Complex<f64>>> {
 #[cfg(test)]
 mod state_ops_tests {
     use super::*;
-    use super::QubitOp::*;
 
     #[test]
     fn test_get_bit() {
