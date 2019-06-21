@@ -62,6 +62,11 @@ impl Qubit {
             id: idb,
         })
     }
+
+    /// Get number of qubits in this Qubit object
+    pub fn n(&self) -> u64 {
+        self.indices.len() as u64
+    }
 }
 
 impl std::cmp::Eq for Qubit {}
@@ -91,6 +96,27 @@ impl fmt::Debug for Qubit {
             .collect::<Vec<String>>();
 
         write!(f, "Qubit[{}][{}]", self.id.to_string(), int_strings.join(", "))
+    }
+}
+
+pub struct QubitHandle {
+    indices: Vec<u64>
+}
+
+impl QubitHandle {
+    pub fn make_init_from_index(&self, index: u64) -> Result<QubitInitialState, &'static str> {
+        if index < 1 << self.indices.len() as u64 {
+            Ok((self.indices.clone(), InitialState::Index(index)))
+        } else {
+            Err("Index too large for QubitHandle")
+        }
+    }
+    pub fn make_init_from_state(&self, state: Vec<Complex<f64>>) -> Result<QubitInitialState, &'static str> {
+        if state.len() == 1 << self.indices.len() {
+            Ok((self.indices.clone(), InitialState::FullState(state)))
+        } else {
+            Err("State not correct size for QubitHandle (must be 2^n)")
+        }
     }
 }
 
@@ -159,6 +185,22 @@ pub trait UnitaryBuilder {
     /// Split the qubit `q` into two, one which `selected_indices` and one with the remaining.
     fn split(&mut self, q: Qubit, selected_indices: Vec<u64>) -> (Qubit, Qubit);
 
+    fn split_many(&mut self, q: Qubit, index_groups: Vec<Vec<u64>>) -> (Vec<Qubit>, Qubit) {
+        index_groups.into_iter().fold((vec![], q), |(mut qs, q), indices| {
+            let (hq, tq) = self.split(q, indices);
+            qs.push(hq);
+            (qs, tq)
+        })
+    }
+
+    fn split_all(&mut self, q: Qubit) -> Vec<Qubit> {
+        let mut indices: Vec<Vec<u64>> = q.indices.iter().cloned().map(|i| vec![i]).collect();
+        indices.pop();
+        let (mut qs, q) = self.split_many(q, indices);
+        qs.push(q);
+        qs
+    }
+
     /// Build a generic matrix op.
     fn make_mat_op(&self, q: &Qubit, data: Vec<Complex<f64>>) -> QubitOp {
         QubitOp::MatrixOp(q.indices.clone(), data)
@@ -180,6 +222,7 @@ pub struct OpBuilder {
 }
 
 impl OpBuilder {
+    /// Build a new OpBuilder
     pub fn new() -> OpBuilder {
         OpBuilder {
             qubit_index: 0,
@@ -197,10 +240,10 @@ impl OpBuilder {
 
     /// Build a new qubit with `n` indices, return it plus a handle which can be
     /// used for feeding in an initial state.
-    pub fn qubit_and_handle(&mut self, n: u64) -> (Qubit, Vec<u64>) {
+    pub fn qubit_and_handle(&mut self, n: u64) -> (Qubit, QubitHandle) {
         let q = self.qubit(n);
         let indices = q.indices.clone();
-        (q, indices)
+        (q, QubitHandle{ indices })
     }
 
     fn get_op_id(&mut self) -> u64 {

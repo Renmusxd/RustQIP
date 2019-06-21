@@ -1,15 +1,18 @@
+/// Contains functions, structs, and enums for storing and manipulating the quantum state.
+
 extern crate num;
 extern crate rayon;
 
 use num::complex::Complex;
 use rayon::prelude::*;
 
-use super::state_ops::QubitOp::*;
-use super::qubit_iterators::{ControlledOpIterator, SwapOpIterator};
-use super::utils::*;
+use QubitOp::*;
+use crate::qubit_iterators::{ControlledOpIterator, SwapOpIterator};
+use crate::utils::*;
 use crate::qubit_iterators::MatrixOpIterator;
 pub const PARALLEL_THRESHOLD: u64 = 12;
 
+/// Types of unitary ops which can be applied to a state.
 #[derive(Debug)]
 pub enum QubitOp {
     // Indices, Matrix data
@@ -133,34 +136,43 @@ pub fn select_matrix_col(n: u64, nindices: u64, indices: &Vec<u64>, col: u64) ->
     })
 }
 
+/// Builds a ControlledOpIterator for the given `op`, then maps using `f` and sums.
+fn map_with_control_iterator<F: Fn((u64, Complex<f64>)) -> Complex<f64>>(nindices: u64, row: u64, op: &Box<QubitOp>, c_indices: &Vec<u64>, o_indices: &Vec<u64>, f: F) -> Complex<f64> {
+    let n_control_indices = c_indices.len() as u64;
+    let n_op_indices = o_indices.len() as u64;
+    // Get reference to boxed op
+    match &**op {
+        MatrixOp(_, data) => {
+            let iter_builder = |row: u64| MatrixOpIterator::new(row, n_op_indices, data);
+            let it = ControlledOpIterator::new(row, n_control_indices, n_op_indices, iter_builder);
+            it.map(f).sum()
+        }
+        SwapOp(_, _) => {
+            let iter_builder = |row: u64| SwapOpIterator::new(row, nindices);
+            let it = ControlledOpIterator::new(row, n_control_indices, n_op_indices, iter_builder);
+            it.map(f).sum()
+        }
+        ControlOp(_, _, _) => {
+            unimplemented!()
+        }
+    }
+}
+
 /// Using the function `f` which maps from a column and `row` to a complex value for the op matrix,
 /// sums for all nonzero entries for a given `op` more efficiently than trying each column between
 /// 0 and 2^nindices.
 /// This really needs to be cleaned up, but runs in a tight loop. This makes it hard since Box
 /// is unfeasible and the iterator types aren't the same size.
-fn sum_for_op_cols(nindices: u64, row: u64, op: &QubitOp, f: &Fn((u64, Complex<f64>)) -> Complex<f64>) -> Complex<f64> {
+fn sum_for_op_cols<F: Fn((u64, Complex<f64>)) -> Complex<f64>>(nindices: u64, row: u64, op: &QubitOp, f: F) -> Complex<f64> {
     match op {
-        MatrixOp(_,data) => MatrixOpIterator::new(row, nindices, data).map(f).sum(),
-        SwapOp(_, _) => SwapOpIterator::new(row, nindices).map(f).sum(),
+        MatrixOp(_,data) => {
+            MatrixOpIterator::new(row, nindices, data).map(f).sum()
+        },
+        SwapOp(_, _) => {
+            SwapOpIterator::new(row, nindices).map(f).sum()
+        },
         ControlOp(c_indices, o_indices, op) => {
-            let n_control_indices = c_indices.len() as u64;
-            let n_op_indices = o_indices.len() as u64;
-            // Get reference to boxed op
-            match &**op {
-                MatrixOp(_, data) => {
-                    let iter_builder = |row: u64| MatrixOpIterator::new(row, n_op_indices, data);
-                    let it = ControlledOpIterator::new(row, n_control_indices, n_op_indices, iter_builder);
-                    it.map(f).sum()
-                }
-                SwapOp(_, _) => {
-                    let iter_builder = |row: u64| SwapOpIterator::new(row, nindices);
-                    let it = ControlledOpIterator::new(row, n_control_indices, n_op_indices, iter_builder);
-                    it.map(f).sum()
-                }
-                ControlOp(_, _, _) => {
-                    unimplemented!()
-                }
-            }
+            map_with_control_iterator(nindices, row, op, c_indices, o_indices, f)
         }
     }
 }
@@ -206,7 +218,7 @@ pub fn apply_op(n: u64, op: &QubitOp,
         };
 
         // Get value for row and assign
-        *outputloc = sum_for_op_cols(nindices, matrow, op, &f);
+        *outputloc = sum_for_op_cols(nindices, matrow, op, f);
     };
 
     // Generate output for each output row

@@ -4,10 +4,11 @@ use std::collections::{BinaryHeap, VecDeque};
 
 use num::complex::Complex;
 use std::collections::HashMap;
-
+use std::cmp;
 use super::qubits::*;
 use super::state_ops::*;
 use crate::measurement_ops::measure;
+use std::cmp::max;
 
 pub enum StateModifierType {
     UnitaryOp(QubitOp),
@@ -49,6 +50,12 @@ impl MeasuredResults {
 
 /// A trait which represents the state of the qubits
 pub trait QuantumState {
+    /// Make new state with n qubits
+    fn new(n: u64) -> Self;
+
+    /// Initialize new state with initial states.
+    fn new_from_initial_states(n: u64, states: &[QubitInitialState]) -> Self;
+
     /// Function to mutate self into the state with op applied.
     fn apply_op(&mut self, op: &QubitOp);
 
@@ -70,10 +77,12 @@ pub enum InitialState {
     Index(u64)
 }
 
-impl LocalQuantumState {
+pub type QubitInitialState = (Vec<u64>, InitialState);
+
+impl QuantumState for LocalQuantumState {
     /// Build a new LocalQuantumState
-    pub fn new(n: u64) -> LocalQuantumState {
-        LocalQuantumState::new_from_initial_states(n, vec![])
+    fn new(n: u64) -> LocalQuantumState {
+        LocalQuantumState::new_from_initial_states(n, &vec![])
     }
 
     /// Build a local state using a set of initial states for subsets of the qubits.
@@ -86,16 +95,19 @@ impl LocalQuantumState {
     ///     (vec![0], InitialState::Index(1)),
     ///     (vec![1, 2], InitialState::FullState(from_reals(&vec![0.5, 0.5, 0.5, 0.5])))
     /// ];
-    /// let state = LocalQuantumState::new_from_initial_states(3, inits);
+    /// let state = LocalQuantumState::new_from_initial_states(3, &inits);
     ///
     /// assert_eq!(state.state, from_reals(&vec![0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 0.5]));
     /// ```
-    pub fn new_from_initial_states(n: u64, states: Vec<(Vec<u64>, InitialState)>) -> LocalQuantumState {
+    fn new_from_initial_states(n: u64, states: &[QubitInitialState]) -> LocalQuantumState {
+        let max_init_n = states.iter().map(|(indices, _)| indices).cloned().flatten().max().map(|m| m+1);
+
+        let n = max_init_n.map(|m| max(n, m)).unwrap_or(n);
+
         let mut cvec: Vec<Complex<f64>> = (0.. 1 << n).map(|_| Complex::<f64> {
             re: 0.0,
             im: 0.0,
         }).collect();
-
 
         // Assume that all unrepresented indices are in the |0> state.
         let n_fullindices: u64 = states.iter().map(|(indices, state)| {
@@ -153,9 +165,7 @@ impl LocalQuantumState {
             arena: cvec,
         }
     }
-}
 
-impl QuantumState for LocalQuantumState {
     fn apply_op(&mut self, op: &QubitOp) {
         apply_op(self.n, op, &self.state, &mut self.arena, 0, 0, self.n > PARALLEL_THRESHOLD);
         std::mem::swap(&mut self.state, &mut self.arena);
@@ -181,18 +191,36 @@ fn fold_modify_state<QS: QuantumState>(mut acc: (QS, MeasuredResults), modifier:
     (s, mr)
 }
 
-/// Run the pipeline using `LocalQuantumState` to store state.
-pub fn run(q: &Qubit) -> (LocalQuantumState, MeasuredResults) {
-    run_with_state(q, |qs| {
+
+/// Builds a default state of size `n`
+pub fn run<QS: QuantumState>(q: &Qubit) -> (QS, MeasuredResults) {
+    run_with_statebuilder(q, |qs| -> QS {
         let n: u64 = qs.iter().map(|q| q.indices.len() as u64).sum();
-        LocalQuantumState::new(n)
+        QS::new(n)
     })
 }
 
-pub fn run_with_state<QS: QuantumState, F: FnOnce(Vec<&Qubit>) -> QS>(q: &Qubit, state_builder: F) -> (QS, MeasuredResults) {
+pub fn run_with_init<QS: QuantumState>(q: &Qubit, states: &[QubitInitialState]) -> (QS, MeasuredResults){
+    run_with_statebuilder(q, |qs| -> QS {
+        let n: u64 = qs.iter().map(|q| q.indices.len() as u64).sum();
+        QS::new_from_initial_states(n, states)
+    })
+}
+
+pub fn run_with_statebuilder<QS: QuantumState, F: FnOnce(Vec<&Qubit>) -> QS>(q: &Qubit, state_builder: F) -> (QS, MeasuredResults) {
     let (frontier, ops) = get_opfns_and_frontier(q);
     let state = state_builder(frontier);
     ops.into_iter().fold((state, MeasuredResults::new()), fold_modify_state)
+}
+
+/// `run` the pipeline using `LocalQuantumState`.
+pub fn run_local(q: &Qubit) -> (LocalQuantumState, MeasuredResults) {
+    run(q)
+}
+
+/// `run_with_init` the pipeline using `LocalQuantumState`
+pub fn run_local_with_init(q: &Qubit, states: &[QubitInitialState]) -> (LocalQuantumState, MeasuredResults) {
+    run_with_init(q, states)
 }
 
 fn get_opfns_and_frontier(q: &Qubit) -> (Vec<&Qubit>, Vec<&StateModifier>) {

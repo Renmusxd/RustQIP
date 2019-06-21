@@ -59,6 +59,7 @@ pub fn entwine_bits(n: u64, mut selector: u64, mut off_bits: u64, mut on_bits: u
     result
 }
 
+/// Get the index into an Op matrix
 pub fn get_flat_index(nindices: u64, i: u64, j: u64) -> u64 {
     let mat_side = 1 << nindices;
     (i * mat_side) + j

@@ -5,3 +5,5 @@ pub mod qubit_iterators;
 pub mod utils;
 pub mod measurement_ops;
 pub mod pipeline;
+pub mod pipeline_debug;
+pub mod qfft;
