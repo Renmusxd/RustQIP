@@ -10,7 +10,7 @@ use QubitOp::*;
 use crate::qubit_iterators::{ControlledOpIterator, SwapOpIterator};
 use crate::utils::*;
 use crate::qubit_iterators::MatrixOpIterator;
-pub const PARALLEL_THRESHOLD: u64 = 12;
+pub const PARALLEL_THRESHOLD: u64 = 0;
 
 /// Types of unitary ops which can be applied to a state.
 #[derive(Debug)]
@@ -116,23 +116,23 @@ pub fn select_matrix_coords(n: u64, nindices: u64, indices: &Vec<u64>, row: u64,
     })
 }
 
-/// Get the row for a submatrix indexed by `indices` given the row for the larger 2^n by 2^n matrix.
-pub fn select_matrix_row(n: u64, nindices: u64, indices: &Vec<u64>, row: u64) -> u64 {
-    (0..nindices).fold(0, |x, j| -> u64 {
-        let indx = indices[j as usize];
-        let rowbit = get_bit(row, n - 1 - indx);
-        let x = set_bit(x, nindices - 1 - j, rowbit);
-        x
+/// Get the index for a submatrix indexed by `indices` given the `full_index` for the larger 2^n by 2^n matrix.
+pub fn full_to_sub(n: u64, mat_indices: &Vec<u64>, full_index: u64) -> u64 {
+    let nindices = mat_indices.len() as u64;
+    (0 .. nindices).fold(0, |acc, j| -> u64 {
+        let indx = mat_indices[j as usize];
+        let bit = get_bit(full_index, n - 1 - indx);
+        set_bit(acc, nindices - 1 - j, bit)
     })
 }
 
-/// Get the col for a submatrix indexed by `indices` given the col for the larger 2^n by 2^n matrix.
-pub fn select_matrix_col(n: u64, nindices: u64, indices: &Vec<u64>, col: u64) -> u64 {
-    (0..nindices).fold(0, |y, j| -> u64 {
-        let indx = indices[j as usize];
-        let colbit = get_bit(col, n - 1 - indx);
-        let y = set_bit(y, nindices - 1 - j, colbit);
-        y
+/// Given the `sub_index` for the submatrix, and a base to overwrite values, get the full index for the 2^n by 2^n matrix.
+pub fn sub_to_full(n: u64, mat_indices: &Vec<u64>, sub_index: u64, base: u64) -> u64 {
+    let nindices = mat_indices.len() as u64;
+    (0..nindices).fold(base, |acc, j| {
+        let indx = mat_indices[j as usize];
+        let bit = get_bit(sub_index, nindices - 1 - j);
+        set_bit(acc, n - 1 - indx, bit)
     })
 }
 
@@ -182,23 +182,15 @@ pub fn apply_op(n: u64, op: &QubitOp,
                input: &Vec<Complex<f64>>, output: &mut Vec<Complex<f64>>,
                input_offset: u64, output_offset: u64, multi_core: bool) {
     let mat_indices: Vec<u64> = (0 .. num_indices(op)).map(|i| get_index(op, i)).collect();
-    let mut flat_indices = mat_indices.clone();
-    flat_indices.sort();
-    let flat_indices = flat_indices;
     let nindices = mat_indices.len() as u64;
 
     let row_fn  = |(outputrow, outputloc): (usize, &mut Complex<f64>)| {
         let row = output_offset + (outputrow as u64);
-        let matrow = select_matrix_row(n, nindices, &mat_indices, row);
+        let matrow = full_to_sub(n, &mat_indices, row);
         // Maps from a op matrix column (from 0 to 2^nindices) to the value at that column
         // for the row calculated above.
-        let f = |item: (u64, Complex<f64>)| -> Complex<f64> {
-            let (i, val) = item;
-            let colbits = (0..nindices).fold(row as u64, |acc, j| {
-                let indx = flat_indices[j as usize];
-                let bit_val = get_bit(i, nindices - 1 - j);
-                set_bit(acc, n - 1 - indx, bit_val)
-            });
+        let f = |(i, val): (u64, Complex<f64>)| -> Complex<f64> {
+            let colbits = sub_to_full(n, &mat_indices, i, row);
             if colbits < input_offset {
                 Complex::<f64> {
                     re: 0.0,
@@ -222,6 +214,7 @@ pub fn apply_op(n: u64, op: &QubitOp,
     };
 
     // Generate output for each output row
+    let multi_core = false;
     if multi_core {
         output.par_iter_mut().enumerate().for_each(row_fn);
     } else {
@@ -293,9 +286,9 @@ mod state_ops_tests {
 
     #[test]
     fn test_apply_identity() {
-        let op = MatrixOp(vec![0], from_reals(&vec![1.0, 0.0, 0.0, 1.0]));
-        let input = from_reals(&vec![1.0, 0.0]);
-        let mut output = from_reals(&vec![0.0, 0.0]);
+        let op = MatrixOp(vec![0], from_reals(&[1.0, 0.0, 0.0, 1.0]));
+        let input = from_reals(&[1.0, 0.0]);
+        let mut output = from_reals(&[0.0, 0.0]);
         apply_op(1, &op, &input, &mut output, 0, 0, false);
 
         assert_eq!(input, output);
@@ -303,9 +296,9 @@ mod state_ops_tests {
 
     #[test]
     fn test_apply_swap() {
-        let op = MatrixOp(vec![0], from_reals(&vec![0.0, 1.0, 1.0, 0.0]));
-        let mut input = from_reals(&vec![1.0, 0.0]);
-        let mut output = from_reals(&vec![0.0, 0.0]);
+        let op = MatrixOp(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
+        let mut input = from_reals(&[1.0, 0.0]);
+        let mut output = from_reals(&[0.0, 0.0]);
         apply_op(1, &op, &input, &mut output, 0, 0, false);
 
         input.reverse();
@@ -314,19 +307,28 @@ mod state_ops_tests {
 
     #[test]
     fn test_apply_swap_first() {
-        let op = MatrixOp(vec![0], from_reals(&vec![0.0, 1.0, 1.0, 0.0]));
-        let input = from_reals(&vec![1.0, 0.0, 0.0, 0.0]);
-        let mut output = from_reals(&vec![0.0, 0.0, 0.0, 0.0]);
+        let op = MatrixOp(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
+
+        let m = make_op_matrix(2, &op);
+        for i in 0 .. 4 {
+            for j in 0 .. 4 {
+                print!("{:.*}\t", 3, m[i][j].re);
+            }
+            println!();
+        }
+
+        let input = from_reals(&[1.0, 0.0, 0.0, 0.0]);
+        let mut output = from_reals(&[0.0, 0.0, 0.0, 0.0]);
         apply_op(2, &op, &input, &mut output, 0, 0, false);
 
-        let expected = from_reals(&vec![0.0, 0.0, 1.0, 0.0]);
+        let expected = from_reals(&[0.0, 0.0, 1.0, 0.0]);
         assert_eq!(expected, output);
 
-        let op = MatrixOp(vec![1], from_reals(&vec![0.0, 1.0, 1.0, 0.0]));
-        let mut output = from_reals(&vec![0.0, 0.0, 0.0, 0.0]);
+        let op = MatrixOp(vec![1], from_reals(&[0.0, 1.0, 1.0, 0.0]));
+        let mut output = from_reals(&[0.0, 0.0, 0.0, 0.0]);
         apply_op(2, &op, &input, &mut output, 0, 0, false);
 
-        let expected = from_reals(&vec![0.0, 1.0, 0.0, 0.0]);
+        let expected = from_reals(&[0.0, 1.0, 0.0, 0.0]);
         assert_eq!(expected, output);
     }
 }

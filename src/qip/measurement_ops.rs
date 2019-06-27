@@ -178,14 +178,13 @@ pub fn measure_state(n: u64, indices: &Vec<u64>, measured: u64, measured_prob: f
 #[cfg(test)]
 mod measurement_tests {
     use crate::state_ops::from_reals;
-
     use super::*;
 
     #[test]
     fn test_measure_state() {
         let n = 2;
         let m = 0;
-        let input = from_reals(&vec![0.5, 0.5, 0.5, 0.5]);
+        let input = from_reals(&[0.5, 0.5, 0.5, 0.5]);
         let p = measure_prob(n, m, &vec![0], &input, 0);
         assert_eq!(p, 0.5);
 
@@ -193,14 +192,14 @@ mod measurement_tests {
         measure_state(n, &vec![0], m, p, &input, &mut output, 0, 0);
 
         let half: f64 = 1.0 / 2.0;
-        assert_eq!(output, from_reals(&vec![half.sqrt(), half.sqrt(), 0.0, 0.0]));
+        assert_eq!(output, from_reals(&[half.sqrt(), half.sqrt(), 0.0, 0.0]));
     }
 
     #[test]
     fn test_measure_state2() {
         let n = 2;
         let m = 1;
-        let input = from_reals(&vec![0.5, 0.5, 0.5, 0.5]);
+        let input = from_reals(&[0.5, 0.5, 0.5, 0.5]);
         let p = measure_prob(n, m, &vec![0], &input, 0);
         assert_eq!(p, 0.5);
 
@@ -208,6 +207,6 @@ mod measurement_tests {
         measure_state(n, &vec![0], m, p, &input, &mut output, 0, 0);
 
         let half: f64 = 1.0 / 2.0;
-        assert_eq!(output, from_reals(&vec![0.0, 0.0, half.sqrt(), half.sqrt()]));
+        assert_eq!(output, from_reals(&[0.0, 0.0, half.sqrt(), half.sqrt()]));
     }
 }

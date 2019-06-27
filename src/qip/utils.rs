@@ -1,3 +1,5 @@
+use std::ops::{Add, Sub, Shl, Shr};
+
 /// Set the `bit_index` bit in `num` to `value`.
 ///
 /// # Example
@@ -63,4 +65,40 @@ pub fn entwine_bits(n: u64, mut selector: u64, mut off_bits: u64, mut on_bits: u
 pub fn get_flat_index(nindices: u64, i: u64, j: u64) -> u64 {
     let mat_side = 1 << nindices;
     (i * mat_side) + j
+}
+
+/// Flips the bits in `num` from ith position to (n-i)th position.
+///
+/// # Example
+///
+/// ```
+/// use qip::utils::flip_bits;
+///
+/// assert_eq!(flip_bits(3, 0b100), 0b001);
+/// assert_eq!(flip_bits(3, 0b010), 0b010);
+/// assert_eq!(flip_bits(4, 0b1010), 0b0101);
+/// ```
+///
+pub fn flip_bits(n: usize, num: u64) -> u64 {
+    (0 .. n).fold(0, |acc, i| {
+        let bit = (num >> i) & 1;
+        acc | (bit << (n - 1 - i))
+    })
+}
+
+/// Extracts bits from a number in a particular order.
+///
+/// # Example
+///
+/// ```
+/// use qip::utils::extract_bits;
+///
+/// assert_eq!(extract_bits(0b1010, &[3, 0]), 0b01);
+/// ```
+///
+pub fn extract_bits(num: u64, indices: &[u64]) -> u64 {
+    indices.iter().enumerate().fold(0, |acc, (i, index)| {
+        let bit = (num >> index) & 1;
+        acc | (bit << i)
+    })
 }

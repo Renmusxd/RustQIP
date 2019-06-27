@@ -134,7 +134,8 @@ pub trait UnitaryBuilder {
     /// Build a builder which uses `q` as context.
     fn with_context(&mut self, q: Qubit) -> ConditionalContextBuilder;
 
-    /// Build a generic matrix op, apply to `q`
+    /// Build a generic matrix op, apply to `q`, if `q` is multiple indices and
+    /// mat is 2x2, apply to each index.
     fn mat(&mut self, q: Qubit, mat: &[Complex<f64>]) -> Qubit;
 
     /// Build a matrix op from real numbers, apply to `q`
@@ -142,28 +143,28 @@ pub trait UnitaryBuilder {
         self.mat(q, from_reals(mat).as_slice())
     }
 
-    /// Apply NOT to `q`
+    /// Apply NOT to `q`, if `q` is multiple indices, apply to each
     fn not(&mut self, q: Qubit) -> Qubit {
         self.x(q)
     }
 
-    /// Apply X to `q`
+    /// Apply X to `q`, if `q` is multiple indices, apply to each
     fn x(&mut self, q: Qubit) -> Qubit {
         self.real_mat(q, &[0.0, 1.0, 1.0, 0.0])
     }
 
-    /// Apply Y to `q`
+    /// Apply Y to `q`, if `q` is multiple indices, apply to each
     fn y(&mut self, q: Qubit) -> Qubit {
         self.mat(q, from_tuples(&[(0.0, 0.0), (0.0, -1.0), (0.0, 0.0), (0.0, 1.0)])
             .as_slice())
     }
 
-    /// Apply Z to `q`
+    /// Apply Z to `q`, if `q` is multiple indices, apply to each
     fn z(&mut self, q: Qubit) -> Qubit {
         self.real_mat(q, &[1.0, 0.0, 0.0, -1.0])
     }
 
-    /// Apply H to `q`
+    /// Apply H to `q`, if `q` is multiple indices, apply to each
     fn hadamard(&mut self, q: Qubit) -> Qubit {
         let inv_sqrt = 1.0 / 2.0_f64.sqrt();
         self.real_mat(q, &[1.0 * inv_sqrt, 1.0 * inv_sqrt, 1.0 * inv_sqrt, -1.0 * inv_sqrt])
@@ -206,8 +207,9 @@ pub trait UnitaryBuilder {
         QubitOp::MatrixOp(q.indices.clone(), data)
     }
 
-    /// Build a swap op.
+    /// Build a swap op. qa and qb must have the same number of indices.
     fn make_swap_op(&self, qa: &Qubit, qb: &Qubit) -> QubitOp {
+        assert_eq!(qa.indices.len(), qb.indices.len());
         QubitOp::SwapOp(qa.indices.clone(), qb.indices.clone())
     }
 
@@ -272,8 +274,18 @@ impl UnitaryBuilder for OpBuilder {
     }
 
     fn mat(&mut self, q: Qubit, mat: &[Complex<f64>]) -> Qubit {
-        let op = self.make_mat_op(&q, mat.to_vec());
-        self.merge_with_op(vec![q], Some(op))
+        // Special case for broadcasting ops
+        if q.indices.len() > 1 && mat.len() == (2 * 2) {
+            let qs = self.split_all(q);
+            let qs = qs.into_iter().map(|q| self.mat(q, mat)).collect();
+            self.merge_with_op(qs, None)
+        } else {
+            let expected_mat_size = 1 << (2*q.indices.len());
+            assert_eq!(expected_mat_size, mat.len());
+
+            let op = self.make_mat_op(&q, mat.to_vec());
+            self.merge_with_op(vec![q], Some(op))
+        }
     }
 
     fn split(&mut self, q: Qubit, selected_indices: Vec<u64>) -> (Qubit, Qubit) {

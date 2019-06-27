@@ -5,9 +5,10 @@ use std::collections::{BinaryHeap, VecDeque};
 use num::complex::Complex;
 use std::collections::HashMap;
 use std::cmp;
-use super::qubits::*;
-use super::state_ops::*;
+use crate::qubits::*;
+use crate::state_ops::*;
 use crate::measurement_ops::measure;
+use crate::utils;
 use std::cmp::max;
 
 pub enum StateModifierType {
@@ -86,19 +87,7 @@ impl QuantumState for LocalQuantumState {
     }
 
     /// Build a local state using a set of initial states for subsets of the qubits.
-    ///
-    /// # Example
-    /// ```
-    /// use qip::pipeline::{LocalQuantumState, InitialState};
-    /// use qip::state_ops::from_reals;
-    /// let inits = vec![
-    ///     (vec![0], InitialState::Index(1)),
-    ///     (vec![1, 2], InitialState::FullState(from_reals(&vec![0.5, 0.5, 0.5, 0.5])))
-    /// ];
-    /// let state = LocalQuantumState::new_from_initial_states(3, &inits);
-    ///
-    /// assert_eq!(state.state, from_reals(&vec![0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 0.5]));
-    /// ```
+    /// These initial states are made from the qubit handles.
     fn new_from_initial_states(n: u64, states: &[QubitInitialState]) -> LocalQuantumState {
         let max_init_n = states.iter().map(|(indices, _)| indices).cloned().flatten().max().map(|m| m+1);
 
@@ -264,4 +253,15 @@ fn qubit_in_heap(q: &Qubit, heap: &BinaryHeap<&Qubit>) -> bool {
         }
     }
     false
+}
+
+pub fn make_circuit_matrix(n: u64, q: &Qubit, h: QubitHandle) -> Vec<Vec<Complex<f64>>> {
+    (0..1 << n).map(|i| {
+        let (state, _) = run_local_with_init(&q, &[
+            h.make_init_from_index(i).unwrap()
+        ]);
+        (0 .. state.state.len()).map(|i| {
+            state.state[utils::flip_bits(n as usize, i as u64) as usize]
+        }).collect()
+    }).collect()
 }

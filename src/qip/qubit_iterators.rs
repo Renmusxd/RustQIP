@@ -2,7 +2,7 @@ extern crate num;
 
 use num::complex::Complex;
 
-use super::utils::*;
+use crate::utils::*;
 
 /// Iterator which provides the indices of nonzero columns for a given row of a matrix
 pub struct MatrixOpIterator<'a> {
@@ -77,8 +77,9 @@ impl<It: std::iter::Iterator<Item=(u64, Complex<f64>)>> std::iter::Iterator for 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(it) = &mut self.op_iter {
             let cval = it.next();
-            self.last_col = cval.map(|(i, _) | i + self.index_threshold);
-            cval.map(|(i, val)| (i + self.index_threshold, val))
+            let ret_val = cval.map(|(i, val)| (i + self.index_threshold, val));
+            self.last_col = ret_val.map(|(i, _)| i);
+            ret_val
         } else {
             if let Some(last_col) = self.last_col {
                 if last_col < self.row {

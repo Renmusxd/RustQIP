@@ -11,19 +11,19 @@ pub fn qfft<B: UnitaryBuilder>(builder: &mut B, q: Qubit) -> Qubit {
     let mut qs = builder.split_all(q);
     qs.reverse();
     let qs = rec_qfft(builder, vec![], qs);
-    let mut qs: Vec<Option<Qubit>> = qs.into_iter().map(|q| Some(q)).collect();
 
-    for i in 0 .. qs.len() >> 1 {
-        let inv_i = qs.len() - i - 1;
-        let qa = qs[i].take();
-        let qb = qs[inv_i].take();
-        if let Some((qa, qb)) = qa.and_then(|a| qb.map(|b| (a,b))) {
-            let (qa, qb) = builder.swap(qa, qb);
-            qs[i] = Some(qa);
-            qs[inv_i] = Some(qb);
-        }
-    }
-    let qs = qs.into_iter().map(|q| q.unwrap()).collect();
+//    let mut qs: Vec<Option<Qubit>> = qs.into_iter().map(|q| Some(q)).collect();
+//    for i in 0 .. qs.len() >> 1 {
+//        let inv_i = qs.len() - i - 1;
+//        let qa = qs[i].take();
+//        let qb = qs[inv_i].take();
+//        if let Some((qa, qb)) = qa.and_then(|a| qb.map(|b| (a,b))) {
+//            let (qa, qb) = builder.swap(qa, qb);
+//            qs[i] = Some(qa);
+//            qs[inv_i] = Some(qb);
+//        }
+//    }
+//    let qs = qs.into_iter().map(|q| q.unwrap()).collect();
 
     builder.merge(qs)
 }
@@ -32,15 +32,18 @@ fn rec_qfft<B: UnitaryBuilder>(builder: &mut B, mut used_qs: Vec<Qubit>, mut rem
     let q = remaining_qs.pop();
     if let Some(q) = q {
         let offset = used_qs.len();
-        let q = builder.hadamard(q);
-        let mut cbuilder = builder.with_context(q);
-        let rn = remaining_qs.len();
-        let qs: Vec<Qubit> = remaining_qs.into_iter().enumerate().map(|(i, q)| {
-            let m = i + 2;
-            cbuilder.mat(q, make_rm_mat(m as u64).as_slice())
-        }).collect();
+        let mut q = builder.hadamard(q);
 
-        let q = cbuilder.release_qubit();
+        let mut pushing_qs = vec![];
+        for (i, cq) in remaining_qs.into_iter().enumerate() {
+            let m = (i + 2) as u64;
+            let mut cbuilder = builder.with_context(cq);
+            q = cbuilder.mat(q, make_rm_mat(m).as_slice());
+            pushing_qs.push(cbuilder.release_qubit());
+        }
+        pushing_qs.reverse();
+        let qs = pushing_qs;
+
         used_qs.push(q);
         rec_qfft(builder, used_qs, qs)
     } else {
@@ -49,7 +52,7 @@ fn rec_qfft<B: UnitaryBuilder>(builder: &mut B, mut used_qs: Vec<Qubit>, mut rem
 }
 
 pub fn make_rm_mat(m: u64) -> Vec<Complex<f64>>{
-    let phi = -2.0 * std::f64::consts::PI / 2.0f64.powi(m as i32);
+    let phi = 2.0 * std::f64::consts::PI / (1 << m) as f64;
     vec![Complex::<f64> {
         re: 1.0,
         im: 0.0
