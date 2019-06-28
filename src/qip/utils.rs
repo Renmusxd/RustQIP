@@ -1,5 +1,3 @@
-use std::ops::{Add, Sub, Shl, Shr};
-
 /// Set the `bit_index` bit in `num` to `value`.
 ///
 /// # Example

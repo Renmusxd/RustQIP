@@ -4,13 +4,14 @@ extern crate rayon;
 
 use std::cmp::{max, min};
 
+use crate::types::Precision;
 use num::complex::Complex;
 use rand::prelude::*;
 use rayon::prelude::*;
 
 /// Get total magnitude of state.
-fn prob_magnitude(input: &Vec<Complex<f64>>) -> f64 {
-    input.par_iter().map(Complex::<f64>::norm_sqr).sum()
+fn prob_magnitude<P: Precision>(input: &[Complex<P>]) -> P {
+    input.par_iter().map(Complex::<P>::norm_sqr).sum()
 }
 
 /// Calculate the probability of a given measurement. `measured` gives the bits (as a u64) which has
@@ -51,7 +52,7 @@ fn prob_magnitude(input: &Vec<Complex<f64>>) -> f64 {
 /// let p = measure_prob(2, 2, &vec![1, 0], &input, 0);
 /// assert_eq!(p, 1.0);
 /// ```
-pub fn measure_prob(n: u64, measured: u64, indices: &Vec<u64>, input: &Vec<Complex<f64>>, input_offset: u64) -> f64 {
+pub fn measure_prob<P: Precision>(n: u64, measured: u64, indices: &[u64], input: &[Complex<P>], input_offset: u64) -> P {
     let template: u64 = indices.iter().cloned().enumerate().map(|(i, index)| -> u64 {
         let sel_bit = (measured >> i as u64) & 1;
         sel_bit << (n - 1 - index)
@@ -59,7 +60,7 @@ pub fn measure_prob(n: u64, measured: u64, indices: &Vec<u64>, input: &Vec<Compl
     let remaining_indices: Vec<u64> = (0..n).filter(|i| !indices.contains(i)).collect();
 
     // No parallel iterators available for u64 ranges.
-    (0..1 << n - indices.len() as u64).map(|remaining_index_bits: u64| -> f64 {
+    (0..1 << n - indices.len() as u64).map(|remaining_index_bits: u64| -> P {
         let tmp_index: u64 = remaining_indices.iter().clone().enumerate().map(|item| -> u64 {
             let (i, index) = item;
             let sel_bit = (remaining_index_bits >> i as u64) & 1;
@@ -67,11 +68,11 @@ pub fn measure_prob(n: u64, measured: u64, indices: &Vec<u64>, input: &Vec<Compl
         }).sum();
         let index = tmp_index + template;
         if index < input_offset {
-            return 0.0;
+            return P::zero();
         }
         let index = index - input_offset;
         if index >= input.len() as u64 {
-            return 0.0;
+            return P::zero();
         }
         input[index as usize].norm_sqr()
     }).sum()
@@ -96,17 +97,17 @@ pub fn measure_prob(n: u64, measured: u64, indices: &Vec<u64>, input: &Vec<Compl
 /// let m = soft_measure(2, &vec![1], &input, 0);
 /// assert_eq!(m, 0);
 /// ```
-pub fn soft_measure(n: u64, indices: &Vec<u64>, input: &Vec<Complex<f64>>, input_offset: u64) -> u64 {
-    let mut r = rand::random::<f64>() *
+pub fn soft_measure<P: Precision>(n: u64, indices: &[u64], input: &[Complex<P>], input_offset: u64) -> u64 {
+    let mut r = P::from(rand::random::<f64>()).unwrap() *
         if input.len() < (1 << n) as usize {
-            prob_magnitude(input)
+            prob_magnitude(input).into()
         } else {
-            1.0
+            P::one()
         };
     let mut measured_indx = 0;
     for (i, c) in input.iter().enumerate() {
-        r -= c.norm_sqr();
-        if r <= 0.0 {
+        r = r - c.norm_sqr();
+        if r <= P::zero() {
             measured_indx = i as u64 + input_offset;
             break;
         }
@@ -119,9 +120,9 @@ pub fn soft_measure(n: u64, indices: &Vec<u64>, input: &Vec<Complex<f64>>, input
 
 /// Selects a measured state from `input`, then calls `measure_state` to manipulate the output.
 /// Returns the measured state and probability.
-pub fn measure(n: u64, indices: &Vec<u64>,
-               input: &Vec<Complex<f64>>, output: &mut Vec<Complex<f64>>,
-               input_offset: u64, output_offset: u64) -> (u64, f64) {
+pub fn measure<P: Precision>(n: u64, indices: &[u64],
+               input: &[Complex<P>], output: &mut Vec<Complex<P>>,
+               input_offset: u64, output_offset: u64) -> (u64, P) {
     let m = soft_measure(n, indices, input, input_offset);
     let p = measure_prob(n, m, indices, input, input_offset);
     measure_state(n, indices, m, p, input, output, input_offset, output_offset);
@@ -132,12 +133,12 @@ pub fn measure(n: u64, indices: &Vec<u64>,
 /// result and has the same magnitude.
 /// This is done by zeroing out the states which cannot give `measured`, and dividing the remaining
 /// by the sqrt(1/p) for p=`measured_prob`. See `measure_prob` for details.
-pub fn measure_state(n: u64, indices: &Vec<u64>, measured: u64, measured_prob: f64,
-                     input: &Vec<Complex<f64>>, output: &mut Vec<Complex<f64>>,
+pub fn measure_state<P: Precision>(n: u64, indices: &[u64], measured: u64, measured_prob: P,
+                     input: &[Complex<P>], output: &mut[Complex<P>],
                      input_offset: u64, output_offset: u64) {
     let p = measured_prob;
-    if p != 0.0 {
-        let p_mult = (1.0 / p).sqrt();
+    if p != P::zero() {
+        let p_mult = P::one() / p.sqrt();
 
         let row_mask: u64 = indices.iter().map(|index| {
             1 << (n - 1 - *index)
@@ -162,9 +163,9 @@ pub fn measure_state(n: u64, indices: &Vec<u64>, measured: u64, measured_prob: f
                 let row = i as u64 + lower;
                 if ((row & row_mask) ^ measured_mask) != 0 {
                     // This is not a valid measurement, zero out the entry.
-                    *output = Complex::<f64> {
-                        re: 0.0,
-                        im: 0.0,
+                    *output = Complex::<P> {
+                        re: P::zero(),
+                        im: P::zero(),
                     }
                 } else {
                     // Otherwise scale the entry.

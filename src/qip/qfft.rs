@@ -2,43 +2,27 @@ extern crate num;
 
 use num::complex::Complex;
 
-use crate::qubits;
 use crate::qubits::{Qubit, UnitaryBuilder};
-use crate::state_ops::from_reals;
+use crate::types::Precision;
 
-
-pub fn qfft<B: UnitaryBuilder>(builder: &mut B, q: Qubit) -> Qubit {
+pub fn qfft<P: Precision, B: UnitaryBuilder<P>>(builder: &mut B, q: Qubit<P>) -> Qubit<P> {
     let mut qs = builder.split_all(q);
     qs.reverse();
     let qs = rec_qfft(builder, vec![], qs);
-
-//    let mut qs: Vec<Option<Qubit>> = qs.into_iter().map(|q| Some(q)).collect();
-//    for i in 0 .. qs.len() >> 1 {
-//        let inv_i = qs.len() - i - 1;
-//        let qa = qs[i].take();
-//        let qb = qs[inv_i].take();
-//        if let Some((qa, qb)) = qa.and_then(|a| qb.map(|b| (a,b))) {
-//            let (qa, qb) = builder.swap(qa, qb);
-//            qs[i] = Some(qa);
-//            qs[inv_i] = Some(qb);
-//        }
-//    }
-//    let qs = qs.into_iter().map(|q| q.unwrap()).collect();
-
     builder.merge(qs)
 }
 
-fn rec_qfft<B: UnitaryBuilder>(builder: &mut B, mut used_qs: Vec<Qubit>, mut remaining_qs: Vec<Qubit>) -> Vec<Qubit> {
+fn rec_qfft<P: Precision, B: UnitaryBuilder<P>>(builder: &mut B, mut used_qs: Vec<Qubit<P>>, mut remaining_qs: Vec<Qubit<P>>) -> Vec<Qubit<P>> {
     let q = remaining_qs.pop();
     if let Some(q) = q {
-        let offset = used_qs.len();
         let mut q = builder.hadamard(q);
 
         let mut pushing_qs = vec![];
         for (i, cq) in remaining_qs.into_iter().enumerate() {
             let m = (i + 2) as u64;
             let mut cbuilder = builder.with_context(cq);
-            q = cbuilder.mat(q, make_rm_mat(m).as_slice());
+            // Rm is a 2x2 matrix, so cannot panic on unwrap.
+            q = cbuilder.mat(q, make_rm_mat(m).as_slice()).unwrap();
             pushing_qs.push(cbuilder.release_qubit());
         }
         pushing_qs.reverse();
@@ -51,19 +35,19 @@ fn rec_qfft<B: UnitaryBuilder>(builder: &mut B, mut used_qs: Vec<Qubit>, mut rem
     }
 }
 
-pub fn make_rm_mat(m: u64) -> Vec<Complex<f64>>{
-    let phi = 2.0 * std::f64::consts::PI / (1 << m) as f64;
-    vec![Complex::<f64> {
-        re: 1.0,
-        im: 0.0
-    }, Complex::<f64> {
-        re: 0.0,
-        im: 0.0
-    }, Complex::<f64> {
-        re: 0.0,
-        im: 0.0
-    }, Complex::<f64> {
-        re: 0.0,
+pub fn make_rm_mat<P: Precision>(m: u64) -> Vec<Complex<P>>{
+    let phi = P::from(2.0 * std::f64::consts::PI / (1 << m) as f64).unwrap();
+    vec![Complex::<P> {
+        re: P::one(),
+        im: P::zero()
+    }, Complex::<P> {
+        re: P::zero(),
+        im: P::zero()
+    }, Complex::<P> {
+        re: P::zero(),
+        im: P::zero()
+    }, Complex::<P> {
+        re: P::zero(),
         im: phi
     }.exp()]
 }

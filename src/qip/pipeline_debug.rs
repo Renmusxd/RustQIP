@@ -1,17 +1,22 @@
-use crate::pipeline;
-use crate::pipeline::{QuantumState, InitialState};
-use crate::state_ops::{QubitOp, get_index, num_indices};
-use crate::qubits::Qubit;
-use std::cmp::{min, max};
+extern crate num;
 
-struct PrintPipeline {
-    n: u64
+use std::marker::PhantomData;
+
+use num::complex::Complex;
+
+use crate::pipeline;
+use crate::pipeline::{InitialState, QuantumState};
+use crate::qubits::Qubit;
+use crate::state_ops::{get_index, num_indices, QubitOp};
+use crate::types::Precision;
+
+struct PrintPipeline<P> {
+    n: u64,
+    phantom: PhantomData<P>
 }
 
-
-
-impl QuantumState for PrintPipeline {
-    fn new(n: u64) -> Self {
+impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
+    fn new(n: u64) -> PrintPipeline<P> {
         let tmp: Vec<String> = (0 .. n).map(|i| i.to_string()).collect();
         println!("{}", tmp.join(" "));
         let tmp: Vec<String> = (0 .. n).map(|_| "V".to_string()).collect();
@@ -20,21 +25,22 @@ impl QuantumState for PrintPipeline {
         println!("{}", tmp.join(" "));
 
         PrintPipeline {
-            n
+            n,
+            phantom: PhantomData
         }
     }
 
-    fn new_from_initial_states(n: u64, states: &[(Vec<u64>, InitialState)]) -> Self {
-        Self::new(n)
+    fn new_from_initial_states(n: u64, _states: &[(Vec<u64>, InitialState<P>)]) -> PrintPipeline<P> {
+        PrintPipeline::<P>::new(n)
     }
 
-    fn apply_op(&mut self, op: &QubitOp) {
+    fn apply_op(&mut self, op: &QubitOp<P>) {
          match op {
              QubitOp::ControlOp(c_indices, o_indices, _) => {
                 let lower = c_indices.iter().chain(o_indices.iter()).cloned().min().unwrap_or(0);
                 let upper = c_indices.iter().chain(o_indices.iter()).cloned().max().unwrap_or(self.n);
 
-                for i in 0 .. lower {
+                for _ in 0 .. lower {
                     print!("{} ", "|".to_string());
                 }
                 for i in lower .. upper+1 {
@@ -51,7 +57,7 @@ impl QuantumState for PrintPipeline {
                         print!("{}{}", "|".to_string(), conn);
                     }
                 }
-                for i in upper+1 .. self.n {
+                for _ in upper+1 .. self.n {
                     print!("{} ", "|".to_string());
                 }
                 println!()
@@ -60,7 +66,7 @@ impl QuantumState for PrintPipeline {
                  let lower = a_indices.iter().chain(b_indices.iter()).cloned().min().unwrap_or(0);
                  let upper = a_indices.iter().chain(b_indices.iter()).cloned().max().unwrap_or(self.n);
 
-                 for i in 0 .. lower {
+                 for _ in 0 .. lower {
                      print!("{} ", "|".to_string());
                  }
                  for i in lower .. upper+1 {
@@ -77,13 +83,13 @@ impl QuantumState for PrintPipeline {
                          print!("{}{}", "|".to_string(), conn);
                      }
                  }
-                 for i in upper+1 .. self.n {
+                 for _ in upper+1 .. self.n {
                      print!("{} ", "|".to_string());
                  }
                  println!()
              },
              _ => {
-                let mut indices: Vec<u64> = (0 .. num_indices(op)).map(|i| get_index(op, i)).collect();
+                let indices: Vec<u64> = (0 .. num_indices(op)).map(|i| get_index(op, i)).collect();
                 let mut tmp: Vec<String> = vec![];
                 for i in 0u64 .. self.n {
                     if indices.contains(&i) {
@@ -99,7 +105,7 @@ impl QuantumState for PrintPipeline {
         println!("{}", tmp.join(" "));
     }
 
-    fn measure(&mut self, indices: &Vec<u64>) -> (u64, f64) {
+    fn measure(&mut self, indices: &[u64]) -> (u64, P) {
         let mut tmp: Vec<String> = vec![];
         for i in 0u64 .. self.n {
             if indices.contains(&i) {
@@ -111,11 +117,15 @@ impl QuantumState for PrintPipeline {
         println!("{}", tmp.join(" "));
         let tmp: Vec<String> = (0 .. self.n).map(|_| "|".to_string()).collect();
         println!("{}", tmp.join(" "));
-        (0, 0.0)
+        (0, P::zero())
+    }
+
+    fn get_state(self, _natural_order: bool) -> Vec<Complex<P>> {
+        unimplemented!()
     }
 }
 
-pub fn run_debug(q: &Qubit) {
+pub fn run_debug<P: Precision>(q: &Qubit<P>) {
     pipeline::run_with_statebuilder(q, |qs| {
         let n: u64 = qs.iter().map(|q| -> u64 {
             q.n()

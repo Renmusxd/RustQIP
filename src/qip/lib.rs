@@ -7,3 +7,4 @@ pub mod measurement_ops;
 pub mod pipeline;
 pub mod pipeline_debug;
 pub mod qfft;
+pub mod types;
