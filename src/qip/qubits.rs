@@ -34,6 +34,11 @@ impl<P: Precision> Qubit<P> {
         }
     }
 
+    /// Create a handle for feeding values.
+    pub fn handle(&self) -> QubitHandle {
+        QubitHandle{ indices: self.indices.clone() }
+    }
+
     /// Merge qubits to for a new qubit object.
     pub fn merge_with_modifier(id: u64, qubits: Vec<Qubit<P>>, modifier: Option<StateModifier<P>>) -> Qubit<P> {
         let mut all_indices = Vec::new();
@@ -51,22 +56,30 @@ impl<P: Precision> Qubit<P> {
     }
 
     /// Split the relative indices out of `q` into its own qubit, remaining live in second qubit.
-    pub fn split(ida: u64, idb: u64, q: Qubit<P>, selected_indices: Vec<u64>) -> Result<(Qubit<P>, Qubit<P>), &'static str> {
-        for indx in &selected_indices {
+    pub fn split(ida: u64, idb: u64, q: Qubit<P>, indices: Vec<u64>) -> Result<(Qubit<P>, Qubit<P>), &'static str> {
+        for indx in &indices {
             if indx < &0 {
                 return Err("All indices for splitting must be above 0");
             } else if indx > &(q.indices.len() as u64) {
                 return Err("All indices for splitting must be below q.n");
             }
         }
-        let selected_indices: Vec<u64> = selected_indices.into_iter().map(|i| q.indices[i as usize]).collect();
-        Self::split_absolute(ida, idb, q, selected_indices)
+        if indices.len() == q.indices.len() {
+            Err("Indices must leave at least one index.")
+        } else if indices.len() == 0 {
+            Err("Indices must contain at least one index.")
+        } else {
+            let selected_indices: Vec<u64> = indices.into_iter().map(|i| q.indices[i as usize]).collect();
+            Self::split_absolute(ida, idb, q, selected_indices)
+        }
     }
 
     /// Split a qubit in two, with one having the indices in `selected_indices`
     pub fn split_absolute(ida: u64, idb: u64, q: Qubit<P>, selected_indices: Vec<u64>) -> Result<(Qubit<P>, Qubit<P>), &'static str> {
         if selected_indices.len() == q.indices.len() {
             return Err("Cannot split out all indices into own qubit.");
+        } else if selected_indices.len() == 0 {
+            return Err("Must provide indices to split.");
         }
         for indx in &selected_indices {
             if !q.indices.contains(indx) {
@@ -215,9 +228,29 @@ pub trait UnitaryBuilder<P: Precision> {
         self.merge_with_op(qs, None)
     }
 
+    /// Split the qubit `q` into two qubits, one with relative `indices` and one with the remaining.
+    fn split(&mut self, q:Qubit<P>, indices: Vec<u64>) -> Result<(Qubit<P>, Qubit<P>), &'static str> {
+        for indx in &indices {
+            if indx < &0 {
+                return Err("All indices for splitting must be above 0");
+            } else if indx > &(q.indices.len() as u64) {
+                return Err("All indices for splitting must be below q.n");
+            }
+        }
+        if indices.len() == 0 {
+            Err("Indices must contain at least one index.")
+        } else if indices.len() == q.indices.len() {
+            Err("Indices must leave at least one index.")
+        } else {
+            let selected_indices: Vec<u64> = indices.into_iter().map(|i| q.indices[i as usize]).collect();
+            self.split_absolute(q, selected_indices)
+        }
+    }
+
     /// Split the qubit `q` into two qubits, one with `selected_indices` and one with the remaining.
     fn split_absolute(&mut self, q: Qubit<P>, selected_indices: Vec<u64>) -> Result<(Qubit<P>, Qubit<P>), &'static str>;
 
+    /// Split the qubit into many qubits, each with the given set of indices.
     fn split_absolute_many(&mut self, q: Qubit<P>, index_groups: Vec<Vec<u64>>) -> Result<(Vec<Qubit<P>>, Qubit<P>), &'static str> {
         Ok(index_groups.into_iter().fold((vec![], q), |(mut qs, q), indices| {
             let (hq, tq) = self.split_absolute(q, indices).unwrap();
