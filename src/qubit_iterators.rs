@@ -36,10 +36,9 @@ impl<'a, P: Precision> std::iter::Iterator for MatrixOpIterator<'a, P> {
             0
         };
         self.last_col = None;
-        let zero = Complex::<P> { re: P::zero(), im: P::zero() };
         for col in pos..(1 << self.n) {
             let val = self.data[col as usize];
-            if val != zero {
+            if val != Complex::default() {
                 self.last_col = Some(col);
                 return Some((col, val));
             }
@@ -139,6 +138,49 @@ impl<P: Precision> std::iter::Iterator for SwapOpIterator<P> {
     }
 }
 
+/// Iterator which provides the indices of nonzero columns for a given function f.
+pub struct FunctionOpIterator<P: Precision> {
+    m: u64,
+    x: u64,
+    fx_xor_y: u64,
+    last_col: Option<u64>,
+    phantom: PhantomData<P>
+}
+
+impl<P: Precision> FunctionOpIterator<P> {
+    pub fn new<F: Fn(u64) -> u64>(row: u64, n: u64, f: F) -> FunctionOpIterator<P> {
+        let m = (n >> 1);
+        let x = row >> m;
+        let fx = f(flip_bits(m as usize, x));
+        let y = row & ((1 << m) - 1);
+        let fx_xor_y = y ^ flip_bits(m as usize, fx);
+        FunctionOpIterator {
+            m,
+            x,
+            fx_xor_y,
+            last_col: None,
+            phantom: PhantomData
+        }
+    }
+}
+
+impl<P: Precision> std::iter::Iterator for FunctionOpIterator<P> {
+    type Item = (u64, Complex<P>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(_) = self.last_col {
+            self.last_col = None;
+        } else {
+            let colbits = (self.x << self.m) | self.fx_xor_y;
+            self.last_col = Some(colbits);
+        };
+        self.last_col.map(|col| (col, Complex {
+            re: P::one(),
+            im: P::zero()
+        }))
+    }
+}
+
 #[cfg(test)]
 mod iterator_tests {
     use crate::state_ops::from_reals;
@@ -212,6 +254,28 @@ mod iterator_tests {
             vec![0.0, 0.0, 0.0, 1.0],
             vec![0.0, 0.0, 1.0, 0.0]
         ];
+        assert_eq!(mat, expected);
+    }
+
+    #[test]
+    fn test_f_iterator() {
+        let n = 2u64;
+        let mat: Vec<Vec<f64>> = (0..1 << n).map(|i| -> Vec<f64> {
+            let it = FunctionOpIterator::<f64>::new(i, n, |x| (x != 1) as u64);
+            let v: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
+            it.fold(v, |mut v, (indx, _)| {
+                v[indx as usize] = 1.0;
+                v
+            })
+        }).collect();
+
+        let expected = vec![
+            vec![0.0, 1.0, 0.0, 0.0],
+            vec![1.0, 0.0, 0.0, 0.0],
+            vec![0.0, 0.0, 1.0, 0.0],
+            vec![0.0, 0.0, 0.0, 1.0]
+        ];
+
         assert_eq!(mat, expected);
     }
 }

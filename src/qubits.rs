@@ -196,7 +196,7 @@ pub trait UnitaryBuilder {
 
     /// Apply Y to `q`, if `q` is multiple indices, apply to each
     fn y(&mut self, q: Qubit) -> Qubit {
-        self.mat(q, from_tuples(&[(0.0, 0.0), (0.0, 0.0 - 1.0), (0.0, 0.0), (0.0, 1.0)])
+        self.mat(q, from_tuples(&[(0.0, 0.0), (0.0, -1.0), (0.0, 0.0), (0.0, 1.0)])
             .as_slice()).unwrap()
     }
 
@@ -207,7 +207,7 @@ pub trait UnitaryBuilder {
 
     /// Apply H to `q`, if `q` is multiple indices, apply to each
     fn hadamard(&mut self, q: Qubit) -> Qubit {
-        let inv_sqrt = 1.0f64 / 2.0_f64.sqrt();
+        let inv_sqrt = 1.0f64 / 2.0f64.sqrt();
         self.real_mat(q, &[inv_sqrt, inv_sqrt, inv_sqrt, -inv_sqrt]).unwrap()
     }
 
@@ -218,6 +218,9 @@ pub trait UnitaryBuilder {
         let q = self.merge_with_op(vec![qa, qb], Some(op));
         self.split_absolute(q, qa_indices)
     }
+
+    /// Make an operation from the boxed function `f`.
+    fn apply_function(&mut self, q_in: Qubit, q_out: Qubit, f: Box<Fn(u64) -> u64 + Send + Sync>) -> (Qubit, Qubit);
 
     /// Merge the qubits in `qs` into a single qubit.
     fn merge(&mut self, qs: Vec<Qubit>) -> Qubit {
@@ -277,8 +280,18 @@ pub trait UnitaryBuilder {
         }
     }
 
+    /// Make a function op. f must be boxed so that this function doesn't need to be parameterized.
+    fn make_function_op(&self, q_in: &Qubit, q_out: &Qubit, f: Box<Fn(u64) -> u64 + Send + Sync>) -> QubitOp {
+        QubitOp::Function(q_in.indices.clone(), q_out.indices.clone(), f)
+    }
+
     /// Merge qubits using a generic state processing function.
     fn merge_with_op(&mut self, qs: Vec<Qubit>, operator: Option<QubitOp>) -> Qubit;
+}
+
+/// Helper function for Boxing static functions and applying using the given UnitaryBuilder.
+pub fn apply_function<B: UnitaryBuilder, F: 'static + Fn(u64) -> u64 + Send + Sync>(b: &mut B, q_in: Qubit, q_out: Qubit, f: F) -> (Qubit, Qubit) {
+    b.apply_function(q_in, q_out, Box::new(f))
 }
 
 /// A basic builder for unitary and non-unitary ops.
@@ -354,6 +367,13 @@ impl UnitaryBuilder for OpBuilder {
                 Ok(self.merge_with_op(vec![q], Some(op)))
             }
         }
+    }
+
+    fn apply_function(&mut self, q_in: Qubit, q_out: Qubit, f: Box<Fn(u64) -> u64 + Send + Sync>) -> (Qubit, Qubit) {
+        let op = self.make_function_op(&q_in, &q_out, f);
+        let in_indices = q_in.indices.clone();
+        let q = self.merge_with_op(vec![q_in, q_out], Some(op));
+        self.split_absolute(q, in_indices).unwrap()
     }
 
     fn split_absolute(&mut self, q: Qubit, selected_indices: Vec<u64>) -> Result<(Qubit, Qubit), &'static str> {
@@ -434,6 +454,10 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         Ok((qa, qb))
     }
 
+    fn apply_function(&mut self, q_in: Qubit, q_out: Qubit, f: Box<Fn(u64) -> u64 + Send + Sync>) -> (Qubit, Qubit) {
+        unimplemented!()
+    }
+
     fn split_absolute(&mut self, q: Qubit, selected_indices: Vec<u64>) -> Result<(Qubit, Qubit), &'static str> {
         self.parent_builder.split_absolute(q, selected_indices)
     }
@@ -450,6 +474,16 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
             Some(cq) => {
                 let op = self.parent_builder.make_swap_op(qa, qb)?;
                 Ok(make_control_op(cq.indices.clone(), op))
+            },
+            None => panic!("Conditional context builder failed to populate qubit.")
+        }
+    }
+
+    fn make_function_op(&self, q_in: &Qubit, q_out: &Qubit, f: Box<Fn(u64) -> u64 + Send + Sync>) -> QubitOp {
+        match &self.conditioned_qubit {
+            Some(cq) => {
+                let op = self.parent_builder.make_function_op(q_in, q_out, f);
+                make_control_op(cq.indices.clone(), op)
             },
             None => panic!("Conditional context builder failed to populate qubit.")
         }

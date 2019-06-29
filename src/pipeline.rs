@@ -82,22 +82,10 @@ pub struct LocalQuantumState<P: Precision> {
     multithread: bool
 }
 
-pub enum InitialState<P: Precision> {
-    FullState(Vec<Complex<P>>),
-    Index(u64)
-}
-
-pub type QubitInitialState<P> = (Vec<u64>, InitialState<P>);
-
-impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
-    /// Build a new LocalQuantumState
-    fn new(n: u64) -> LocalQuantumState<P> {
-        LocalQuantumState::new_from_initial_states(n, &[])
-    }
-
+impl<P: Precision> LocalQuantumState<P> {
     /// Build a local state using a set of initial states for subsets of the qubits.
     /// These initial states are made from the qubit handles.
-    fn new_from_initial_states(n: u64, states: &[QubitInitialState<P>]) -> LocalQuantumState<P> {
+    fn new_from_initial_states_and_multithread(n: u64, states: &[QubitInitialState<P>], multithread: bool) -> LocalQuantumState<P> {
         let max_init_n = states.iter().map(|(indices, _)| indices).cloned().flatten().max().map(|m| m+1);
 
         let n = max_init_n.map(|m| max(n, m)).unwrap_or(n);
@@ -153,8 +141,28 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
             n,
             state: cvec.clone(),
             arena: cvec,
-            multithread: n > PARALLEL_THRESHOLD
+            multithread
         }
+    }
+}
+
+pub enum InitialState<P: Precision> {
+    FullState(Vec<Complex<P>>),
+    Index(u64)
+}
+
+pub type QubitInitialState<P> = (Vec<u64>, InitialState<P>);
+
+impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
+    /// Build a new LocalQuantumState
+    fn new(n: u64) -> LocalQuantumState<P> {
+        LocalQuantumState::new_from_initial_states(n, &[])
+    }
+
+    /// Build a local state using a set of initial states for subsets of the qubits.
+    /// These initial states are made from the qubit handles.
+    fn new_from_initial_states(n: u64, states: &[QubitInitialState<P>]) -> LocalQuantumState<P> {
+        Self::new_from_initial_states_and_multithread(n, states, true)
     }
 
     fn apply_op(&mut self, op: &QubitOp) {

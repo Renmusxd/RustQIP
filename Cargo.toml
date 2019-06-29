@@ -1,12 +1,12 @@
 [package]
-name = "rust_qip"
+name = "qip"
 version = "0.1.0"
 authors = ["sumnernh@gmail.com <sumnernh@gmail.com>"]
 edition = "2018"
 
 [lib]
 name = "qip"
-path = "src/qip/lib.rs"
+path = "src/lib.rs"
 
 [dependencies]
 num = "0.2.0"
