@@ -1,12 +1,32 @@
 #[macro_use]
 extern crate bencher;
 extern crate qip;
+extern crate num;
 
 use bencher::Bencher;
 
+use num::Complex;
 use qip::state_ops::*;
-use qip::multi_ops::*;
 use qip::state_ops::QubitOp::*;
+
+/// Make the full op matrix from `ops`.
+/// Not very efficient, use only for debugging.
+fn make_ops_matrix(n: u64, ops: &Vec<&QubitOp>) -> Vec<Vec<Complex<f64>>> {
+    let zeros: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
+    (0..1 << n).map(|i| {
+        let mut input = from_reals(&zeros);
+        let mut output = input.clone();
+        input[i] = Complex {
+            re: 1.0,
+            im: 0.0,
+        };
+        let (input, output) = ops.iter().fold((input, output), |(input, mut output), op| {
+            apply_op(n, op, &input, &mut output, 0, 0, true);
+            (output, input)
+        });
+        input
+    }).collect()
+}
 
 fn bench_identity(b: &mut Bencher) {
     let n = 3;
