@@ -13,12 +13,12 @@ fn bench_identity(b: &mut Bencher) {
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
 
-    let ops: Vec<QubitOp<f64>> = (0..n).map(|i| MatrixOp::<f64>(vec![i], mat.clone())).collect();
+    let ops: Vec<QubitOp> = (0..n).map(|i| MatrixOp(vec![i], mat.clone())).collect();
     let ops_ref = ops.iter().collect();
 
     let mat_nested = make_ops_matrix(n, &ops_ref);
     let mat = mat_nested.into_iter().flatten().collect();
-    let op = MatrixOp::<f64>((0..n).collect(), mat);
+    let op = MatrixOp((0..n).collect(), mat);
 
     let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
@@ -33,12 +33,12 @@ fn bench_hadamard(b: &mut Bencher) {
     let mult = (1.0/2.0f64).sqrt();
     let mat = from_reals(&vec![mult, mult, mult, -mult]);
 
-    let ops: Vec<QubitOp<f64>> = (0..n).map(|i| MatrixOp::<f64>(vec![i], mat.clone())).collect();
+    let ops: Vec<QubitOp> = (0..n).map(|i| MatrixOp(vec![i], mat.clone())).collect();
     let ops_ref = ops.iter().collect();
 
     let mat_nested = make_ops_matrix(n, &ops_ref);
     let mat = mat_nested.into_iter().flatten().collect();
-    let op = MatrixOp::<f64>((0..n).collect(), mat);
+    let op = MatrixOp((0..n).collect(), mat);
 
     let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
@@ -51,7 +51,7 @@ fn bench_cidentity(b: &mut Bencher) {
     let n = 3;
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
-    let op = make_control_op((0..n - 1).collect(), MatrixOp::<f64>(vec![n - 1], mat));
+    let op = make_control_op((0..n - 1).collect(), MatrixOp(vec![n - 1], mat));
 
     let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
@@ -65,12 +65,12 @@ fn bench_identity_larger(b: &mut Bencher) {
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
 
-    let ops: Vec<QubitOp<f64>> = (0..n).map(|i| MatrixOp::<f64>(vec![i], mat.clone())).collect();
+    let ops: Vec<QubitOp> = (0..n).map(|i| MatrixOp(vec![i], mat.clone())).collect();
     let ops_ref = ops.iter().collect();
 
     let mat_nested = make_ops_matrix(n, &ops_ref);
     let mat = mat_nested.into_iter().flatten().collect();
-    let op = MatrixOp::<f64>((0..n).collect(), mat);
+    let op = MatrixOp((0..n).collect(), mat);
 
     let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
@@ -85,12 +85,12 @@ fn bench_hadamard_larger(b: &mut Bencher) {
     let mult = (1.0/2.0f64).sqrt();
     let mat = from_reals(&vec![mult, mult, mult, -mult]);
 
-    let ops: Vec<QubitOp<f64>> = (0..n).map(|i| MatrixOp::<f64>(vec![i], mat.clone())).collect();
+    let ops: Vec<QubitOp> = (0..n).map(|i| MatrixOp(vec![i], mat.clone())).collect();
     let ops_ref = ops.iter().collect();
 
     let mat_nested = make_ops_matrix(n, &ops_ref);
     let mat = mat_nested.into_iter().flatten().collect();
-    let op = MatrixOp::<f64>((0..n).collect(), mat);
+    let op = MatrixOp((0..n).collect(), mat);
 
     let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
@@ -103,7 +103,7 @@ fn bench_cidentity_larger(b: &mut Bencher) {
     let n = 8;
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
-    let op = make_control_op((0..n - 1).collect(), MatrixOp::<f64>(vec![n - 1], mat));
+    let op = make_control_op((0..n - 1).collect(), MatrixOp(vec![n - 1], mat));
 
     let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
@@ -117,7 +117,7 @@ fn bench_cidentity_giant(b: &mut Bencher) {
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
     let c_indices = (0 .. n - 1).collect();
-    let op = make_control_op(c_indices, MatrixOp::<f64>(vec![n - 1], mat));
+    let op = make_control_op(c_indices, MatrixOp(vec![n - 1], mat));
 
     let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
@@ -131,7 +131,7 @@ fn bench_cidentity_giant_halfprec(b: &mut Bencher) {
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
     let c_indices = (0 .. n - 1).collect();
-    let op = make_control_op(c_indices, MatrixOp::<f32>(vec![n - 1], mat));
+    let op = make_control_op(c_indices, MatrixOp(vec![n - 1], mat));
 
     let base_vector: Vec<f32> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);

@@ -15,7 +15,7 @@ pub struct MatrixOpIterator<'a, P: Precision> {
 }
 
 impl<'a, P: Precision> MatrixOpIterator<'a, P> {
-    pub fn new(row: u64, n: u64, data: &'a Vec<Complex<P>>) -> MatrixOpIterator<P> {
+    pub fn new(row: u64, n: u64, data: &'a [Complex<P>]) -> MatrixOpIterator<P> {
         let lower = get_flat_index(n, row, 0) as usize;
         let upper = get_flat_index(n, row, 1 << n) as usize;
         MatrixOpIterator {
@@ -124,7 +124,7 @@ impl<P: Precision> std::iter::Iterator for SwapOpIterator<P> {
     type Item = (u64, Complex<P>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let None = self.last_col {
+        if self.last_col.is_none() {
             let lower_mask: u64 = !(std::u64::MAX << self.half_n);
             let lower = self.row & lower_mask;
             let upper = self.row >> self.half_n;

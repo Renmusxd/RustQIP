@@ -9,24 +9,24 @@ use crate::state_ops::*;
 use crate::types::Precision;
 
 /// Possible relations to a parent qubit
-pub enum Parent<P: Precision> {
-    Owned(Vec<Qubit<P>>, Option<StateModifier<P>>),
-    Shared(Rc<Qubit<P>>),
+pub enum Parent {
+    Owned(Vec<Qubit>, Option<StateModifier>),
+    Shared(Rc<Qubit>),
 }
 
 /// A qubit object, possible representing multiple physical qubit indices.
-pub struct Qubit<P: Precision> {
+pub struct Qubit {
     pub indices: Vec<u64>,
-    pub parent: Option<Parent<P>>,
+    pub parent: Option<Parent>,
     pub id: u64,
 }
 
-impl<P: Precision> Qubit<P> {
-    fn new(id: u64, indices: Vec<u64>) -> Result<Qubit<P>, &'static str> {
-        if indices.len() == 0 {
+impl Qubit {
+    fn new(id: u64, indices: Vec<u64>) -> Result<Qubit, &'static str> {
+        if indices.is_empty() {
             Err("Qubit must have nonzero number of indices.")
         } else {
-            Ok(Qubit::<P> {
+            Ok(Qubit {
                 indices,
                 parent: None,
                 id,
@@ -40,7 +40,7 @@ impl<P: Precision> Qubit<P> {
     }
 
     /// Merge qubits to for a new qubit object.
-    pub fn merge_with_modifier(id: u64, qubits: Vec<Qubit<P>>, modifier: Option<StateModifier<P>>) -> Qubit<P> {
+    pub fn merge_with_modifier(id: u64, qubits: Vec<Qubit>, modifier: Option<StateModifier>) -> Qubit {
         let mut all_indices = Vec::new();
 
         for q in qubits.iter() {
@@ -48,7 +48,7 @@ impl<P: Precision> Qubit<P> {
         }
         all_indices.sort();
 
-        Qubit::<P> {
+        Qubit {
             indices: all_indices,
             parent: Some(Parent::Owned(qubits, modifier)),
             id,
@@ -56,17 +56,15 @@ impl<P: Precision> Qubit<P> {
     }
 
     /// Split the relative indices out of `q` into its own qubit, remaining live in second qubit.
-    pub fn split(ida: u64, idb: u64, q: Qubit<P>, indices: Vec<u64>) -> Result<(Qubit<P>, Qubit<P>), &'static str> {
+    pub fn split(ida: u64, idb: u64, q: Qubit, indices: Vec<u64>) -> Result<(Qubit, Qubit), &'static str> {
         for indx in &indices {
-            if indx < &0 {
-                return Err("All indices for splitting must be above 0");
-            } else if indx > &(q.indices.len() as u64) {
+            if *indx > (q.indices.len() as u64) {
                 return Err("All indices for splitting must be below q.n");
             }
         }
         if indices.len() == q.indices.len() {
             Err("Indices must leave at least one index.")
-        } else if indices.len() == 0 {
+        } else if indices.is_empty() {
             Err("Indices must contain at least one index.")
         } else {
             let selected_indices: Vec<u64> = indices.into_iter().map(|i| q.indices[i as usize]).collect();
@@ -75,10 +73,10 @@ impl<P: Precision> Qubit<P> {
     }
 
     /// Split a qubit in two, with one having the indices in `selected_indices`
-    pub fn split_absolute(ida: u64, idb: u64, q: Qubit<P>, selected_indices: Vec<u64>) -> Result<(Qubit<P>, Qubit<P>), &'static str> {
+    pub fn split_absolute(ida: u64, idb: u64, q: Qubit, selected_indices: Vec<u64>) -> Result<(Qubit, Qubit), &'static str> {
         if selected_indices.len() == q.indices.len() {
             return Err("Cannot split out all indices into own qubit.");
-        } else if selected_indices.len() == 0 {
+        } else if selected_indices.is_empty() {
             return Err("Must provide indices to split.");
         }
         for indx in &selected_indices {
@@ -110,27 +108,27 @@ impl<P: Precision> Qubit<P> {
     }
 }
 
-impl<P: Precision> std::cmp::Eq for Qubit<P> {}
+impl std::cmp::Eq for Qubit {}
 
-impl<P: Precision> std::cmp::PartialEq for Qubit<P> {
-    fn eq(&self, other: &Qubit<P>) -> bool {
+impl std::cmp::PartialEq for Qubit {
+    fn eq(&self, other: &Qubit) -> bool {
         self.id == other.id
     }
 }
 
-impl<P: Precision> std::cmp::Ord for Qubit<P> {
+impl std::cmp::Ord for Qubit {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.id.cmp(&other.id)
     }
 }
 
-impl<P: Precision> std::cmp::PartialOrd for Qubit<P> {
-    fn partial_cmp(&self, other: &Qubit<P>) -> Option<std::cmp::Ordering> {
+impl std::cmp::PartialOrd for Qubit {
+    fn partial_cmp(&self, other: &Qubit) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<P: Precision> fmt::Debug for Qubit<P> {
+impl fmt::Debug for Qubit {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let int_strings = self.indices.iter()
             .map(|x| x.clone().to_string())
@@ -162,61 +160,60 @@ impl QubitHandle {
 }
 
 /// A builder which supports non-unitary operations
-pub trait NonUnitaryBuilder<P: Precision> {
+pub trait NonUnitaryBuilder {
     /// Add a measure op to the pipeline for `q` and return a reference which can
     /// later be used to access the measured value from the results of `pipeline::run`.
-    fn measure(&mut self, q: Qubit<P>) -> (Qubit<P>, u64);
+    fn measure(&mut self, q: Qubit) -> (Qubit, u64);
 }
 
 /// A builder which support unitary operations
-pub trait UnitaryBuilder<P: Precision> {
+pub trait UnitaryBuilder {
     // Things like X, Y, Z, NOT, H, SWAP, ... go here
 
     /// Build a builder which uses `q` as context.
-    fn with_context(&mut self, q: Qubit<P>) -> ConditionalContextBuilder<P>;
+    fn with_context(&mut self, q: Qubit) -> ConditionalContextBuilder;
 
     /// Build a generic matrix op, apply to `q`, if `q` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
     /// size for the number of indices in `q` (mat.len() == 2^(2n)).
-    fn mat(&mut self, q: Qubit<P>, mat: &[Complex<P>]) -> Result<Qubit<P>, &'static str>;
+    fn mat(&mut self, q: Qubit, mat: &[Complex<f64>]) -> Result<Qubit, &'static str>;
 
     /// Build a matrix op from real numbers, apply to `q`, if `q` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
     /// size for the number of indices in `q` (mat.len() == 2^(2n)).
-    fn real_mat(&mut self, q: Qubit<P>, mat: &[P]) -> Result<Qubit<P>, &'static str> {
+    fn real_mat(&mut self, q: Qubit, mat: &[f64]) -> Result<Qubit, &'static str> {
         self.mat(q, from_reals(mat).as_slice())
     }
 
     /// Apply NOT to `q`, if `q` is multiple indices, apply to each
-    fn not(&mut self, q: Qubit<P>) -> Qubit<P> {
+    fn not(&mut self, q: Qubit) -> Qubit {
         self.x(q)
     }
 
     /// Apply X to `q`, if `q` is multiple indices, apply to each
-    fn x(&mut self, q: Qubit<P>) -> Qubit<P> {
-        self.real_mat(q, &[P::zero(), P::one(), P::one(), P::zero()]).unwrap()
+    fn x(&mut self, q: Qubit) -> Qubit {
+        self.real_mat(q, &[0.0, 1.0, 1.0, 0.0]).unwrap()
     }
 
     /// Apply Y to `q`, if `q` is multiple indices, apply to each
-    fn y(&mut self, q: Qubit<P>) -> Qubit<P> {
-        self.mat(q, from_tuples(&[(P::zero(), P::zero()), (P::zero(), P::zero() - P::one()), (P::zero(), P::zero()), (P::zero(), P::one())])
+    fn y(&mut self, q: Qubit) -> Qubit {
+        self.mat(q, from_tuples(&[(0.0, 0.0), (0.0, 0.0 - 1.0), (0.0, 0.0), (0.0, 1.0)])
             .as_slice()).unwrap()
     }
 
     /// Apply Z to `q`, if `q` is multiple indices, apply to each
-    fn z(&mut self, q: Qubit<P>) -> Qubit<P> {
-        self.real_mat(q, &[P::one(), P::zero(), P::zero(), P::zero()-P::one()]).unwrap()
+    fn z(&mut self, q: Qubit) -> Qubit {
+        self.real_mat(q, &[1.0, 0.0, 0.0, -1.0]).unwrap()
     }
 
     /// Apply H to `q`, if `q` is multiple indices, apply to each
-    fn hadamard(&mut self, q: Qubit<P>) -> Qubit<P> {
+    fn hadamard(&mut self, q: Qubit) -> Qubit {
         let inv_sqrt = 1.0f64 / 2.0_f64.sqrt();
-        let inv_sqrt = P::from(inv_sqrt).unwrap();
-        self.real_mat(q, &[inv_sqrt, inv_sqrt, inv_sqrt, P::zero()-inv_sqrt]).unwrap()
+        self.real_mat(q, &[inv_sqrt, inv_sqrt, inv_sqrt, -inv_sqrt]).unwrap()
     }
 
     /// Apply SWAP to `qa` and `qb`
-    fn swap(&mut self, qa: Qubit<P>, qb: Qubit<P>) -> Result<(Qubit<P>, Qubit<P>), &'static str> {
+    fn swap(&mut self, qa: Qubit, qb: Qubit) -> Result<(Qubit, Qubit), &'static str> {
         let op = self.make_swap_op(&qa, &qb)?;
         let qa_indices = qa.indices.clone();
         let q = self.merge_with_op(vec![qa, qb], Some(op));
@@ -224,20 +221,18 @@ pub trait UnitaryBuilder<P: Precision> {
     }
 
     /// Merge the qubits in `qs` into a single qubit.
-    fn merge(&mut self, qs: Vec<Qubit<P>>) -> Qubit<P> {
+    fn merge(&mut self, qs: Vec<Qubit>) -> Qubit {
         self.merge_with_op(qs, None)
     }
 
     /// Split the qubit `q` into two qubits, one with relative `indices` and one with the remaining.
-    fn split(&mut self, q:Qubit<P>, indices: Vec<u64>) -> Result<(Qubit<P>, Qubit<P>), &'static str> {
+    fn split(&mut self, q:Qubit, indices: Vec<u64>) -> Result<(Qubit, Qubit), &'static str> {
         for indx in &indices {
-            if indx < &0 {
-                return Err("All indices for splitting must be above 0");
-            } else if indx > &(q.indices.len() as u64) {
+            if *indx > (q.indices.len() as u64) {
                 return Err("All indices for splitting must be below q.n");
             }
         }
-        if indices.len() == 0 {
+        if indices.is_empty() {
             Err("Indices must contain at least one index.")
         } else if indices.len() == q.indices.len() {
             Err("Indices must leave at least one index.")
@@ -248,10 +243,10 @@ pub trait UnitaryBuilder<P: Precision> {
     }
 
     /// Split the qubit `q` into two qubits, one with `selected_indices` and one with the remaining.
-    fn split_absolute(&mut self, q: Qubit<P>, selected_indices: Vec<u64>) -> Result<(Qubit<P>, Qubit<P>), &'static str>;
+    fn split_absolute(&mut self, q: Qubit, selected_indices: Vec<u64>) -> Result<(Qubit, Qubit), &'static str>;
 
     /// Split the qubit into many qubits, each with the given set of indices.
-    fn split_absolute_many(&mut self, q: Qubit<P>, index_groups: Vec<Vec<u64>>) -> Result<(Vec<Qubit<P>>, Qubit<P>), &'static str> {
+    fn split_absolute_many(&mut self, q: Qubit, index_groups: Vec<Vec<u64>>) -> Result<(Vec<Qubit>, Qubit), &'static str> {
         Ok(index_groups.into_iter().fold((vec![], q), |(mut qs, q), indices| {
             let (hq, tq) = self.split_absolute(q, indices).unwrap();
             qs.push(hq);
@@ -260,7 +255,7 @@ pub trait UnitaryBuilder<P: Precision> {
     }
 
     /// Split `q` into a single qubit for each index.
-    fn split_all(&mut self, q: Qubit<P>) -> Vec<Qubit<P>> {
+    fn split_all(&mut self, q: Qubit) -> Vec<Qubit> {
         let mut indices: Vec<Vec<u64>> = q.indices.iter().cloned().map(|i| vec![i]).collect();
         indices.pop();
         // Cannot fail since all indices are from q.
@@ -270,12 +265,12 @@ pub trait UnitaryBuilder<P: Precision> {
     }
 
     /// Build a generic matrix op.
-    fn make_mat_op(&self, q: &Qubit<P>, data: Vec<Complex<P>>) -> QubitOp<P> {
+    fn make_mat_op(&self, q: &Qubit, data: Vec<Complex<f64>>) -> QubitOp {
         QubitOp::MatrixOp(q.indices.clone(), data)
     }
 
     /// Build a swap op. qa and qb must have the same number of indices.
-    fn make_swap_op(&self, qa: &Qubit<P>, qb: &Qubit<P>) -> Result<QubitOp<P>, &'static str> {
+    fn make_swap_op(&self, qa: &Qubit, qb: &Qubit) -> Result<QubitOp, &'static str> {
         if qa.indices.len() == qb.indices.len() {
             Ok(QubitOp::SwapOp(qa.indices.clone(), qb.indices.clone()))
         } else {
@@ -284,33 +279,31 @@ pub trait UnitaryBuilder<P: Precision> {
     }
 
     /// Merge qubits using a generic state processing function.
-    fn merge_with_op(&mut self, qs: Vec<Qubit<P>>, operator: Option<QubitOp<P>>) -> Qubit<P>;
+    fn merge_with_op(&mut self, qs: Vec<Qubit>, operator: Option<QubitOp>) -> Qubit;
 }
 
 /// A basic builder for unitary and non-unitary ops.
-pub struct OpBuilder<P: Precision> {
+pub struct OpBuilder {
     qubit_index: u64,
-    op_id: u64,
-    phantom: PhantomData<P>
+    op_id: u64
 }
 
-impl<P: Precision> OpBuilder<P> {
+impl OpBuilder {
     /// Build a new OpBuilder
-    pub fn new() -> OpBuilder<P> {
-        OpBuilder::<P> {
+    pub fn new() -> OpBuilder {
+        OpBuilder {
             qubit_index: 0,
             op_id: 0,
-            phantom: PhantomData
         }
     }
 
     /// Build a new qubit with `n` indices
-    pub fn qubit(&mut self, n: u64) -> Result<Qubit<P>, &'static str> {
+    pub fn qubit(&mut self, n: u64) -> Result<Qubit, &'static str> {
         if n == 0 {
             Err("Qubit n must be greater than 0.")
         } else {
             let base_index = self.qubit_index;
-            self.qubit_index = self.qubit_index + n;
+            self.qubit_index += n;
 
             Qubit::new(self.get_op_id(), (base_index..self.qubit_index).collect())
         }
@@ -318,7 +311,7 @@ impl<P: Precision> OpBuilder<P> {
 
     /// Build a new qubit with `n` indices, return it plus a handle which can be
     /// used for feeding in an initial state.
-    pub fn qubit_and_handle(&mut self, n: u64) -> Result<(Qubit<P>, QubitHandle), &'static str> {
+    pub fn qubit_and_handle(&mut self, n: u64) -> Result<(Qubit, QubitHandle), &'static str> {
         let q = self.qubit(n)?;
         let indices = q.indices.clone();
         Ok((q, QubitHandle{ indices }))
@@ -331,25 +324,25 @@ impl<P: Precision> OpBuilder<P> {
     }
 }
 
-impl<P: Precision> NonUnitaryBuilder<P> for OpBuilder<P> {
-    fn measure(&mut self, q: Qubit<P>) -> (Qubit<P>, u64) {
+impl NonUnitaryBuilder for OpBuilder {
+    fn measure(&mut self, q: Qubit) -> (Qubit, u64) {
         let id = self.get_op_id();
-        let modifier = StateModifier::new_measurement(String::from("measure"), id.clone(), q.indices.clone());
+        let modifier = StateModifier::new_measurement(String::from("measure"), id, q.indices.clone());
         let modifier = Some(modifier);
-        let q = Qubit::merge_with_modifier(id.clone(), vec![q], modifier);
+        let q = Qubit::merge_with_modifier(id, vec![q], modifier);
         (q, id)
     }
 }
 
-impl<P: Precision> UnitaryBuilder<P> for OpBuilder<P> {
-    fn with_context(&mut self, q: Qubit<P>) -> ConditionalContextBuilder<P> {
+impl UnitaryBuilder for OpBuilder {
+    fn with_context(&mut self, q: Qubit) -> ConditionalContextBuilder {
         ConditionalContextBuilder {
             parent_builder: self,
             conditioned_qubit: Some(q),
         }
     }
 
-    fn mat(&mut self, q: Qubit<P>, mat: &[Complex<P>]) -> Result<Qubit<P>, &'static str> {
+    fn mat(&mut self, q: Qubit, mat: &[Complex<f64>]) -> Result<Qubit, &'static str> {
         // Special case for broadcasting ops
         if q.indices.len() > 1 && mat.len() == (2 * 2) {
             let qs = self.split_all(q);
@@ -366,49 +359,49 @@ impl<P: Precision> UnitaryBuilder<P> for OpBuilder<P> {
         }
     }
 
-    fn split_absolute(&mut self, q: Qubit<P>, selected_indices: Vec<u64>) -> Result<(Qubit<P>, Qubit<P>), &'static str> {
+    fn split_absolute(&mut self, q: Qubit, selected_indices: Vec<u64>) -> Result<(Qubit, Qubit), &'static str> {
         Qubit::split_absolute(self.get_op_id(), self.get_op_id(), q, selected_indices)
     }
 
-    fn merge_with_op(&mut self, qs: Vec<Qubit<P>>, op: Option<QubitOp<P>>) -> Qubit<P> {
+    fn merge_with_op(&mut self, qs: Vec<Qubit>, op: Option<QubitOp>) -> Qubit {
         let modifier = op.map(|op|StateModifier::new_unitary(String::from("unitary"), op));
         Qubit::merge_with_modifier(self.get_op_id(), qs, modifier)
     }
 }
 
 /// An op builder which depends on the value of a given qubit (COPs)
-pub struct ConditionalContextBuilder<'a, P: Precision> {
-    parent_builder: &'a mut UnitaryBuilder<P>,
-    conditioned_qubit: Option<Qubit<P>>,
+pub struct ConditionalContextBuilder<'a> {
+    parent_builder: &'a mut UnitaryBuilder,
+    conditioned_qubit: Option<Qubit>,
 }
 
-impl<'a, P: Precision> ConditionalContextBuilder<'a, P> {
+impl<'a> ConditionalContextBuilder<'a> {
     /// Release the qubit used to build this builder
-    pub fn release_qubit(self: Self) -> Qubit<P> {
+    pub fn release_qubit(self: Self) -> Qubit {
         match self.conditioned_qubit {
             Some(q) => q,
             None => panic!("Conditional context builder failed to populate qubit.")
         }
     }
 
-    fn get_conditional_qubit(&mut self) -> Qubit<P> {
+    fn get_conditional_qubit(&mut self) -> Qubit {
         self.conditioned_qubit.take().unwrap()
     }
 
-    fn set_conditional_qubit(&mut self, cq: Qubit<P>) {
+    fn set_conditional_qubit(&mut self, cq: Qubit) {
         self.conditioned_qubit = Some(cq);
     }
 }
 
-impl<'a, P: Precision> UnitaryBuilder<P> for ConditionalContextBuilder<'a, P> {
-    fn with_context(&mut self, q: Qubit<P>) -> ConditionalContextBuilder<P> {
-        ConditionalContextBuilder::<P> {
+impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
+    fn with_context(&mut self, q: Qubit) -> ConditionalContextBuilder {
+        ConditionalContextBuilder {
             parent_builder: self,
             conditioned_qubit: Some(q),
         }
     }
 
-    fn mat(&mut self, q: Qubit<P>, mat: &[Complex<P>]) -> Result<Qubit<P>, &'static str> {
+    fn mat(&mut self, q: Qubit, mat: &[Complex<f64>]) -> Result<Qubit, &'static str> {
         // Special case for applying mat to each qubit in collection.
         if q.indices.len() > 1 && mat.len() == (2 * 2) {
             let qs = self.split_all(q);
@@ -431,7 +424,7 @@ impl<'a, P: Precision> UnitaryBuilder<P> for ConditionalContextBuilder<'a, P> {
         }
     }
 
-    fn swap(&mut self, qa: Qubit<P>, qb: Qubit<P>) -> Result<(Qubit<P>, Qubit<P>), &'static str> {
+    fn swap(&mut self, qa: Qubit, qb: Qubit) -> Result<(Qubit, Qubit), &'static str> {
         let op = self.make_swap_op(&qa, &qb)?;
         let cq = self.get_conditional_qubit();
         let cq_indices = cq.indices.clone();
@@ -444,18 +437,18 @@ impl<'a, P: Precision> UnitaryBuilder<P> for ConditionalContextBuilder<'a, P> {
         Ok((qa, qb))
     }
 
-    fn split_absolute(&mut self, q: Qubit<P>, selected_indices: Vec<u64>) -> Result<(Qubit<P>, Qubit<P>), &'static str> {
+    fn split_absolute(&mut self, q: Qubit, selected_indices: Vec<u64>) -> Result<(Qubit, Qubit), &'static str> {
         self.parent_builder.split_absolute(q, selected_indices)
     }
 
-    fn make_mat_op(&self, q: &Qubit<P>, data: Vec<Complex<P>>) -> QubitOp<P> {
+    fn make_mat_op(&self, q: &Qubit, data: Vec<Complex<f64>>) -> QubitOp {
         match &self.conditioned_qubit {
             Some(cq) => make_control_op(cq.indices.clone(), self.parent_builder.make_mat_op(q, data)),
             None => panic!("Conditional context builder failed to populate qubit.")
         }
     }
 
-    fn make_swap_op(&self, qa: &Qubit<P>, qb: &Qubit<P>) -> Result<QubitOp<P>, &'static str> {
+    fn make_swap_op(&self, qa: &Qubit, qb: &Qubit) -> Result<QubitOp, &'static str> {
         match &self.conditioned_qubit {
             Some(cq) => {
                 let op = self.parent_builder.make_swap_op(qa, qb)?;
@@ -465,7 +458,7 @@ impl<'a, P: Precision> UnitaryBuilder<P> for ConditionalContextBuilder<'a, P> {
         }
     }
 
-    fn merge_with_op(&mut self, qs: Vec<Qubit<P>>, op: Option<QubitOp<P>>) -> Qubit<P> {
+    fn merge_with_op(&mut self, qs: Vec<Qubit>, op: Option<QubitOp>) -> Qubit {
         self.parent_builder.merge_with_op(qs, op)
     }
 }

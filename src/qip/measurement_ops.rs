@@ -100,7 +100,7 @@ pub fn measure_prob<P: Precision>(n: u64, measured: u64, indices: &[u64], input:
 pub fn soft_measure<P: Precision>(n: u64, indices: &[u64], input: &[Complex<P>], input_offset: u64) -> u64 {
     let mut r = P::from(rand::random::<f64>()).unwrap() *
         if input.len() < (1 << n) as usize {
-            prob_magnitude(input).into()
+            prob_magnitude(input)
         } else {
             P::one()
         };

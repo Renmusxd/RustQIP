@@ -5,14 +5,14 @@ use num::complex::Complex;
 use crate::qubits::{Qubit, UnitaryBuilder};
 use crate::types::Precision;
 
-pub fn qfft<P: Precision, B: UnitaryBuilder<P>>(builder: &mut B, q: Qubit<P>) -> Qubit<P> {
+pub fn qfft<B: UnitaryBuilder>(builder: &mut B, q: Qubit) -> Qubit {
     let mut qs = builder.split_all(q);
     qs.reverse();
     let qs = rec_qfft(builder, vec![], qs);
     builder.merge(qs)
 }
 
-fn rec_qfft<P: Precision, B: UnitaryBuilder<P>>(builder: &mut B, mut used_qs: Vec<Qubit<P>>, mut remaining_qs: Vec<Qubit<P>>) -> Vec<Qubit<P>> {
+fn rec_qfft<B: UnitaryBuilder>(builder: &mut B, mut used_qs: Vec<Qubit>, mut remaining_qs: Vec<Qubit>) -> Vec<Qubit> {
     let q = remaining_qs.pop();
     if let Some(q) = q {
         let mut q = builder.hadamard(q);
@@ -35,19 +35,19 @@ fn rec_qfft<P: Precision, B: UnitaryBuilder<P>>(builder: &mut B, mut used_qs: Ve
     }
 }
 
-pub fn make_rm_mat<P: Precision>(m: u64) -> Vec<Complex<P>>{
-    let phi = P::from(2.0 * std::f64::consts::PI / (1 << m) as f64).unwrap();
-    vec![Complex::<P> {
-        re: P::one(),
-        im: P::zero()
-    }, Complex::<P> {
-        re: P::zero(),
-        im: P::zero()
-    }, Complex::<P> {
-        re: P::zero(),
-        im: P::zero()
-    }, Complex::<P> {
-        re: P::zero(),
+pub fn make_rm_mat(m: u64) -> Vec<Complex<f64>>{
+    let phi = 2.0 * std::f64::consts::PI / f64::from(1 << m);
+    vec![Complex {
+        re: 1.0,
+        im: 0.0
+    }, Complex {
+        re: 0.0,
+        im: 0.0
+    }, Complex {
+        re: 0.0,
+        im: 0.0
+    }, Complex {
+        re: 0.0,
         im: phi
     }.exp()]
 }

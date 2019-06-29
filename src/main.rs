@@ -9,7 +9,7 @@ use qip::utils::flip_bits;
 
 fn main() {
     let sn = 4;
-    let mut builder = OpBuilder::<f32>::new();
+    let mut builder = OpBuilder::new();
     let (q1, h1) = builder.qubit_and_handle(1).unwrap();
     let (q2, h2) = builder.qubit_and_handle(sn).unwrap();
     let (q3, h3) = builder.qubit_and_handle(sn).unwrap();
@@ -25,7 +25,7 @@ fn main() {
 
     run_debug(&q1);
 
-    let (out, measured) = run_local_with_init(&q1, &[
+    let (out, measured) = run_local_with_init::<f64>(&q1, &[
         h2.make_init_from_index(0).unwrap(),
         h3.make_init_from_index(1).unwrap(),
     ]);

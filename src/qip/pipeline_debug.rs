@@ -10,7 +10,7 @@ use crate::qubits::Qubit;
 use crate::state_ops::{get_index, num_indices, QubitOp};
 use crate::types::Precision;
 
-struct PrintPipeline<P> {
+struct PrintPipeline<P: Precision> {
     n: u64,
     phantom: PhantomData<P>
 }
@@ -34,7 +34,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
         PrintPipeline::<P>::new(n)
     }
 
-    fn apply_op(&mut self, op: &QubitOp<P>) {
+    fn apply_op(&mut self, op: &QubitOp) {
          match op {
              QubitOp::ControlOp(c_indices, o_indices, _) => {
                 let lower = c_indices.iter().chain(o_indices.iter()).cloned().min().unwrap_or(0);
@@ -43,7 +43,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
                 for _ in 0 .. lower {
                     print!("{} ", "|".to_string());
                 }
-                for i in lower .. upper+1 {
+                for i in lower ..= upper {
                     let conn = if i == upper {
                         " "
                     } else {
@@ -69,7 +69,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
                  for _ in 0 .. lower {
                      print!("{} ", "|".to_string());
                  }
-                 for i in lower .. upper+1 {
+                 for i in lower ..= upper {
                      let conn = if i == upper {
                          " "
                      } else {
@@ -125,11 +125,11 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
     }
 }
 
-pub fn run_debug<P: Precision>(q: &Qubit<P>) {
+pub fn run_debug(q: &Qubit) {
     pipeline::run_with_statebuilder(q, |qs| {
         let n: u64 = qs.iter().map(|q| -> u64 {
             q.n()
         }).sum();
-        PrintPipeline::new(n)
+        PrintPipeline::<f32>::new(n)
     });
 }
