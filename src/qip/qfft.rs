@@ -3,7 +3,6 @@ extern crate num;
 use num::complex::Complex;
 
 use crate::qubits::{Qubit, UnitaryBuilder};
-use crate::types::Precision;
 
 pub fn qfft<B: UnitaryBuilder>(builder: &mut B, q: Qubit) -> Qubit {
     let mut qs = builder.split_all(q);

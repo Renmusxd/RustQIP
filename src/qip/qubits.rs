@@ -1,5 +1,4 @@
 use std::fmt;
-use std::marker::PhantomData;
 use std::rc::Rc;
 
 use num::complex::Complex;
@@ -266,13 +265,13 @@ pub trait UnitaryBuilder {
 
     /// Build a generic matrix op.
     fn make_mat_op(&self, q: &Qubit, data: Vec<Complex<f64>>) -> QubitOp {
-        QubitOp::MatrixOp(q.indices.clone(), data)
+        QubitOp::Matrix(q.indices.clone(), data)
     }
 
     /// Build a swap op. qa and qb must have the same number of indices.
     fn make_swap_op(&self, qa: &Qubit, qb: &Qubit) -> Result<QubitOp, &'static str> {
         if qa.indices.len() == qb.indices.len() {
-            Ok(QubitOp::SwapOp(qa.indices.clone(), qb.indices.clone()))
+            Ok(QubitOp::Swap(qa.indices.clone(), qb.indices.clone()))
         } else {
             Err("Swap must be made from two qubits of equal size.")
         }
@@ -283,6 +282,7 @@ pub trait UnitaryBuilder {
 }
 
 /// A basic builder for unitary and non-unitary ops.
+#[derive(Default)]
 pub struct OpBuilder {
     qubit_index: u64,
     op_id: u64
@@ -291,10 +291,7 @@ pub struct OpBuilder {
 impl OpBuilder {
     /// Build a new OpBuilder
     pub fn new() -> OpBuilder {
-        OpBuilder {
-            qubit_index: 0,
-            op_id: 0,
-        }
+        OpBuilder::default()
     }
 
     /// Build a new qubit with `n` indices

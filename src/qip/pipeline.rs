@@ -40,15 +40,15 @@ impl StateModifier {
     }
 }
 
+#[derive(Default)]
 pub struct MeasuredResults<P: Precision> {
     pub results: HashMap<u64, (u64, P)>
 }
 
 impl<P: Precision> MeasuredResults<P> {
+
     pub fn new() -> MeasuredResults<P> {
-        MeasuredResults {
-            results: HashMap::new()
-        }
+        MeasuredResults::default()
     }
 }
 
@@ -102,10 +102,7 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
 
         let n = max_init_n.map(|m| max(n, m)).unwrap_or(n);
 
-        let mut cvec: Vec<Complex<P>> = (0.. 1 << n).map(|_| Complex::<P> {
-            re: P::zero(),
-            im: P::zero(),
-        }).collect();
+        let mut cvec: Vec<Complex<P>> = (0.. 1 << n).map(|_| Complex::default()).collect();
 
         // Assume that all unrepresented indices are in the |0> state.
         let n_fullindices: u64 = states.iter().map(|(indices, state)| {

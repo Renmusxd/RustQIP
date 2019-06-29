@@ -36,7 +36,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
 
     fn apply_op(&mut self, op: &QubitOp) {
          match op {
-             QubitOp::ControlOp(c_indices, o_indices, _) => {
+             QubitOp::Control(c_indices, o_indices, _) => {
                 let lower = c_indices.iter().chain(o_indices.iter()).cloned().min().unwrap_or(0);
                 let upper = c_indices.iter().chain(o_indices.iter()).cloned().max().unwrap_or(self.n);
 
@@ -62,7 +62,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
                 }
                 println!()
              },
-             QubitOp::SwapOp(a_indices, b_indices) => {
+             QubitOp::Swap(a_indices, b_indices) => {
                  let lower = a_indices.iter().chain(b_indices.iter()).cloned().min().unwrap_or(0);
                  let upper = a_indices.iter().chain(b_indices.iter()).cloned().max().unwrap_or(self.n);
 
