@@ -22,7 +22,7 @@ pub enum QubitOp {
     // Control indices, Op indices, Op
     Control(Vec<u64>, Vec<u64>, Box<QubitOp>),
     // Function which maps |x,y> to |x,f(x) xor y> where x,y are both m bits.
-    Function(Vec<u64>, Vec<u64>, Box<Fn(u64) -> u64 + Send + Sync>)
+    Function(Vec<u64>, Vec<u64>, Box<Fn(u64) -> (u64, f64) + Send + Sync>)
 }
 
 /// Make a ControlOp
@@ -156,7 +156,7 @@ enum PrecisionQubitOp<'a, P: Precision> {
     // Control indices, Op indices, Op
     Control(Vec<u64>, Vec<u64>, Box<PrecisionQubitOp<'a, P>>),
     // Function which maps |x,y> to |x,f(x) xor y> where x,y are both m bits.
-    Function(Vec<u64>, Vec<u64>, &'a (Fn(u64) -> u64 + Send + Sync))
+    Function(Vec<u64>, Vec<u64>, &'a (Fn(u64) -> (u64, f64) + Send + Sync))
 }
 
 /// Convert &QubitOp to equivalent PrecisionQubitOp<P>
@@ -227,8 +227,10 @@ fn map_with_control_iterator<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P
             let it = ControlledOpIterator::new(row, n_control_indices, n_op_indices, iter_builder);
             it.map(f).sum()
         }
-        Function(_, _, op_f) => {
-            let iter_builder = |row: u64| FunctionOpIterator::new(row, n_op_indices, op_f);
+        Function(inputs, outputs, op_f) => {
+            let input_n = inputs.len() as u64;
+            let output_n = outputs.len() as u64;
+            let iter_builder = |row: u64| FunctionOpIterator::new(row, input_n, output_n, op_f);
             let it = ControlledOpIterator::new(row, n_control_indices, n_op_indices, iter_builder);
             it.map(f).sum()
         }
@@ -255,8 +257,11 @@ fn sum_for_op_cols<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(nindice
             SwapOpIterator::new(row, nindices).map(f).sum(),
         Control(c_indices, o_indices, op) =>
             map_with_control_iterator(row, op, c_indices.len() as u64, o_indices.len() as u64, f),
-        Function(_, _, op_f) =>
-            FunctionOpIterator::new(row, nindices, op_f).map(f).sum(),
+        Function(inputs, outputs, op_f) => {
+            let input_n = inputs.len() as u64;
+            let output_n = outputs.len() as u64;
+            FunctionOpIterator::new(row, input_n, output_n, op_f).map(f).sum()
+        },
     }
 }
 
@@ -264,7 +269,7 @@ fn sum_for_op_cols<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(nindice
 /// index in their 0th index, use `input/output_offset`.
 pub fn apply_op<P: Precision>(n: u64, op: &QubitOp,
                input: &[Complex<P>], output: &mut[Complex<P>],
-               input_offset: u64, output_offset: u64, multi_core: bool) {
+               input_offset: u64, output_offset: u64, multithread: bool) {
     let op = clone_as_precision_op::<P>(op);
     let mat_indices: Vec<u64> = (0 .. precision_num_indices(&op)).map(|i| precision_get_index(&op, i)).collect();
     let nindices = mat_indices.len() as u64;
@@ -293,7 +298,7 @@ pub fn apply_op<P: Precision>(n: u64, op: &QubitOp,
     };
 
     // Generate output for each output row
-    if multi_core {
+    if multithread {
         output.par_iter_mut().enumerate().for_each(row_fn);
     } else {
         output.iter_mut().enumerate().for_each(row_fn);
@@ -302,7 +307,7 @@ pub fn apply_op<P: Precision>(n: u64, op: &QubitOp,
 
 /// Make the full op matrix from `ops`.
 /// Not very efficient, use only for debugging.
-pub fn make_op_matrix<P: Precision>(n: u64, op: &QubitOp, multi_core: bool) -> Vec<Vec<Complex<P>>> {
+pub fn make_op_matrix<P: Precision>(n: u64, op: &QubitOp, multithread: bool) -> Vec<Vec<Complex<P>>> {
     let zeros: Vec<P> = (0..1 << n).map(|_| P::zero()).collect();
     (0..1 << n).map(|i| {
         let mut input = from_reals(&zeros);
@@ -311,7 +316,7 @@ pub fn make_op_matrix<P: Precision>(n: u64, op: &QubitOp, multi_core: bool) -> V
             re: P::one(),
             im: P::zero(),
         };
-        apply_op(n, op, &input, &mut output, 0, 0, multi_core);
+        apply_op(n, op, &input, &mut output, 0, 0, multithread);
         output.clone()
     }).collect()
 }

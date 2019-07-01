@@ -31,40 +31,30 @@ fn prob_magnitude<P: Precision>(input: &[Complex<P>]) -> P {
 /// // Make the state |10>, index 0 is always |1> and index 1 is always |0>
 /// let input = from_reals(&[0.0, 0.0, 1.0, 0.0]);
 ///
-/// let p = measure_prob(2, 0, &[0], &input, 0);
+/// let p = measure_prob(2, 0, &[0], &input, 0, false);
 /// assert_eq!(p, 0.0);
-/// let p = measure_prob(2, 1, &[0], &input, 0);
+///
+/// let p = measure_prob(2, 1, &[0], &input, 0, false);
+/// assert_eq!(p, 1.0);
+///
+/// let p = measure_prob(2, 1, &[0, 1], &input, 0, false);
+/// assert_eq!(p, 1.0);
+///
+/// let p = measure_prob(2, 2, &[1, 0], &input, 0, false);
 /// assert_eq!(p, 1.0);
 /// ```
-/// ```
-/// use qip::state_ops::from_reals;
-/// use qip::measurement_ops::measure_prob;
-/// // Make the state |10>, index 0 is always |1> and index 1 is always |0>
-/// let input = from_reals(&[0.0, 0.0, 1.0, 0.0]);
-/// let p = measure_prob(2, 1, &[0, 1], &input, 0);
-/// assert_eq!(p, 1.0);
-/// ```
-/// ```
-/// use qip::state_ops::from_reals;
-/// use qip::measurement_ops::measure_prob;
-/// // Make the state |10>, index 0 is always |1> and index 1 is always |0>
-/// let input = from_reals(&[0.0, 0.0, 1.0, 0.0]);
-/// let p = measure_prob(2, 2, &[1, 0], &input, 0);
-/// assert_eq!(p, 1.0);
-/// ```
-pub fn measure_prob<P: Precision>(n: u64, measured: u64, indices: &[u64], input: &[Complex<P>], input_offset: u64) -> P {
-    let template: u64 = indices.iter().cloned().enumerate().map(|(i, index)| -> u64 {
+pub fn measure_prob<P: Precision>(n: u64, measured: u64, indices: &[u64], input: &[Complex<P>], input_offset: u64, multithread: bool) -> P {
+    let template: u64 = indices.iter().cloned().enumerate().fold(0, |acc, (i, index)| -> u64 {
         let sel_bit = (measured >> i as u64) & 1;
-        sel_bit << (n - 1 - index)
-    }).sum();
+        acc | (sel_bit << (n - 1 - index))
+    });
     let remaining_indices: Vec<u64> = (0..n).filter(|i| !indices.contains(i)).collect();
 
-    (0u64 .. 1 << (n - indices.len() as u64)).into_par_iter().map(|remaining_index_bits: u64| -> P {
-        let tmp_index: u64 = remaining_indices.iter().clone().enumerate().map(|item| -> u64 {
-            let (i, index) = item;
+    let f = |remaining_index_bits: u64| -> P {
+        let tmp_index: u64 = remaining_indices.iter().clone().enumerate().fold(0, |acc, (i, index)| -> u64 {
             let sel_bit = (remaining_index_bits >> i as u64) & 1;
-            sel_bit << (n - 1 - index)
-        }).sum();
+            acc | (sel_bit << (n - 1 - index))
+        });
         let index = tmp_index + template;
         if index < input_offset {
             return P::zero();
@@ -74,7 +64,30 @@ pub fn measure_prob<P: Precision>(n: u64, measured: u64, indices: &[u64], input:
             return P::zero();
         }
         input[index as usize].norm_sqr()
-    }).sum()
+    };
+
+    let r = 0u64..1 << remaining_indices.len();
+    if multithread {
+        r.into_par_iter().map(f).sum()
+    } else {
+        r.map(f).sum()
+    }
+}
+
+/// Get probability for each possible measurement of `indices` on `input`.
+pub fn measure_probs<P: Precision>(n: u64, indices: &[u64], input: &[Complex<P>], input_offset: u64, multithread: bool) -> Vec<P> {
+    // If there aren't many indices, put the parallelism on the larger list inside measure_prob.
+    // Otherwise use parallelism on the super iteration.
+    let r = 0u64 .. 1 << indices.len();
+    if multithread && (indices.len() as u64 > (n >> 1)) {
+        r.into_par_iter().map(|measured| {
+            measure_prob(n, measured, indices, input, input_offset, false)
+        }).collect()
+    } else {
+        r.map(|measured| {
+            measure_prob(n, measured, indices, input, input_offset, multithread)
+        }).collect()
+    }
 }
 
 /// Sample a measurement from a state `input`. b
@@ -83,7 +96,8 @@ pub fn measure_prob<P: Precision>(n: u64, measured: u64, indices: &[u64], input:
 ///
 /// Keep in mind that qubits are big-endian to match kron product standards.
 /// |abc> means q0=a, q1=b, q2=c
-/// /// # Examples
+///
+/// # Examples
 /// ```
 /// use qip::state_ops::from_reals;
 /// use qip::measurement_ops::soft_measure;
@@ -121,9 +135,9 @@ pub fn soft_measure<P: Precision>(n: u64, indices: &[u64], input: &[Complex<P>],
 /// Returns the measured state and probability.
 pub fn measure<P: Precision>(n: u64, indices: &[u64],
                input: &[Complex<P>], output: &mut Vec<Complex<P>>,
-               input_offset: u64, output_offset: u64) -> (u64, P) {
+               input_offset: u64, output_offset: u64, multithread: bool) -> (u64, P) {
     let m = soft_measure(n, indices, input, input_offset);
-    let p = measure_prob(n, m, indices, input, input_offset);
+    let p = measure_prob(n, m, indices, input, input_offset, multithread);
     measure_state(n, indices, m, p, input, output, input_offset, output_offset);
     (m, p)
 }
@@ -181,7 +195,7 @@ mod measurement_tests {
         let n = 2;
         let m = 0;
         let input = from_reals(&[0.5, 0.5, 0.5, 0.5]);
-        let p = measure_prob(n, m, &[0], &input, 0);
+        let p = measure_prob(n, m, &[0], &input, 0, false);
         assert_eq!(p, 0.5);
 
         let mut output = input.clone();
@@ -196,7 +210,7 @@ mod measurement_tests {
         let n = 2;
         let m = 1;
         let input = from_reals(&[0.5, 0.5, 0.5, 0.5]);
-        let p = measure_prob(n, m, &[0], &input, 0);
+        let p = measure_prob(n, m, &[0], &input, 0, false);
         assert_eq!(p, 0.5);
 
         let mut output = input.clone();
@@ -204,5 +218,14 @@ mod measurement_tests {
 
         let half: f64 = 1.0 / 2.0;
         assert_eq!(output, from_reals(&[0.0, 0.0, half.sqrt(), half.sqrt()]));
+    }
+
+    #[test]
+    fn test_measure_probs() {
+        let n = 2;
+        let m = 1;
+        let input = from_reals(&[0.5, 0.5, 0.5, 0.5]);
+        let p = measure_probs(n, &[m], &input, 0, false);
+        assert_eq!(p, vec![0.5, 0.5]);
     }
 }

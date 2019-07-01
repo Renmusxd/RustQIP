@@ -219,8 +219,10 @@ pub trait UnitaryBuilder {
         self.split_absolute(q, qa_indices)
     }
 
-    /// Make an operation from the boxed function `f`.
-    fn apply_function(&mut self, q_in: Qubit, q_out: Qubit, f: Box<Fn(u64) -> u64 + Send + Sync>) -> (Qubit, Qubit);
+    /// Make an operation from the boxed function `f`. This maps c|`q_in`>|`q_out`> to
+    /// c*e^i`theta`|`q_in`>|`q_out` ^ `indx`> where `indx` and `theta` are the outputs from the
+    /// function `f(x) = (indx, theta)`
+    fn apply_function(&mut self, q_in: Qubit, q_out: Qubit, f: Box<Fn(u64) -> (u64, f64) + Send + Sync>) -> (Qubit, Qubit);
 
     /// Merge the qubits in `qs` into a single qubit.
     fn merge(&mut self, qs: Vec<Qubit>) -> Qubit {
@@ -281,16 +283,20 @@ pub trait UnitaryBuilder {
     }
 
     /// Make a function op. f must be boxed so that this function doesn't need to be parameterized.
-    fn make_function_op(&self, q_in: &Qubit, q_out: &Qubit, f: Box<Fn(u64) -> u64 + Send + Sync>) -> QubitOp {
+    fn make_function_op(&self, q_in: &Qubit, q_out: &Qubit, f: Box<Fn(u64) -> (u64, f64) + Send + Sync>) -> QubitOp {
         QubitOp::Function(q_in.indices.clone(), q_out.indices.clone(), f)
     }
 
     /// Merge qubits using a generic state processing function.
     fn merge_with_op(&mut self, qs: Vec<Qubit>, operator: Option<QubitOp>) -> Qubit;
+
+    /// Measure all qubit states and probabilities, does not edit state (thus Unitary). Returns
+    /// qubit and handle.
+    fn stochastic_measure(&mut self, q: Qubit) -> (Qubit, u64);
 }
 
 /// Helper function for Boxing static functions and applying using the given UnitaryBuilder.
-pub fn apply_function<B: UnitaryBuilder, F: 'static + Fn(u64) -> u64 + Send + Sync>(b: &mut B, q_in: Qubit, q_out: Qubit, f: F) -> (Qubit, Qubit) {
+pub fn apply_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(b: &mut UnitaryBuilder, q_in: Qubit, q_out: Qubit, f: F) -> (Qubit, Qubit) {
     b.apply_function(q_in, q_out, Box::new(f))
 }
 
@@ -369,7 +375,7 @@ impl UnitaryBuilder for OpBuilder {
         }
     }
 
-    fn apply_function(&mut self, q_in: Qubit, q_out: Qubit, f: Box<Fn(u64) -> u64 + Send + Sync>) -> (Qubit, Qubit) {
+    fn apply_function(&mut self, q_in: Qubit, q_out: Qubit, f: Box<Fn(u64) -> (u64, f64) + Send + Sync>) -> (Qubit, Qubit) {
         let op = self.make_function_op(&q_in, &q_out, f);
         let in_indices = q_in.indices.clone();
         let q = self.merge_with_op(vec![q_in, q_out], Some(op));
@@ -383,6 +389,14 @@ impl UnitaryBuilder for OpBuilder {
     fn merge_with_op(&mut self, qs: Vec<Qubit>, op: Option<QubitOp>) -> Qubit {
         let modifier = op.map(|op|StateModifier::new_unitary(String::from("unitary"), op));
         Qubit::merge_with_modifier(self.get_op_id(), qs, modifier)
+    }
+
+    fn stochastic_measure(&mut self, q: Qubit) -> (Qubit, u64) {
+        let id = self.get_op_id();
+        let modifier = StateModifier::new_stochastic_measurement(String::from("stochastic"), id, q.indices.clone());
+        let modifier = Some(modifier);
+        let q = Qubit::merge_with_modifier(id, vec![q], modifier);
+        (q, id)
     }
 }
 
@@ -454,8 +468,18 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         Ok((qa, qb))
     }
 
-    fn apply_function(&mut self, q_in: Qubit, q_out: Qubit, f: Box<Fn(u64) -> u64 + Send + Sync>) -> (Qubit, Qubit) {
-        unimplemented!()
+    fn apply_function(&mut self, q_in: Qubit, q_out: Qubit, f: Box<Fn(u64) -> (u64, f64) + Send + Sync>) -> (Qubit, Qubit) {
+        let op = self.make_function_op(&q_in, &q_out, f);
+        let cq = self.get_conditional_qubit();
+
+        let cq_indices = cq.indices.clone();
+        let in_indices = q_in.indices.clone();
+        let q = self.merge_with_op(vec![cq, q_in, q_out], Some(op));
+        let (cq, q) = self.split_absolute(q, cq_indices).unwrap();
+        let (q_in, q_out) = self.split_absolute(q, in_indices).unwrap();
+
+        self.set_conditional_qubit(cq);
+        (q_in, q_out)
     }
 
     fn split_absolute(&mut self, q: Qubit, selected_indices: Vec<u64>) -> Result<(Qubit, Qubit), &'static str> {
@@ -479,7 +503,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         }
     }
 
-    fn make_function_op(&self, q_in: &Qubit, q_out: &Qubit, f: Box<Fn(u64) -> u64 + Send + Sync>) -> QubitOp {
+    fn make_function_op(&self, q_in: &Qubit, q_out: &Qubit, f: Box<Fn(u64) -> (u64, f64) + Send + Sync>) -> QubitOp {
         match &self.conditioned_qubit {
             Some(cq) => {
                 let op = self.parent_builder.make_function_op(q_in, q_out, f);
@@ -491,5 +515,9 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
 
     fn merge_with_op(&mut self, qs: Vec<Qubit>, op: Option<QubitOp>) -> Qubit {
         self.parent_builder.merge_with_op(qs, op)
+    }
+
+    fn stochastic_measure(&mut self, q: Qubit) -> (Qubit, u64) {
+        self.parent_builder.stochastic_measure(q)
     }
 }

@@ -34,6 +34,10 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
         PrintPipeline::<P>::new(n)
     }
 
+    fn n(&self) -> u64 {
+        self.n
+    }
+
     fn apply_op(&mut self, op: &QubitOp) {
          match op {
              QubitOp::Control(c_indices, o_indices, _) => {
@@ -120,8 +124,12 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
         (0, P::zero())
     }
 
+    fn stochastic_measure(&self, _indices: &[u64]) -> Vec<P> {
+        vec![]
+    }
+
     fn get_state(self, _natural_order: bool) -> Vec<Complex<P>> {
-        unimplemented!()
+        vec![]
     }
 }
 

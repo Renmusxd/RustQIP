@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use num::complex::Complex;
 use rayon::prelude::*;
 
-use crate::measurement_ops::measure;
+use crate::measurement_ops::{measure, measure_probs};
 use crate::qubits::*;
 use crate::state_ops::*;
 use crate::types::Precision;
@@ -16,7 +16,8 @@ use crate::utils;
 
 pub enum StateModifierType {
     UnitaryOp(QubitOp),
-    MeasureState(u64, Vec<u64>)
+    MeasureState(u64, Vec<u64>),
+    StochasticMeasureState(u64, Vec<u64>)
 }
 
 pub struct StateModifier {
@@ -38,17 +39,39 @@ impl StateModifier {
             modifier: StateModifierType::MeasureState(id, indices)
         }
     }
+
+    pub fn new_stochastic_measurement(name: String, id: u64, indices: Vec<u64>) -> StateModifier {
+        StateModifier {
+            name,
+            modifier: StateModifierType::StochasticMeasureState(id, indices)
+        }
+    }
 }
 
 #[derive(Default)]
 pub struct MeasuredResults<P: Precision> {
-    pub results: HashMap<u64, (u64, P)>
+    results: HashMap<u64, (u64, P)>,
+    stochastic_results: HashMap<u64, Vec<P>>
 }
 
 impl<P: Precision> MeasuredResults<P> {
-
     pub fn new() -> MeasuredResults<P> {
         MeasuredResults::default()
+    }
+
+    /// Retrieve the measurement and likelihood for a given handle.
+    pub fn get_measurement(&self, handle: u64) -> Option<(u64, P)>{
+        self.results.get(&handle).cloned()
+    }
+
+    /// Clone the stochastic set of measurements for a given handle.
+    pub fn clone_stochastic_measurements(&self, handle: u64) -> Option<Vec<P>> {
+        self.stochastic_results.get(&handle).cloned()
+    }
+
+    /// Remove the set of measurements from the MeasuredResults struct, and return it.
+    pub fn pop_stochastic_measurements(&mut self, handle: u64) -> Option<Vec<P>> {
+        self.stochastic_results.remove(&handle)
     }
 }
 
@@ -60,11 +83,18 @@ pub trait QuantumState<P: Precision> {
     /// Initialize new state with initial states.
     fn new_from_initial_states(n: u64, states: &[QubitInitialState<P>]) -> Self;
 
+    /// Get number of qubits represented by this state.
+    fn n(&self) -> u64;
+
     /// Function to mutate self into the state with op applied.
     fn apply_op(&mut self, op: &QubitOp);
 
     /// Mutate self with measurement, return result as index and probability
     fn measure(&mut self, indices: &[u64]) -> (u64, P);
+
+    /// Measure stochastically, do not alter internal state.
+    /// Returns a vector of size 2^indices.len()
+    fn stochastic_measure(&self, indices: &[u64]) -> Vec<P>;
 
     /// Consume the QuantumState object and return the state as a vector of complex numbers.
     /// `natural_order` means that qubit with index 0 is the least significant index bit, otherwise
@@ -144,6 +174,41 @@ impl<P: Precision> LocalQuantumState<P> {
             multithread
         }
     }
+
+    /// Clone the state in either the `natural_order` or the internal order.
+    pub fn clone_state(&mut self, natural_order: bool) -> Vec<Complex<P>> {
+        if natural_order {
+            let n = self.n;
+            let state = &self.state;
+            let f = |(i, outputloc): (usize, &mut Complex<P>)| {
+                *outputloc = state[utils::flip_bits(n as usize, i as u64) as usize];
+            };
+
+            if self.multithread {
+                self.arena.par_iter_mut().enumerate().for_each(f);
+            } else {
+                self.arena.iter_mut().enumerate().for_each(f);
+            }
+            self.arena.clone()
+        } else {
+            self.state.clone()
+        }
+    }
+
+    pub fn set_multithreading(&mut self, multithread: bool) {
+        self.multithread = multithread;
+    }
+}
+
+impl<P: Precision> Clone for LocalQuantumState<P> {
+    fn clone(&self) -> Self {
+        LocalQuantumState {
+            n: self.n,
+            state: self.state.clone(),
+            arena: self.arena.clone(),
+            multithread: self.multithread
+        }
+    }
 }
 
 pub enum InitialState<P: Precision> {
@@ -165,15 +230,23 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
         Self::new_from_initial_states_and_multithread(n, states, true)
     }
 
+    fn n(&self) -> u64 {
+        self.n
+    }
+
     fn apply_op(&mut self, op: &QubitOp) {
         apply_op(self.n, op, &self.state, &mut self.arena, 0, 0, self.multithread);
         std::mem::swap(&mut self.state, &mut self.arena);
     }
 
     fn measure(&mut self, indices: &[u64]) -> (u64, P) {
-        let measured_result = measure(self.n, indices, &self.state, &mut self.arena, 0, 0);
+        let measured_result = measure(self.n, indices, &self.state, &mut self.arena, 0, 0, self.multithread);
         std::mem::swap(&mut self.state, &mut self.arena);
         measured_result
+    }
+
+    fn stochastic_measure(&self, indices: &[u64]) -> Vec<P> {
+        measure_probs(self.n, indices, &self.state, 0, self.multithread)
     }
 
     fn get_state(mut self, natural_order: bool) -> Vec<Complex<P>> {
@@ -205,10 +278,23 @@ fn fold_modify_state<P: Precision, QS: QuantumState<P>>(acc: (QS, MeasuredResult
             let result = s.measure(indices);
             mr.results.insert(id.clone(), result);
         }
+        StateModifierType::StochasticMeasureState(id, indices) => {
+            let result = s.stochastic_measure(indices);
+            mr.stochastic_results.insert(id.clone(), result);
+        }
     }
     (s, mr)
 }
 
+fn get_required_state_size<P: Precision>(frontier: &[&Qubit], states: &[QubitInitialState<P>]) -> u64 {
+    let max_init_n = states.iter().map(|(indices, _)| {
+        indices
+    }).cloned().flatten().max().map(|m| m+1).unwrap_or(0);
+    let max_qubit_n = frontier.iter().map(|q| {
+        &q.indices
+    }).cloned().flatten().max().map(|m| m+1).unwrap_or(0);
+    max(max_init_n, max_qubit_n)
+}
 
 /// Builds a default state of size `n`
 pub fn run<P: Precision, QS: QuantumState<P>>(q: &Qubit) -> (QS, MeasuredResults<P>) {
@@ -228,7 +314,19 @@ pub fn run_with_init<P: Precision, QS: QuantumState<P>>(q: &Qubit, states: &[Qub
 pub fn run_with_statebuilder<P: Precision, QS: QuantumState<P>, F: FnOnce(Vec<&Qubit>) -> QS>(q: &Qubit, state_builder: F) -> (QS, MeasuredResults<P>) {
     let (frontier, ops) = get_opfns_and_frontier(q);
     let state = state_builder(frontier);
-    ops.into_iter().fold((state, MeasuredResults::new()), fold_modify_state)
+    run_with_state_and_ops(&ops, state)
+}
+
+pub fn run_with_state<P: Precision, QS: QuantumState<P>>(q: &Qubit, state: QS) -> Result<(QS, MeasuredResults<P>), &'static str> {
+    let (frontier, ops) = get_opfns_and_frontier(q);
+
+    let req_n = get_required_state_size::<P>(&frontier, &[]);
+
+    if req_n != state.n() {
+        Err("Provided state n is not the required value for this circuit.")
+    } else {
+        Ok(run_with_state_and_ops(&ops, state))
+    }
 }
 
 /// `run` the pipeline using `LocalQuantumState`.
@@ -239,6 +337,10 @@ pub fn run_local<P: Precision>(q: &Qubit) -> (LocalQuantumState<P>, MeasuredResu
 /// `run_with_init` the pipeline using `LocalQuantumState`
 pub fn run_local_with_init<P: Precision>(q: &Qubit, states: &[QubitInitialState<P>]) -> (LocalQuantumState<P>, MeasuredResults<P>) {
     run_with_init(q, states)
+}
+
+fn run_with_state_and_ops<P: Precision, QS: QuantumState<P>>(ops: &[&StateModifier], state: QS) -> (QS, MeasuredResults<P>) {
+    ops.iter().cloned().fold((state, MeasuredResults::new()), fold_modify_state)
 }
 
 fn get_opfns_and_frontier(q: &Qubit) -> (Vec<&Qubit>, Vec<&StateModifier>) {

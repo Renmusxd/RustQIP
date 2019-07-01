@@ -28,5 +28,5 @@ fn main() {
         h3.make_init_from_index(1).unwrap(),
     ]);
 
-    println!("{:?}", measured.results.get(&m1));
+    println!("{:?}", measured.get_measurement(m1));
 }

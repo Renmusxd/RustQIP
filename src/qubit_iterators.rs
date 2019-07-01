@@ -140,24 +140,26 @@ impl<P: Precision> std::iter::Iterator for SwapOpIterator<P> {
 
 /// Iterator which provides the indices of nonzero columns for a given function f.
 pub struct FunctionOpIterator<P: Precision> {
-    m: u64,
+    output_n: u64,
     x: u64,
     fx_xor_y: u64,
+    theta: P,
     last_col: Option<u64>,
     phantom: PhantomData<P>
 }
 
 impl<P: Precision> FunctionOpIterator<P> {
-    pub fn new<F: Fn(u64) -> u64>(row: u64, n: u64, f: F) -> FunctionOpIterator<P> {
-        let m = (n >> 1);
-        let x = row >> m;
-        let fx = f(flip_bits(m as usize, x));
-        let y = row & ((1 << m) - 1);
-        let fx_xor_y = y ^ flip_bits(m as usize, fx);
+    pub fn new<F: Fn(u64) -> (u64, f64)>(row: u64, input_n: u64, output_n: u64, f: F) -> FunctionOpIterator<P> {
+        let x = row >> output_n;
+        let (fx, theta) = f(flip_bits(input_n as usize, x));
+        let y = row & ((1 << output_n) - 1);
+        let fx_xor_y = y ^ flip_bits(output_n as usize, fx);
+        let theta = P::from(theta).unwrap();
         FunctionOpIterator {
-            m,
+            output_n,
             x,
             fx_xor_y,
+            theta,
             last_col: None,
             phantom: PhantomData
         }
@@ -168,16 +170,13 @@ impl<P: Precision> std::iter::Iterator for FunctionOpIterator<P> {
     type Item = (u64, Complex<P>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(_) = self.last_col {
+        if self.last_col.is_some() {
             self.last_col = None;
         } else {
-            let colbits = (self.x << self.m) | self.fx_xor_y;
+            let colbits = (self.x << self.output_n) | self.fx_xor_y;
             self.last_col = Some(colbits);
         };
-        self.last_col.map(|col| (col, Complex {
-            re: P::one(),
-            im: P::zero()
-        }))
+        self.last_col.map(|col| (col, Complex::from_polar(&P::one(), &self.theta)))
     }
 }
 
@@ -261,7 +260,9 @@ mod iterator_tests {
     fn test_f_iterator() {
         let n = 2u64;
         let mat: Vec<Vec<f64>> = (0..1 << n).map(|i| -> Vec<f64> {
-            let it = FunctionOpIterator::<f64>::new(i, n, |x| (x != 1) as u64);
+            let it = FunctionOpIterator::<f64>::new(i, n >> 1, n >> 1, |x| {
+                ((x != 1) as u64, 0.0)
+            });
             let v: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
             it.fold(v, |mut v, (indx, _)| {
                 v[indx as usize] = 1.0;
