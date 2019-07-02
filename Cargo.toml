@@ -7,7 +7,6 @@ edition = "2018"
 [lib]
 name = "qip"
 
-
 [dependencies]
 num = "0.2.0"
 rayon = "1.0.3"
