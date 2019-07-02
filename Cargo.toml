@@ -2,6 +2,8 @@
 name = "qip"
 version = "0.1.0"
 authors = ["sumnernh@gmail.com <sumnernh@gmail.com>"]
+description = "A library for efficient quantum computing simulations."
+license = "MIT"
 edition = "2018"
 
 [lib]
