@@ -6,7 +6,7 @@ use qip::pipeline_debug::run_debug;
 use qip::qubits::*;
 
 fn main() {
-    let sn = 13;
+    let sn = 5;
     let mut builder = OpBuilder::new();
     let q1 = builder.qubit(1).unwrap();
     let (q2, h2) = builder.qubit_and_handle(sn).unwrap();

@@ -6,7 +6,7 @@ edition = "2018"
 
 [lib]
 name = "qip"
-path = "src/lib.rs"
+
 
 [dependencies]
 num = "0.2.0"

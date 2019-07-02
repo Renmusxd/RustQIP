@@ -175,47 +175,49 @@ pub trait UnitaryBuilder {
     /// Build a generic matrix op, apply to `q`, if `q` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
     /// size for the number of indices in `q` (mat.len() == 2^(2n)).
-    fn mat(&mut self, q: Qubit, mat: &[Complex<f64>]) -> Result<Qubit, &'static str>;
+    fn mat(&mut self, name: &str, q: Qubit, mat: &[Complex<f64>]) -> Result<Qubit, &'static str>;
 
     /// Build a matrix op from real numbers, apply to `q`, if `q` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
     /// size for the number of indices in `q` (mat.len() == 2^(2n)).
-    fn real_mat(&mut self, q: Qubit, mat: &[f64]) -> Result<Qubit, &'static str> {
-        self.mat(q, from_reals(mat).as_slice())
+    fn real_mat(&mut self, name: &str, q: Qubit, mat: &[f64]) -> Result<Qubit, &'static str> {
+        self.mat(name, q, from_reals(mat).as_slice())
     }
 
     /// Apply NOT to `q`, if `q` is multiple indices, apply to each
     fn not(&mut self, q: Qubit) -> Qubit {
-        self.x(q)
+        self.real_mat("not", q, &[0.0, 1.0, 1.0, 0.0]).unwrap()
     }
 
     /// Apply X to `q`, if `q` is multiple indices, apply to each
     fn x(&mut self, q: Qubit) -> Qubit {
-        self.real_mat(q, &[0.0, 1.0, 1.0, 0.0]).unwrap()
+        self.real_mat("X", q, &[0.0, 1.0, 1.0, 0.0]).unwrap()
     }
 
     /// Apply Y to `q`, if `q` is multiple indices, apply to each
     fn y(&mut self, q: Qubit) -> Qubit {
-        self.mat(q, from_tuples(&[(0.0, 0.0), (0.0, -1.0), (0.0, 0.0), (0.0, 1.0)])
+        self.mat("Y", q, from_tuples(&[(0.0, 0.0), (0.0, -1.0), (0.0, 0.0), (0.0, 1.0)])
             .as_slice()).unwrap()
     }
 
     /// Apply Z to `q`, if `q` is multiple indices, apply to each
     fn z(&mut self, q: Qubit) -> Qubit {
-        self.real_mat(q, &[1.0, 0.0, 0.0, -1.0]).unwrap()
+        self.real_mat("Z", q, &[1.0, 0.0, 0.0, -1.0]).unwrap()
     }
 
     /// Apply H to `q`, if `q` is multiple indices, apply to each
     fn hadamard(&mut self, q: Qubit) -> Qubit {
         let inv_sqrt = 1.0f64 / 2.0f64.sqrt();
-        self.real_mat(q, &[inv_sqrt, inv_sqrt, inv_sqrt, -inv_sqrt]).unwrap()
+        self.real_mat("H",q, &[inv_sqrt, inv_sqrt, inv_sqrt, -inv_sqrt]).unwrap()
     }
 
     /// Apply SWAP to `qa` and `qb`
     fn swap(&mut self, qa: Qubit, qb: Qubit) -> Result<(Qubit, Qubit), &'static str> {
         let op = self.make_swap_op(&qa, &qb)?;
         let qa_indices = qa.indices.clone();
-        let q = self.merge_with_op(vec![qa, qb], Some(op));
+
+        let name = String::from("swap");
+        let q = self.merge_with_op(vec![qa, qb], Some((name, op)));
         self.split_absolute(q, qa_indices)
     }
 
@@ -288,7 +290,7 @@ pub trait UnitaryBuilder {
     }
 
     /// Merge qubits using a generic state processing function.
-    fn merge_with_op(&mut self, qs: Vec<Qubit>, operator: Option<QubitOp>) -> Qubit;
+    fn merge_with_op(&mut self, qs: Vec<Qubit>, named_operator: Option<(String, QubitOp)>) -> Qubit;
 
     /// Measure all qubit states and probabilities, does not edit state (thus Unitary). Returns
     /// qubit and handle.
@@ -358,11 +360,11 @@ impl UnitaryBuilder for OpBuilder {
         }
     }
 
-    fn mat(&mut self, q: Qubit, mat: &[Complex<f64>]) -> Result<Qubit, &'static str> {
+    fn mat(&mut self, name: &str, q: Qubit, mat: &[Complex<f64>]) -> Result<Qubit, &'static str> {
         // Special case for broadcasting ops
         if q.indices.len() > 1 && mat.len() == (2 * 2) {
             let qs = self.split_all(q);
-            let qs = qs.into_iter().map(|q| self.mat(q, mat).unwrap()).collect();
+            let qs = qs.into_iter().map(|q| self.mat(name, q, mat).unwrap()).collect();
             Ok(self.merge_with_op(qs, None))
         } else {
             let expected_mat_size = 1 << (2*q.indices.len());
@@ -370,7 +372,8 @@ impl UnitaryBuilder for OpBuilder {
                 Err("Matrix not of expected size")
             } else {
                 let op = self.make_mat_op(&q, mat.to_vec());
-                Ok(self.merge_with_op(vec![q], Some(op)))
+                let name = String::from(name);
+                Ok(self.merge_with_op(vec![q], Some((name, op))))
             }
         }
     }
@@ -378,7 +381,8 @@ impl UnitaryBuilder for OpBuilder {
     fn apply_function(&mut self, q_in: Qubit, q_out: Qubit, f: Box<Fn(u64) -> (u64, f64) + Send + Sync>) -> (Qubit, Qubit) {
         let op = self.make_function_op(&q_in, &q_out, f);
         let in_indices = q_in.indices.clone();
-        let q = self.merge_with_op(vec![q_in, q_out], Some(op));
+        let name = String::from("f");
+        let q = self.merge_with_op(vec![q_in, q_out], Some((name, op)));
         self.split_absolute(q, in_indices).unwrap()
     }
 
@@ -386,8 +390,8 @@ impl UnitaryBuilder for OpBuilder {
         Qubit::split_absolute(self.get_op_id(), self.get_op_id(), q, selected_indices)
     }
 
-    fn merge_with_op(&mut self, qs: Vec<Qubit>, op: Option<QubitOp>) -> Qubit {
-        let modifier = op.map(|op|StateModifier::new_unitary(String::from("unitary"), op));
+    fn merge_with_op(&mut self, qs: Vec<Qubit>, named_operator: Option<(String, QubitOp)>) -> Qubit {
+        let modifier = named_operator.map(|(name, op)|StateModifier::new_unitary(name, op));
         Qubit::merge_with_modifier(self.get_op_id(), qs, modifier)
     }
 
@@ -432,11 +436,11 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         }
     }
 
-    fn mat(&mut self, q: Qubit, mat: &[Complex<f64>]) -> Result<Qubit, &'static str> {
+    fn mat(&mut self, name: &str, q: Qubit, mat: &[Complex<f64>]) -> Result<Qubit, &'static str> {
         // Special case for applying mat to each qubit in collection.
         if q.indices.len() > 1 && mat.len() == (2 * 2) {
             let qs = self.split_all(q);
-            let qs = qs.into_iter().map(|q| self.mat(q, mat).unwrap()).collect();
+            let qs = qs.into_iter().map(|q| self.mat(name, q, mat).unwrap()).collect();
             Ok(self.merge_with_op(qs, None))
         } else {
             let expected_mat_size = 1 << (2*q.indices.len());
@@ -446,7 +450,8 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
                 let op = self.make_mat_op(&q, mat.to_vec());
                 let cq = self.get_conditional_qubit();
                 let cq_indices = cq.indices.clone();
-                let q = self.merge_with_op(vec![cq, q], Some(op));
+                let name = format!("C({})", name);
+                let q = self.merge_with_op(vec![cq, q], Some((name, op)));
                 let (cq, q) = self.split_absolute(q, cq_indices).unwrap();
 
                 self.set_conditional_qubit(cq);
@@ -460,7 +465,8 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         let cq = self.get_conditional_qubit();
         let cq_indices = cq.indices.clone();
         let qa_indices = qa.indices.clone();
-        let q = self.merge_with_op(vec![cq, qa, qb], Some(op));
+        let name = String::from("C(swap)");
+        let q = self.merge_with_op(vec![cq, qa, qb], Some((name, op)));
         let (cq, q) = self.split_absolute(q, cq_indices).unwrap();
         let (qa, qb) = self.split_absolute(q, qa_indices).unwrap();
 
@@ -474,7 +480,8 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
 
         let cq_indices = cq.indices.clone();
         let in_indices = q_in.indices.clone();
-        let q = self.merge_with_op(vec![cq, q_in, q_out], Some(op));
+        let name = String::from("C(f)");
+        let q = self.merge_with_op(vec![cq, q_in, q_out], Some((name, op)));
         let (cq, q) = self.split_absolute(q, cq_indices).unwrap();
         let (q_in, q_out) = self.split_absolute(q, in_indices).unwrap();
 
@@ -513,8 +520,8 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         }
     }
 
-    fn merge_with_op(&mut self, qs: Vec<Qubit>, op: Option<QubitOp>) -> Qubit {
-        self.parent_builder.merge_with_op(qs, op)
+    fn merge_with_op(&mut self, qs: Vec<Qubit>,  named_operator: Option<(String, QubitOp)>) -> Qubit {
+        self.parent_builder.merge_with_op(qs, named_operator)
     }
 
     fn stochastic_measure(&mut self, q: Qubit) -> (Qubit, u64) {

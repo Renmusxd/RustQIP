@@ -87,7 +87,12 @@ pub trait QuantumState<P: Precision> {
     fn n(&self) -> u64;
 
     /// Function to mutate self into the state with op applied.
-    fn apply_op(&mut self, op: &QubitOp);
+    fn apply_op(&mut self, op: &QubitOp) {
+        self.apply_op_with_name(None, op)
+    }
+
+    /// Apply op with a given name. Mutate self using op.
+    fn apply_op_with_name(&mut self, name: Option<&str>, op: &QubitOp);
 
     /// Mutate self with measurement, return result as index and probability
     fn measure(&mut self, indices: &[u64]) -> (u64, P);
@@ -234,19 +239,20 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
         self.n
     }
 
-    fn apply_op(&mut self, op: &QubitOp) {
+    fn apply_op_with_name(&mut self, _name: Option<&str>, op: &QubitOp) {
         apply_op(self.n, op, &self.state, &mut self.arena, 0, 0, self.multithread);
         std::mem::swap(&mut self.state, &mut self.arena);
     }
 
     fn measure(&mut self, indices: &[u64]) -> (u64, P) {
-        let measured_result = measure(self.n, indices, &self.state, &mut self.arena, 0, 0, self.multithread);
+        let measured_result = measure(self.n, indices, &self.state,
+                                      &mut self.arena, None, self.multithread);
         std::mem::swap(&mut self.state, &mut self.arena);
         measured_result
     }
 
     fn stochastic_measure(&self, indices: &[u64]) -> Vec<P> {
-        measure_probs(self.n, indices, &self.state, 0, self.multithread)
+        measure_probs(self.n, indices, &self.state, None, self.multithread)
     }
 
     fn get_state(mut self, natural_order: bool) -> Vec<Complex<P>> {
@@ -273,7 +279,7 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
 fn fold_modify_state<P: Precision, QS: QuantumState<P>>(acc: (QS, MeasuredResults<P>), modifier: &StateModifier) -> (QS, MeasuredResults<P>) {
     let (mut s, mut mr) = acc;
     match &modifier.modifier {
-        StateModifierType::UnitaryOp(op) => s.apply_op(op),
+        StateModifierType::UnitaryOp(op) => s.apply_op_with_name(Some(&modifier.name), op),
         StateModifierType::MeasureState(id, indices) => {
             let result = s.measure(indices);
             mr.results.insert(id.clone(), result);

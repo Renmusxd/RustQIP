@@ -57,7 +57,7 @@ fn apply_grover_iteration<P: Precision>(x: u64, s: LocalQuantumState<P>) -> Loca
 }
 
 fn main() {
-    let n = 7;
+    let n = 10;
     let x = 42;
 
     let s = prepare_state::<f64>(n);
