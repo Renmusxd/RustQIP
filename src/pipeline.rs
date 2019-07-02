@@ -95,7 +95,7 @@ pub trait QuantumState<P: Precision> {
     fn apply_op_with_name(&mut self, name: Option<&str>, op: &QubitOp);
 
     /// Mutate self with measurement, return result as index and probability
-    fn measure(&mut self, indices: &[u64]) -> (u64, P);
+    fn measure(&mut self, indices: &[u64], measured: Option<(u64, P)>) -> (u64, P);
 
     /// Measure stochastically, do not alter internal state.
     /// Returns a vector of size 2^indices.len()
@@ -244,9 +244,9 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
         std::mem::swap(&mut self.state, &mut self.arena);
     }
 
-    fn measure(&mut self, indices: &[u64]) -> (u64, P) {
+    fn measure(&mut self, indices: &[u64], measured: Option<(u64, P)>) -> (u64, P) {
         let measured_result = measure(self.n, indices, &self.state,
-                                      &mut self.arena, None, self.multithread);
+                                      &mut self.arena, None, measured, self.multithread);
         std::mem::swap(&mut self.state, &mut self.arena);
         measured_result
     }
@@ -281,7 +281,7 @@ fn fold_modify_state<P: Precision, QS: QuantumState<P>>(acc: (QS, MeasuredResult
     match &modifier.modifier {
         StateModifierType::UnitaryOp(op) => s.apply_op_with_name(Some(&modifier.name), op),
         StateModifierType::MeasureState(id, indices) => {
-            let result = s.measure(indices);
+            let result = s.measure(indices, None);
             mr.results.insert(id.clone(), result);
         }
         StateModifierType::StochasticMeasureState(id, indices) => {

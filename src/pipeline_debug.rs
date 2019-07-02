@@ -120,7 +120,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
         println!("{}", tmp.join(" "));
     }
 
-    fn measure(&mut self, indices: &[u64]) -> (u64, P) {
+    fn measure(&mut self, indices: &[u64], _: Option<(u64, P)>) -> (u64, P) {
         let mut tmp: Vec<String> = vec![];
         for i in 0u64 .. self.n {
             if indices.contains(&i) {

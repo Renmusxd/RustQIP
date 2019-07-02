@@ -137,12 +137,18 @@ pub fn soft_measure<P: Precision>(n: u64, indices: &[u64], input: &[Complex<P>],
 /// Returns the measured state and probability.
 pub fn measure<P: Precision>(n: u64, indices: &[u64], input: &[Complex<P>],
                              output: &mut Vec<Complex<P>>, offsets: Option<(u64, u64)>,
-                             multithread: bool) -> (u64, P) {
-    let input_offset = offsets.map(|(i,_)| i);
-    let m = soft_measure(n, indices, input, input_offset);
-    let p = measure_prob(n, m, indices, input, input_offset, multithread);
-    measure_state(n, indices, (m, p), input, output, offsets, multithread);
-    (m, p)
+                             measured: Option<(u64, P)>, multithread: bool) -> (u64, P) {
+    let measured = if let Some(measured) = measured {
+        measured
+    } else {
+        let input_offset = offsets.map(|(i, _)| i);
+        let m = soft_measure(n, indices, input, input_offset);
+        let p = measure_prob(n, m, indices, input, input_offset, multithread);
+        (m, p)
+    };
+
+    measure_state(n, indices, measured, input, output, offsets, multithread);
+    measured
 }
 
 /// Normalize the output state such that it matches only states which produce the `measured`
@@ -214,8 +220,8 @@ mod measurement_tests {
 
     fn approx_eq(a: &[Complex<f64>], b: &[Complex<f64>], prec: i32){
         let prec = 10.0f64.powi(-prec);
-        let a: Vec<Complex<f64>> = a.iter().map(|f| round((f*prec)) / prec).collect();
-        let b: Vec<Complex<f64>> = b.iter().map(|f| round((f*prec)) / prec).collect();
+        let a: Vec<Complex<f64>> = a.iter().map(|f| round(f*prec) / prec).collect();
+        let b: Vec<Complex<f64>> = b.iter().map(|f| round(f*prec) / prec).collect();
         assert_eq!(a, b)
     }
 
