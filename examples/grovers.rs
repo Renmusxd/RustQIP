@@ -2,7 +2,6 @@ extern crate num;
 extern crate qip;
 
 use qip::pipeline::{run_local_with_init, LocalQuantumState, run_local, run_with_state, QuantumState};
-use qip::pipeline_debug::run_debug;
 use qip::qubits::*;
 use qip::types::Precision;
 
@@ -20,8 +19,6 @@ fn prepare_state<P: Precision>(n: u64) -> LocalQuantumState<P> {
     let (s, _) = run_local(&q);
     s
 }
-
-
 
 fn apply_us(b: &mut UnitaryBuilder, search: Qubit, ancillary: Qubit) -> (Qubit, Qubit) {
     let search = b.hadamard(search);

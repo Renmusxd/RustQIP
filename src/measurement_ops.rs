@@ -133,19 +133,29 @@ pub fn soft_measure<P: Precision>(n: u64, indices: &[u64], input: &[Complex<P>],
     }).sum()
 }
 
+pub struct MeasuredCondition<P: Precision> {
+    pub measured: u64,
+    pub prob: Option<P>
+}
+
 /// Selects a measured state from `input`, then calls `measure_state` to manipulate the output.
 /// Returns the measured state and probability.
 pub fn measure<P: Precision>(n: u64, indices: &[u64], input: &[Complex<P>],
                              output: &mut Vec<Complex<P>>, offsets: Option<(u64, u64)>,
-                             measured: Option<(u64, P)>, multithread: bool) -> (u64, P) {
-    let measured = if let Some(measured) = measured {
-        measured
+                             measured: Option<MeasuredCondition<P>>, multithread: bool) -> (u64, P) {
+    let input_offset = offsets.map(|(i, _)| i);
+    let m = if let Some(measured) = &measured {
+        measured.measured
     } else {
-        let input_offset = offsets.map(|(i, _)| i);
-        let m = soft_measure(n, indices, input, input_offset);
-        let p = measure_prob(n, m, indices, input, input_offset, multithread);
-        (m, p)
+        soft_measure(n, indices, input, input_offset)
     };
+
+    let p = if let Some(measured_prob) = measured.and_then(|m| m.prob) {
+        measured_prob
+    } else {
+        measure_prob(n, m, indices, input, input_offset, multithread)
+    };
+    let measured = (m, p);
 
     measure_state(n, indices, measured, input, output, offsets, multithread);
     measured
