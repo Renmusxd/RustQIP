@@ -9,8 +9,12 @@ use num::complex::Complex;
 use rayon::prelude::*;
 
 /// Get total magnitude of state.
-fn prob_magnitude<P: Precision>(input: &[Complex<P>]) -> P {
-    input.par_iter().map(Complex::<P>::norm_sqr).sum()
+pub fn prob_magnitude<P: Precision>(input: &[Complex<P>], multithread: bool) -> P {
+    if multithread {
+        input.par_iter().map(Complex::<P>::norm_sqr).sum()
+    } else {
+        input.iter().map(Complex::<P>::norm_sqr).sum()
+    }
 }
 
 /// Calculate the probability of a given measurement. `measured` gives the bits (as a u64) which has
@@ -106,16 +110,16 @@ pub fn measure_probs<P: Precision>(n: u64, indices: &[u64], input: &[Complex<P>]
 /// // Make the state |10>, index 0 is always |1> and index 1 is always |0>
 /// let input = from_reals(&[0.0, 0.0, 1.0, 0.0]);
 ///
-/// let m = soft_measure(2, &[0], &input, None);
+/// let m = soft_measure(2, &[0], &input, None, false);
 /// assert_eq!(m, 1);
-/// let m = soft_measure(2, &[1], &input, None);
+/// let m = soft_measure(2, &[1], &input, None, false);
 /// assert_eq!(m, 0);
 /// ```
-pub fn soft_measure<P: Precision>(n: u64, indices: &[u64], input: &[Complex<P>], input_offset: Option<u64>) -> u64 {
+pub fn soft_measure<P: Precision>(n: u64, indices: &[u64], input: &[Complex<P>], input_offset: Option<u64>, multithread: bool) -> u64 {
     let input_offset = input_offset.unwrap_or(0);
     let mut r = P::from(rand::random::<f64>()).unwrap() *
         if input.len() < (1 << n) as usize {
-            prob_magnitude(input)
+            prob_magnitude(input, multithread)
         } else {
             P::one()
         };
@@ -141,13 +145,13 @@ pub struct MeasuredCondition<P: Precision> {
 /// Selects a measured state from `input`, then calls `measure_state` to manipulate the output.
 /// Returns the measured state and probability.
 pub fn measure<P: Precision>(n: u64, indices: &[u64], input: &[Complex<P>],
-                             output: &mut Vec<Complex<P>>, offsets: Option<(u64, u64)>,
+                             output: &mut[Complex<P>], offsets: Option<(u64, u64)>,
                              measured: Option<MeasuredCondition<P>>, multithread: bool) -> (u64, P) {
     let input_offset = offsets.map(|(i, _)| i);
     let m = if let Some(measured) = &measured {
         measured.measured
     } else {
-        soft_measure(n, indices, input, input_offset)
+        soft_measure(n, indices, input, input_offset, multithread)
     };
 
     let p = if let Some(measured_prob) = measured.and_then(|m| m.prob) {

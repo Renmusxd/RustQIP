@@ -1,9 +1,7 @@
 extern crate num;
 extern crate qip;
 
-use qip::pipeline::run_local_with_init;
-use qip::pipeline_debug::run_debug;
-use qip::qubits::*;
+use qip::*;
 
 fn main() {
     let sn = 5;
@@ -21,7 +19,7 @@ fn main() {
 
     let (q1, m1) = builder.measure(q1);
 
-    run_debug(&q1);
+    qip::run_debug(&q1);
 
     let (_, measured) = run_local_with_init::<f64>(&q1, &[
         h2.make_init_from_index(0).unwrap(),

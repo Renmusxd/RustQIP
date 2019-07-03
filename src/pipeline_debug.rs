@@ -9,6 +9,7 @@ use crate::pipeline::{InitialState, QuantumState};
 use crate::qubits::Qubit;
 use crate::state_ops::{get_index, num_indices, QubitOp};
 use crate::types::Precision;
+use crate::measurement_ops::MeasuredCondition;
 
 struct PrintPipeline<P: Precision> {
     n: u64,
@@ -120,7 +121,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
         println!("{}", tmp.join(" "));
     }
 
-    fn measure(&mut self, indices: &[u64], _: Option<u64>, _: Option<P>) -> (u64, P) {
+    fn measure(&mut self, indices: &[u64], _: Option<MeasuredCondition<P>>) -> (u64, P) {
         let mut tmp: Vec<String> = vec![];
         for i in 0u64 .. self.n {
             if indices.contains(&i) {
@@ -133,6 +134,14 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
         let tmp: Vec<String> = (0 .. self.n).map(|_| "|".to_string()).collect();
         println!("{}", tmp.join(" "));
         (0, P::zero())
+    }
+
+    fn soft_measure(&self, _: &[u64], _: Option<u64>) -> (u64, P) {
+        (0, P::zero())
+    }
+
+    fn state_magnitude(&self) -> P {
+        P::zero()
     }
 
     fn stochastic_measure(&self, _indices: &[u64]) -> Vec<P> {

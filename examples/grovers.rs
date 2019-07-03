@@ -1,8 +1,9 @@
 extern crate num;
 extern crate qip;
 
-use qip::pipeline::{run_local_with_init, LocalQuantumState, run_local, run_with_state, QuantumState};
-use qip::qubits::*;
+use qip::*;
+use qip::qubits::apply_function;
+use qip::pipeline::LocalQuantumState;
 use qip::types::Precision;
 
 fn prepare_state<P: Precision>(n: u64) -> LocalQuantumState<P> {

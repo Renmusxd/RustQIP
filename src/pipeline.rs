@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use num::complex::Complex;
 use rayon::prelude::*;
 
-use crate::measurement_ops::{measure, measure_probs, MeasuredCondition};
+use crate::measurement_ops::{measure, measure_probs, MeasuredCondition, soft_measure, measure_prob, prob_magnitude};
 use crate::qubits::*;
 use crate::state_ops::*;
 use crate::types::Precision;
@@ -95,7 +95,14 @@ pub trait QuantumState<P: Precision> {
     fn apply_op_with_name(&mut self, name: Option<&str>, op: &QubitOp);
 
     /// Mutate self with measurement, return result as index and probability
-    fn measure(&mut self, indices: &[u64], measured: Option<u64>, measured_prob: Option<P>) -> (u64, P);
+    fn measure(&mut self, indices: &[u64], measured: Option<MeasuredCondition<P>>) -> (u64, P);
+
+    /// Perform calculations of `measure` without mutating result. Returns a possible measured value
+    /// and associated probability.
+    fn soft_measure(&self, indices: &[u64], measured: Option<u64>) -> (u64, P);
+
+    /// Give the total magnitude represented by this state. Most often 1.0
+    fn state_magnitude(&self) -> P;
 
     /// Measure stochastically, do not alter internal state.
     /// Returns a vector of size 2^indices.len()
@@ -244,17 +251,26 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
         std::mem::swap(&mut self.state, &mut self.arena);
     }
 
-    fn measure(&mut self, indices: &[u64], measured: Option<u64>, measured_prob: Option<P>) -> (u64, P) {
-        let measured = measured.map(|m| MeasuredCondition {
-            measured: m,
-            prob: measured_prob
-        });
-
+    fn measure(&mut self, indices: &[u64], measured: Option<MeasuredCondition<P>>) -> (u64, P) {
         let measured_result = measure(self.n, indices, &self.state,
                                       &mut self.arena, None, measured,
                                              self.multithread);
         std::mem::swap(&mut self.state, &mut self.arena);
         measured_result
+    }
+
+    fn soft_measure(&self, indices: &[u64], measured: Option<u64>) -> (u64, P) {
+        let m = if let Some(m) = measured {
+            m
+        } else {
+            soft_measure(self.n, indices, &self.state, None, self.multithread)
+        };
+        let p = measure_prob(self.n, m, indices, &self.state, None, self.multithread);
+        (m, p)
+    }
+
+    fn state_magnitude(&self) -> P {
+        prob_magnitude(&self.state, self.multithread)
     }
 
     fn stochastic_measure(&self, indices: &[u64]) -> Vec<P> {
@@ -287,7 +303,7 @@ fn fold_modify_state<P: Precision, QS: QuantumState<P>>(acc: (QS, MeasuredResult
     match &modifier.modifier {
         StateModifierType::UnitaryOp(op) => s.apply_op_with_name(Some(&modifier.name), op),
         StateModifierType::MeasureState(id, indices) => {
-            let result = s.measure(indices, None, None);
+            let result = s.measure(indices, None);
             mr.results.insert(id.clone(), result);
         }
         StateModifierType::StochasticMeasureState(id, indices) => {
