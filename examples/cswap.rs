@@ -3,28 +3,38 @@ extern crate qip;
 
 use qip::*;
 
-fn main() {
-    let sn = 5;
-    let mut builder = OpBuilder::new();
-    let q1 = builder.qubit(1).unwrap();
-    let (q2, h2) = builder.qubit_and_handle(sn).unwrap();
-    let (q3, h3) = builder.qubit_and_handle(sn).unwrap();
-    let q1 = builder.hadamard(q1);
+fn main() -> Result<(), &'static str> {
+    // Setup inputs
+    let mut b = OpBuilder::new();
+    let q1 = b.qubit(1)?;
+    let q2 = b.qubit(3)?;
+    let q3 = b.qubit(3)?;
 
-    let mut c = builder.with_context(q1);
-    let _ = c.swap(q2, q3).unwrap();
+    // We will want to feed in some inputs later.
+    let h2 = q2.handle();
+    let h3 = q3.handle();
+
+    // Define circuit
+    let q1 = b.hadamard(q1);
+
+    let mut c = b.with_context(q1);
+    let _ = c.swap(q2, q3)?;
     let q1 = c.release_qubit();
 
-    let q1 = builder.hadamard(q1);
+    let q1 = b.hadamard(q1);
 
-    let (q1, m1) = builder.measure(q1);
+    let (q1, m1) = b.measure(q1);
 
+    // Print circuit diagram
     qip::run_debug(&q1);
 
+    // Run circuit
     let (_, measured) = run_local_with_init::<f64>(&q1, &[
-        h2.make_init_from_index(0).unwrap(),
-        h3.make_init_from_index(1).unwrap(),
+        h2.make_init_from_index(0)?,
+        h3.make_init_from_index(1)?,
     ]);
 
     println!("{:?}", measured.get_measurement(m1));
+
+    Ok(())
 }

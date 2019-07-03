@@ -156,6 +156,14 @@ impl QubitHandle {
             Err("State not correct size for QubitHandle (must be 2^n)")
         }
     }
+
+    pub fn init_index<P: Precision>(&self, index: u64) -> QubitInitialState<P> {
+        self.make_init_from_index(index).unwrap()
+    }
+
+    pub fn init_state<P: Precision>(&self, state: Vec<Complex<P>>) -> QubitInitialState<P> {
+        self.make_init_from_state(state).unwrap()
+    }
 }
 
 /// A builder which supports non-unitary operations
@@ -327,12 +335,17 @@ impl OpBuilder {
         }
     }
 
+    /// If you just plan to call unwrap this is cleaner.
+    pub fn q(&mut self, n: u64) -> Qubit {
+        self.qubit(n).unwrap()
+    }
+
     /// Build a new qubit with `n` indices, return it plus a handle which can be
     /// used for feeding in an initial state.
     pub fn qubit_and_handle(&mut self, n: u64) -> Result<(Qubit, QubitHandle), &'static str> {
         let q = self.qubit(n)?;
-        let indices = q.indices.clone();
-        Ok((q, QubitHandle{ indices }))
+        let h = q.handle();
+        Ok((q, h))
     }
 
     fn get_op_id(&mut self) -> u64 {
