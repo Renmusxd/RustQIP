@@ -270,12 +270,16 @@ pub trait UnitaryBuilder {
 
     /// Split `q` into a single qubit for each index.
     fn split_all(&mut self, q: Qubit) -> Vec<Qubit> {
-        let mut indices: Vec<Vec<u64>> = q.indices.iter().cloned().map(|i| vec![i]).collect();
-        indices.pop();
-        // Cannot fail since all indices are from q.
-        let (mut qs, q) = self.split_absolute_many(q, indices).unwrap();
-        qs.push(q);
-        qs
+        if q.indices.len() == 1 {
+            vec![q]
+        } else {
+            let mut indices: Vec<Vec<u64>> = q.indices.iter().cloned().map(|i| vec![i]).collect();
+            indices.pop();
+            // Cannot fail since all indices are from q.
+            let (mut qs, q) = self.split_absolute_many(q, indices).unwrap();
+            qs.push(q);
+            qs
+        }
     }
 
     /// Build a generic matrix op.
