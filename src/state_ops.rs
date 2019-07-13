@@ -56,7 +56,7 @@ pub fn make_swap_op(a_indices: Vec<u64>, b_indices: Vec<u64>) -> Result<QubitOp,
 /// use qip::state_ops::make_control_op;
 /// use qip::state_ops::QubitOp::{Matrix, Control};
 /// let op = Matrix(vec![1], vec![/* ... */]);
-/// let cop = make_control_op(vec![0], op);
+/// let cop = make_control_op(vec![0], op).unwrap();
 ///
 /// if let Control(c_indices, o_indices, _) = cop {
 ///     assert_eq!(c_indices, vec![0]);
