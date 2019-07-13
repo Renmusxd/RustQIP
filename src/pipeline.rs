@@ -2,13 +2,15 @@ extern crate num;
 extern crate rayon;
 
 use std::cmp::max;
-use std::collections::{BinaryHeap, VecDeque};
 use std::collections::HashMap;
+use std::collections::{BinaryHeap, VecDeque};
 
 use num::complex::Complex;
 use rayon::prelude::*;
 
-use crate::measurement_ops::{measure, measure_probs, MeasuredCondition, soft_measure, measure_prob, prob_magnitude};
+use crate::measurement_ops::{
+    measure, measure_prob, measure_probs, prob_magnitude, soft_measure, MeasuredCondition,
+};
 use crate::qubits::*;
 use crate::state_ops::*;
 use crate::types::Precision;
@@ -17,33 +19,33 @@ use crate::utils;
 pub enum StateModifierType {
     UnitaryOp(QubitOp),
     MeasureState(u64, Vec<u64>),
-    StochasticMeasureState(u64, Vec<u64>)
+    StochasticMeasureState(u64, Vec<u64>),
 }
 
 pub struct StateModifier {
     name: String,
-    modifier: StateModifierType
+    modifier: StateModifierType,
 }
 
 impl StateModifier {
     pub fn new_unitary(name: String, op: QubitOp) -> StateModifier {
         StateModifier {
             name,
-            modifier: StateModifierType::UnitaryOp(op)
+            modifier: StateModifierType::UnitaryOp(op),
         }
     }
 
     pub fn new_measurement(name: String, id: u64, indices: Vec<u64>) -> StateModifier {
         StateModifier {
             name,
-            modifier: StateModifierType::MeasureState(id, indices)
+            modifier: StateModifierType::MeasureState(id, indices),
         }
     }
 
     pub fn new_stochastic_measurement(name: String, id: u64, indices: Vec<u64>) -> StateModifier {
         StateModifier {
             name,
-            modifier: StateModifierType::StochasticMeasureState(id, indices)
+            modifier: StateModifierType::StochasticMeasureState(id, indices),
         }
     }
 }
@@ -51,7 +53,7 @@ impl StateModifier {
 #[derive(Default)]
 pub struct MeasuredResults<P: Precision> {
     results: HashMap<u64, (u64, P)>,
-    stochastic_results: HashMap<u64, Vec<P>>
+    stochastic_results: HashMap<u64, Vec<P>>,
 }
 
 impl<P: Precision> MeasuredResults<P> {
@@ -60,7 +62,7 @@ impl<P: Precision> MeasuredResults<P> {
     }
 
     /// Retrieve the measurement and likelihood for a given handle.
-    pub fn get_measurement(&self, handle: u64) -> Option<(u64, P)>{
+    pub fn get_measurement(&self, handle: u64) -> Option<(u64, P)> {
         self.results.get(&handle).cloned()
     }
 
@@ -121,61 +123,83 @@ pub struct LocalQuantumState<P: Precision> {
     pub n: u64,
     state: Vec<Complex<P>>,
     arena: Vec<Complex<P>>,
-    multithread: bool
+    multithread: bool,
 }
 
 impl<P: Precision> LocalQuantumState<P> {
     /// Build a local state using a set of initial states for subsets of the qubits.
     /// These initial states are made from the qubit handles.
-    fn new_from_initial_states_and_multithread(n: u64, states: &[QubitInitialState<P>], multithread: bool) -> LocalQuantumState<P> {
-        let max_init_n = states.iter().map(|(indices, _)| indices).cloned().flatten().max().map(|m| m+1);
+    fn new_from_initial_states_and_multithread(
+        n: u64,
+        states: &[QubitInitialState<P>],
+        multithread: bool,
+    ) -> LocalQuantumState<P> {
+        let max_init_n = states
+            .iter()
+            .map(|(indices, _)| indices)
+            .cloned()
+            .flatten()
+            .max()
+            .map(|m| m + 1);
 
         let n = max_init_n.map(|m| max(n, m)).unwrap_or(n);
 
-        let mut cvec: Vec<Complex<P>> = (0.. 1 << n).map(|_| Complex::default()).collect();
+        let mut cvec: Vec<Complex<P>> = (0..1 << n).map(|_| Complex::default()).collect();
 
         // Assume that all unrepresented indices are in the |0> state.
-        let n_fullindices: u64 = states.iter().map(|(indices, state)| {
-            match state {
+        let n_fullindices: u64 = states
+            .iter()
+            .map(|(indices, state)| match state {
                 InitialState::FullState(_) => indices.len() as u64,
-                _ => 0
-            }
-        }).sum();
+                _ => 0,
+            })
+            .sum();
 
         // Make the index template/base
         let template: u64 = states.iter().fold(0, |acc, (indices, state)| -> u64 {
             match state {
                 InitialState::Index(val_indx) => sub_to_full(n, indices, *val_indx, acc),
-                _ => acc
+                _ => acc,
             }
         });
 
         let init = Complex::<P> {
             re: P::one(),
-            im: P::zero()
+            im: P::zero(),
         };
         // Go through each combination of full index locations
-        (0 .. 1 << n_fullindices).for_each(|i| {
+        (0..1 << n_fullindices).for_each(|i| {
             // Calculate the offset from template, and the product of fullstates.
-            let (delta_index, _, val) = states.iter().fold((0u64, 0u64, init), |acc, (indices, state) | {
-                if let InitialState::FullState(vals) = state {
-                    let (superindex_acc, sub_index_offset, val_acc) = acc;
-                    // Now we need to make additions to the superindex by adding bits based on
-                    // indices, as well as return the value given by the [sub .. sub + len] bits
-                    // from i.
-                    let index_mask = (1 << indices.len() as u64) - 1;
-                    let val_index_bits = (i >> sub_index_offset) & index_mask;
-                    let val_acc = val_acc * vals[val_index_bits as usize];
+            let (delta_index, _, val) =
+                states
+                    .iter()
+                    .fold((0u64, 0u64, init), |acc, (indices, state)| {
+                        if let InitialState::FullState(vals) = state {
+                            let (superindex_acc, sub_index_offset, val_acc) = acc;
+                            // Now we need to make additions to the superindex by adding bits based on
+                            // indices, as well as return the value given by the [sub .. sub + len] bits
+                            // from i.
+                            let index_mask = (1 << indices.len() as u64) - 1;
+                            let val_index_bits = (i >> sub_index_offset) & index_mask;
+                            let val_acc = val_acc * vals[val_index_bits as usize];
 
-                    let superindex_delta: u64 = indices.iter().enumerate().map(|(j,indx)| {
-                        let bit = (val_index_bits >> j as u64) & 1u64;
-                        bit << (n - 1 - indx)
-                    }).sum();
-                    (superindex_acc + superindex_delta, sub_index_offset + indices.len() as u64, val_acc)
-                } else {
-                    acc
-                }
-            });
+                            let superindex_delta: u64 = indices
+                                .iter()
+                                .enumerate()
+                                .map(|(j, indx)| {
+                                    let bit = (val_index_bits >> j as u64) & 1u64;
+                                    bit << (n - 1 - indx)
+                                })
+                                .sum();
+                            (
+                                superindex_acc + superindex_delta,
+                                sub_index_offset + indices.len() as u64,
+                                val_acc,
+                            )
+                        } else {
+                            acc
+                        }
+                    });
             cvec[(delta_index + template) as usize] = val;
         });
 
@@ -183,7 +207,7 @@ impl<P: Precision> LocalQuantumState<P> {
             n,
             state: cvec.clone(),
             arena: cvec,
-            multithread
+            multithread,
         }
     }
 
@@ -218,14 +242,14 @@ impl<P: Precision> Clone for LocalQuantumState<P> {
             n: self.n,
             state: self.state.clone(),
             arena: self.arena.clone(),
-            multithread: self.multithread
+            multithread: self.multithread,
         }
     }
 }
 
 pub enum InitialState<P: Precision> {
     FullState(Vec<Complex<P>>),
-    Index(u64)
+    Index(u64),
 }
 
 pub type QubitInitialState<P> = (Vec<u64>, InitialState<P>);
@@ -247,14 +271,28 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
     }
 
     fn apply_op_with_name(&mut self, _name: Option<&str>, op: &QubitOp) {
-        apply_op(self.n, op, &self.state, &mut self.arena, 0, 0, self.multithread);
+        apply_op(
+            self.n,
+            op,
+            &self.state,
+            &mut self.arena,
+            0,
+            0,
+            self.multithread,
+        );
         std::mem::swap(&mut self.state, &mut self.arena);
     }
 
     fn measure(&mut self, indices: &[u64], measured: Option<MeasuredCondition<P>>) -> (u64, P) {
-        let measured_result = measure(self.n, indices, &self.state,
-                                      &mut self.arena, None, measured,
-                                             self.multithread);
+        let measured_result = measure(
+            self.n,
+            indices,
+            &self.state,
+            &mut self.arena,
+            None,
+            measured,
+            self.multithread,
+        );
         std::mem::swap(&mut self.state, &mut self.arena);
         measured_result
     }
@@ -298,7 +336,10 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
 }
 
 /// Apply an QubitOp to the state `s` and return the new state.
-fn fold_modify_state<P: Precision, QS: QuantumState<P>>(acc: (QS, MeasuredResults<P>), modifier: &StateModifier) -> (QS, MeasuredResults<P>) {
+fn fold_modify_state<P: Precision, QS: QuantumState<P>>(
+    acc: (QS, MeasuredResults<P>),
+    modifier: &StateModifier,
+) -> (QS, MeasuredResults<P>) {
     let (mut s, mut mr) = acc;
     match &modifier.modifier {
         StateModifierType::UnitaryOp(op) => s.apply_op_with_name(Some(&modifier.name), op),
@@ -314,13 +355,26 @@ fn fold_modify_state<P: Precision, QS: QuantumState<P>>(acc: (QS, MeasuredResult
     (s, mr)
 }
 
-fn get_required_state_size<P: Precision>(frontier: &[&Qubit], states: &[QubitInitialState<P>]) -> u64 {
-    let max_init_n = states.iter().map(|(indices, _)| {
-        indices
-    }).cloned().flatten().max().map(|m| m+1).unwrap_or(0);
-    let max_qubit_n = frontier.iter().map(|q| {
-        &q.indices
-    }).cloned().flatten().max().map(|m| m+1).unwrap_or(0);
+fn get_required_state_size<P: Precision>(
+    frontier: &[&Qubit],
+    states: &[QubitInitialState<P>],
+) -> u64 {
+    let max_init_n = states
+        .iter()
+        .map(|(indices, _)| indices)
+        .cloned()
+        .flatten()
+        .max()
+        .map(|m| m + 1)
+        .unwrap_or(0);
+    let max_qubit_n = frontier
+        .iter()
+        .map(|q| &q.indices)
+        .cloned()
+        .flatten()
+        .max()
+        .map(|m| m + 1)
+        .unwrap_or(0);
     max(max_init_n, max_qubit_n)
 }
 
@@ -332,20 +386,29 @@ pub fn run<P: Precision, QS: QuantumState<P>>(q: &Qubit) -> (QS, MeasuredResults
     })
 }
 
-pub fn run_with_init<P: Precision, QS: QuantumState<P>>(q: &Qubit, states: &[QubitInitialState<P>]) -> (QS, MeasuredResults<P>){
+pub fn run_with_init<P: Precision, QS: QuantumState<P>>(
+    q: &Qubit,
+    states: &[QubitInitialState<P>],
+) -> (QS, MeasuredResults<P>) {
     run_with_statebuilder(q, |qs| -> QS {
         let n: u64 = qs.iter().map(|q| q.indices.len() as u64).sum();
         QS::new_from_initial_states(n, states)
     })
 }
 
-pub fn run_with_statebuilder<P: Precision, QS: QuantumState<P>, F: FnOnce(Vec<&Qubit>) -> QS>(q: &Qubit, state_builder: F) -> (QS, MeasuredResults<P>) {
+pub fn run_with_statebuilder<P: Precision, QS: QuantumState<P>, F: FnOnce(Vec<&Qubit>) -> QS>(
+    q: &Qubit,
+    state_builder: F,
+) -> (QS, MeasuredResults<P>) {
     let (frontier, ops) = get_opfns_and_frontier(q);
     let state = state_builder(frontier);
     run_with_state_and_ops(&ops, state)
 }
 
-pub fn run_with_state<P: Precision, QS: QuantumState<P>>(q: &Qubit, state: QS) -> Result<(QS, MeasuredResults<P>), &'static str> {
+pub fn run_with_state<P: Precision, QS: QuantumState<P>>(
+    q: &Qubit,
+    state: QS,
+) -> Result<(QS, MeasuredResults<P>), &'static str> {
     let (frontier, ops) = get_opfns_and_frontier(q);
 
     let req_n = get_required_state_size::<P>(&frontier, &[]);
@@ -363,12 +426,20 @@ pub fn run_local<P: Precision>(q: &Qubit) -> (LocalQuantumState<P>, MeasuredResu
 }
 
 /// `run_with_init` the pipeline using `LocalQuantumState`
-pub fn run_local_with_init<P: Precision>(q: &Qubit, states: &[QubitInitialState<P>]) -> (LocalQuantumState<P>, MeasuredResults<P>) {
+pub fn run_local_with_init<P: Precision>(
+    q: &Qubit,
+    states: &[QubitInitialState<P>],
+) -> (LocalQuantumState<P>, MeasuredResults<P>) {
     run_with_init(q, states)
 }
 
-fn run_with_state_and_ops<P: Precision, QS: QuantumState<P>>(ops: &[&StateModifier], state: QS) -> (QS, MeasuredResults<P>) {
-    ops.iter().cloned().fold((state, MeasuredResults::new()), fold_modify_state)
+fn run_with_state_and_ops<P: Precision, QS: QuantumState<P>>(
+    ops: &[&StateModifier],
+    state: QS,
+) -> (QS, MeasuredResults<P>) {
+    ops.iter()
+        .cloned()
+        .fold((state, MeasuredResults::new()), fold_modify_state)
 }
 
 fn get_opfns_and_frontier(q: &Qubit) -> (Vec<&Qubit>, Vec<&StateModifier>) {
@@ -379,23 +450,21 @@ fn get_opfns_and_frontier(q: &Qubit) -> (Vec<&Qubit>, Vec<&StateModifier>) {
     while !heap.is_empty() {
         if let Some(q) = heap.pop() {
             match &q.parent {
-                Some(parent) => {
-                    match &parent {
-                        Parent::Owned(parents, modifier) => {
-                            if let Some(modifier) = modifier {
-                                fn_queue.push_front(modifier);
-                            }
-                            heap.extend(parents);
+                Some(parent) => match &parent {
+                    Parent::Owned(parents, modifier) => {
+                        if let Some(modifier) = modifier {
+                            fn_queue.push_front(modifier);
                         }
-                        Parent::Shared(parent) => {
-                            let parent = parent.as_ref();
-                            if !qubit_in_heap(parent, &heap) {
-                                heap.push(parent);
-                            }
+                        heap.extend(parents);
+                    }
+                    Parent::Shared(parent) => {
+                        let parent = parent.as_ref();
+                        if !qubit_in_heap(parent, &heap) {
+                            heap.push(parent);
                         }
                     }
-                }
-                None => frontier_qubits.push(q)
+                },
+                None => frontier_qubits.push(q),
             }
         }
     }
@@ -415,24 +484,31 @@ fn qubit_in_heap(q: &Qubit, heap: &BinaryHeap<&Qubit>) -> bool {
 /// qubit with index 0 represents the lowest bit in the index of the state (has the smallest
 /// increment when flipped), otherwise it's the largest index (which is the internal state used by
 /// the simulator).
-pub fn make_circuit_matrix<P: Precision>(n: u64, q: &Qubit, natural_order: bool) -> Vec<Vec<Complex<P>>> {
-    let indices: Vec<u64> = (0 .. n).collect();
-    (0 .. 1 << n).map(|i| {
-        let indx = if natural_order {
-            i
-        } else {
-            utils::flip_bits(n as usize, i as u64)
-        };
-        let (state, _) = run_local_with_init(&q, &[
-            (indices.clone(), InitialState::Index(indx))
-        ]);
-        (0 .. state.state.len()).map(|i| {
+pub fn make_circuit_matrix<P: Precision>(
+    n: u64,
+    q: &Qubit,
+    natural_order: bool,
+) -> Vec<Vec<Complex<P>>> {
+    let indices: Vec<u64> = (0..n).collect();
+    (0..1 << n)
+        .map(|i| {
             let indx = if natural_order {
-                utils::flip_bits(n as usize, i as u64) as usize
-            } else {
                 i
+            } else {
+                utils::flip_bits(n as usize, i as u64)
             };
-            state.state[indx]
-        }).collect()
-    }).collect()
+            let (state, _) =
+                run_local_with_init(&q, &[(indices.clone(), InitialState::Index(indx))]);
+            (0..state.state.len())
+                .map(|i| {
+                    let indx = if natural_order {
+                        utils::flip_bits(n as usize, i as u64) as usize
+                    } else {
+                        i
+                    };
+                    state.state[indx]
+                })
+                .collect()
+        })
+        .collect()
 }

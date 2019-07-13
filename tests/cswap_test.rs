@@ -1,8 +1,8 @@
 extern crate num;
 extern crate qip;
 
-use qip::*;
 use qip::qubits::QubitHandle;
+use qip::*;
 
 fn assert_almost_eq(a: f64, b: f64, prec: i32) {
     let mult = 10.0f64.powi(prec);
@@ -42,10 +42,10 @@ fn test_cswap_aligned() -> Result<(), &'static str> {
     let (q1, h2, h3, m1) = setup_cswap_circuit(3)?;
 
     // Run circuit
-    let (_, measured) = run_local_with_init::<f64>(&q1, &[
-        h2.make_init_from_index(0)?,
-        h3.make_init_from_index(0)?,
-    ]);
+    let (_, measured) = run_local_with_init::<f64>(
+        &q1,
+        &[h2.make_init_from_index(0)?, h3.make_init_from_index(0)?],
+    );
 
     let (m, p) = measured.get_measurement(m1).unwrap();
     assert_eq!(m, 0);
@@ -60,10 +60,10 @@ fn test_cswap_orthogonal() -> Result<(), &'static str> {
     let (q1, h2, h3, m1) = setup_cswap_circuit(3)?;
 
     // Run circuit
-    let (_, measured) = run_local_with_init::<f64>(&q1, &[
-        h2.make_init_from_index(0)?,
-        h3.make_init_from_index(1)?,
-    ]);
+    let (_, measured) = run_local_with_init::<f64>(
+        &q1,
+        &[h2.make_init_from_index(0)?, h3.make_init_from_index(1)?],
+    );
 
     let (m, p) = measured.get_measurement(m1).unwrap();
     assert!(m == 0 || m == 1);
@@ -75,18 +75,15 @@ fn test_cswap_orthogonal() -> Result<(), &'static str> {
 /// sin((2 * pi * i * w / L) + d) normalized
 fn sin_wave(n: u64, w: f64, d: f64) -> Vec<Complex<f64>> {
     let l = 1 << n;
-    let state: Vec<_> = (0 .. l).map(|i| -> Complex<f64> {
-        let v = (d + (std::f64::consts::PI * w * i as f64 / l as f64)).sin();
-        Complex {
-            re: v,
-            im: 0.0
-        }
-    }).collect();
+    let state: Vec<_> = (0..l)
+        .map(|i| -> Complex<f64> {
+            let v = (d + (std::f64::consts::PI * w * i as f64 / l as f64)).sin();
+            Complex { re: v, im: 0.0 }
+        })
+        .collect();
     let mag: f64 = state.iter().map(|c| c.norm_sqr()).sum();
     let mag = mag.sqrt();
-    state.iter().map(|c| -> Complex<f64> {
-        c / mag
-    }).collect()
+    state.iter().map(|c| -> Complex<f64> { c / mag }).collect()
 }
 
 #[test]
@@ -98,10 +95,10 @@ fn test_cswap_waves() -> Result<(), &'static str> {
     let s2 = sin_wave(3, 2.0, 0.0);
 
     // Run circuit
-    let (_, measured) = run_local_with_init::<f64>(&q1, &[
-        h2.make_init_from_state(s1)?,
-        h3.make_init_from_state(s2)?,
-    ]);
+    let (_, measured) = run_local_with_init::<f64>(
+        &q1,
+        &[h2.make_init_from_state(s1)?, h3.make_init_from_state(s2)?],
+    );
 
     let (m, p) = measured.get_measurement(m1).unwrap();
     assert!(m == 0 || m == 1);

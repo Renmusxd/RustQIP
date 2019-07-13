@@ -1,5 +1,4 @@
 /// Contains functions, structs, and enums for storing and manipulating the quantum state.
-
 extern crate num;
 extern crate rayon;
 
@@ -8,8 +7,8 @@ use rayon::prelude::*;
 
 use PrecisionQubitOp::*;
 
-use crate::qubit_iterators::{ControlledOpIterator, SwapOpIterator, FunctionOpIterator};
 use crate::qubit_iterators::MatrixOpIterator;
+use crate::qubit_iterators::{ControlledOpIterator, FunctionOpIterator, SwapOpIterator};
 use crate::types::Precision;
 use crate::utils::*;
 
@@ -21,11 +20,36 @@ pub enum QubitOp {
     Swap(Vec<u64>, Vec<u64>),
     // Control indices, Op indices, Op
     Control(Vec<u64>, Vec<u64>, Box<QubitOp>),
-    // Function which maps |x,y> to |x,f(x) xor y> where x,y are both m bits.
-    Function(Vec<u64>, Vec<u64>, Box<Fn(u64) -> (u64, f64) + Send + Sync>)
+    // Function which maps |x,y> to |x,f(x) xor y>
+    Function(Vec<u64>, Vec<u64>, Box<Fn(u64) -> (u64, f64) + Send + Sync>),
 }
 
-/// Make a ControlOp
+/// Make a Matrix QubitOp
+pub fn make_matrix_op(indices: Vec<u64>, dat: Vec<Complex<f64>>) -> Result<QubitOp, &'static str> {
+    if indices.is_empty() {
+        Err("Must supply at least one op index")
+    } else {
+        let expected_mat_size = 1 << (2 * indices.len());
+        if dat.len() != expected_mat_size {
+            Err("Matrix data not correct size for 2^n by 2^n matrix")
+        } else {
+            Ok(QubitOp::Matrix(indices, dat))
+        }
+    }
+}
+
+/// Make a Swap QubitOp
+pub fn make_swap_op(a_indices: Vec<u64>, b_indices: Vec<u64>) -> Result<QubitOp, &'static str> {
+    if a_indices.is_empty() || b_indices.is_empty() {
+        Err("Need at least 1 swap index for a and b")
+    } else if a_indices.len() != b_indices.len() {
+        Err("Swap must be performed on two sets of indices of equal length")
+    } else {
+        Ok(QubitOp::Swap(a_indices, b_indices))
+    }
+}
+
+/// Make a Control QubitOp
 ///
 /// # Example
 /// ```
@@ -41,42 +65,66 @@ pub enum QubitOp {
 ///     assert!(false);
 /// }
 /// ```
-pub fn make_control_op(mut c_indices: Vec<u64>, op: QubitOp) -> QubitOp {
-    match op {
-        QubitOp::Control(oc_indices, oo_indices, op) => {
-            c_indices.extend(oc_indices);
-            QubitOp::Control(c_indices, oo_indices, op)
+pub fn make_control_op(mut c_indices: Vec<u64>, op: QubitOp) -> Result<QubitOp, &'static str> {
+    if c_indices.is_empty() {
+        Err("Must supply at least one control index")
+    } else {
+        match op {
+            QubitOp::Control(oc_indices, oo_indices, op) => {
+                c_indices.extend(oc_indices);
+                Ok(QubitOp::Control(c_indices, oo_indices, op))
+            }
+            op => {
+                let o_indices = (0..num_indices(&op)).map(|i| get_index(&op, i)).collect();
+                Ok(QubitOp::Control(c_indices, o_indices, Box::new(op)))
+            }
         }
-        op => {
-            let o_indices = (0..num_indices(&op)).map(|i| get_index(&op, i)).collect();
-            QubitOp::Control(c_indices, o_indices, Box::new(op))
-        }
+    }
+}
+
+/// Make a Function QubitOp
+pub fn make_function_op(
+    input_indices: Vec<u64>,
+    output_indices: Vec<u64>,
+    f: Box<Fn(u64) -> (u64, f64) + Send + Sync>,
+) -> Result<QubitOp, &'static str> {
+    if input_indices.is_empty() || output_indices.is_empty() {
+        Err("Input and Output indices must not be empty")
+    } else {
+        Ok(QubitOp::Function(input_indices, output_indices, f))
     }
 }
 
 /// Make a vector of complex numbers whose reals are given by `data`
 pub fn from_reals<P: Precision>(data: &[P]) -> Vec<Complex<P>> {
-    data.iter().map(|x| Complex::<P> {
-        re: *x,
-        im: P::zero(),
-    }).collect()
+    data.iter()
+        .map(|x| Complex::<P> {
+            re: *x,
+            im: P::zero(),
+        })
+        .collect()
 }
 
 /// Make a vector of complex numbers whose reals are given by the first tuple entry in `data` and
 /// whose imaginaries are from the second.
 pub fn from_tuples<P: Precision>(data: &[(P, P)]) -> Vec<Complex<P>> {
-    data.iter().map(|x| -> Complex<P> {
-        let (r, i) = x;
-        Complex::<P> {
-            re: *r,
-            im: *i,
-        }
-    }).collect()
+    data.iter()
+        .map(|x| -> Complex<P> {
+            let (r, i) = x;
+            Complex::<P> { re: *r, im: *i }
+        })
+        .collect()
 }
 
 /// Given the full matrix `row` and `col`, find the given op's row and column using the full `n`,
 /// the op's `nindices`, the op's `indices'.
-pub fn select_matrix_coords(n: u64, nindices: u64, indices: &[u64], row: u64, col: u64) -> (u64, u64) {
+pub fn select_matrix_coords(
+    n: u64,
+    nindices: u64,
+    indices: &[u64],
+    row: u64,
+    col: u64,
+) -> (u64, u64) {
     (0..nindices).fold((0, 0), |acc, j| -> (u64, u64) {
         let (x, y) = acc;
         let indx = indices[j as usize];
@@ -91,7 +139,7 @@ pub fn select_matrix_coords(n: u64, nindices: u64, indices: &[u64], row: u64, co
 /// Get the index for a submatrix indexed by `indices` given the `full_index` for the larger 2^n by 2^n matrix.
 pub fn full_to_sub(n: u64, mat_indices: &[u64], full_index: u64) -> u64 {
     let nindices = mat_indices.len() as u64;
-    (0 .. nindices).fold(0, |acc, j| -> u64 {
+    (0..nindices).fold(0, |acc, j| -> u64 {
         let indx = mat_indices[j as usize];
         let bit = get_bit(full_index, n - 1 - indx);
         set_bit(acc, nindices - 1 - j, bit)
@@ -114,7 +162,7 @@ pub fn num_indices(op: &QubitOp) -> usize {
         QubitOp::Matrix(indices, _) => indices.len(),
         QubitOp::Swap(a, b) => a.len() + b.len(),
         QubitOp::Control(cs, os, _) => cs.len() + os.len(),
-        QubitOp::Function(inputs, outputs, _) => inputs.len() + outputs.len()
+        QubitOp::Function(inputs, outputs, _) => inputs.len() + outputs.len(),
     }
 }
 
@@ -156,22 +204,33 @@ enum PrecisionQubitOp<'a, P: Precision> {
     // Control indices, Op indices, Op
     Control(Vec<u64>, Vec<u64>, Box<PrecisionQubitOp<'a, P>>),
     // Function which maps |x,y> to |x,f(x) xor y> where x,y are both m bits.
-    Function(Vec<u64>, Vec<u64>, &'a (Fn(u64) -> (u64, f64) + Send + Sync))
+    Function(
+        Vec<u64>,
+        Vec<u64>,
+        &'a (Fn(u64) -> (u64, f64) + Send + Sync),
+    ),
 }
 
 /// Convert &QubitOp to equivalent PrecisionQubitOp<P>
 fn clone_as_precision_op<P: Precision>(op: &QubitOp) -> PrecisionQubitOp<P> {
     match op {
         QubitOp::Matrix(indices, data) => {
-            let data: Vec<Complex<P>> = data.iter().map(|c| Complex {
-                re: P::from(c.re).unwrap(),
-                im: P::from(c.im).unwrap(),
-            }).collect();
+            let data: Vec<Complex<P>> = data
+                .iter()
+                .map(|c| Complex {
+                    re: P::from(c.re).unwrap(),
+                    im: P::from(c.im).unwrap(),
+                })
+                .collect();
             Matrix(indices.clone(), data)
         }
         QubitOp::Swap(a_indices, b_indices) => Swap(a_indices.clone(), b_indices.clone()),
-        QubitOp::Control(c_indices, o_indices, op) => Control(c_indices.clone(), o_indices.clone(), Box::new(clone_as_precision_op(op))),
-        QubitOp::Function(inputs, outputs, f) => Function(inputs.clone(), outputs.clone(), f)
+        QubitOp::Control(c_indices, o_indices, op) => Control(
+            c_indices.clone(),
+            o_indices.clone(),
+            Box::new(clone_as_precision_op(op)),
+        ),
+        QubitOp::Function(inputs, outputs, f) => Function(inputs.clone(), outputs.clone(), f),
     }
 }
 
@@ -181,7 +240,7 @@ fn precision_num_indices<P: Precision>(op: &PrecisionQubitOp<P>) -> usize {
         Matrix(indices, _) => indices.len(),
         Swap(a, b) => a.len() + b.len(),
         Control(cs, os, _) => cs.len() + os.len(),
-        Function(inputs, outputs, _) => inputs.len() + outputs.len()
+        Function(inputs, outputs, _) => inputs.len() + outputs.len(),
     }
 }
 
@@ -213,9 +272,14 @@ fn precision_get_index<P: Precision>(op: &PrecisionQubitOp<P>, i: usize) -> u64 
     }
 }
 
-
 /// Builds a ControlledOpIterator for the given `op`, then maps using `f` and sums.
-fn map_with_control_iterator<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(row: u64, op: &PrecisionQubitOp<P>, n_control_indices: u64, n_op_indices: u64, f: F) -> Complex<P> {
+fn map_with_control_iterator<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(
+    row: u64,
+    op: &PrecisionQubitOp<P>,
+    n_control_indices: u64,
+    n_op_indices: u64,
+    f: F,
+) -> Complex<P> {
     match op {
         Matrix(_, data) => {
             let iter_builder = |row: u64| MatrixOpIterator::new(row, n_op_indices, &data);
@@ -249,32 +313,46 @@ fn map_with_control_iterator<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P
 /// 0 and 2^nindices.
 /// This really needs to be cleaned up, but runs in a tight loop. This makes it hard since Box
 /// is unfeasible and the iterator types aren't the same size.
-fn sum_for_op_cols<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(nindices: u64, row: u64, op: &PrecisionQubitOp<P>, f: F) -> Complex<P> {
+fn sum_for_op_cols<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(
+    nindices: u64,
+    row: u64,
+    op: &PrecisionQubitOp<P>,
+    f: F,
+) -> Complex<P> {
     match op {
-        Matrix(_, data) =>
-            MatrixOpIterator::new(row, nindices, &data).map(f).sum(),
-        Swap(_, _) =>
-            SwapOpIterator::new(row, nindices).map(f).sum(),
-        Control(c_indices, o_indices, op) =>
-            map_with_control_iterator(row, op, c_indices.len() as u64, o_indices.len() as u64, f),
+        Matrix(_, data) => MatrixOpIterator::new(row, nindices, &data).map(f).sum(),
+        Swap(_, _) => SwapOpIterator::new(row, nindices).map(f).sum(),
+        Control(c_indices, o_indices, op) => {
+            map_with_control_iterator(row, op, c_indices.len() as u64, o_indices.len() as u64, f)
+        }
         Function(inputs, outputs, op_f) => {
             let input_n = inputs.len() as u64;
             let output_n = outputs.len() as u64;
-            FunctionOpIterator::new(row, input_n, output_n, op_f).map(f).sum()
-        },
+            FunctionOpIterator::new(row, input_n, output_n, op_f)
+                .map(f)
+                .sum()
+        }
     }
 }
 
 /// Apply `op` to the `input`, storing the results in `output`. If either start at a nonzero state
 /// index in their 0th index, use `input/output_offset`.
-pub fn apply_op<P: Precision>(n: u64, op: &QubitOp,
-               input: &[Complex<P>], output: &mut[Complex<P>],
-               input_offset: u64, output_offset: u64, multithread: bool) {
+pub fn apply_op<P: Precision>(
+    n: u64,
+    op: &QubitOp,
+    input: &[Complex<P>],
+    output: &mut [Complex<P>],
+    input_offset: u64,
+    output_offset: u64,
+    multithread: bool,
+) {
     let op = clone_as_precision_op::<P>(op);
-    let mat_indices: Vec<u64> = (0 .. precision_num_indices(&op)).map(|i| precision_get_index(&op, i)).collect();
+    let mat_indices: Vec<u64> = (0..precision_num_indices(&op))
+        .map(|i| precision_get_index(&op, i))
+        .collect();
     let nindices = mat_indices.len() as u64;
 
-    let row_fn  = |(outputrow, outputloc): (usize, &mut Complex<P>)| {
+    let row_fn = |(outputrow, outputloc): (usize, &mut Complex<P>)| {
         let row = output_offset + (outputrow as u64);
         let matrow = full_to_sub(n, &mat_indices, row);
         // Maps from a op matrix column (from 0 to 2^nindices) to the value at that column
@@ -307,18 +385,24 @@ pub fn apply_op<P: Precision>(n: u64, op: &QubitOp,
 
 /// Make the full op matrix from `ops`.
 /// Not very efficient, use only for debugging.
-pub fn make_op_matrix<P: Precision>(n: u64, op: &QubitOp, multithread: bool) -> Vec<Vec<Complex<P>>> {
+pub fn make_op_matrix<P: Precision>(
+    n: u64,
+    op: &QubitOp,
+    multithread: bool,
+) -> Vec<Vec<Complex<P>>> {
     let zeros: Vec<P> = (0..1 << n).map(|_| P::zero()).collect();
-    (0..1 << n).map(|i| {
-        let mut input = from_reals(&zeros);
-        let mut output = input.clone();
-        input[i] = Complex {
-            re: P::one(),
-            im: P::zero(),
-        };
-        apply_op(n, op, &input, &mut output, 0, 0, multithread);
-        output.clone()
-    }).collect()
+    (0..1 << n)
+        .map(|i| {
+            let mut input = from_reals(&zeros);
+            let mut output = input.clone();
+            input[i] = Complex {
+                re: P::one(),
+                im: P::zero(),
+            };
+            apply_op(n, op, &input, &mut output, 0, 0, multithread);
+            output.clone()
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -349,7 +433,7 @@ mod state_ops_tests {
     #[test]
     fn test_get_index_condition() {
         let mop = QubitOp::Matrix(vec![2, 3], vec![]);
-        let op = make_control_op(vec![0, 1], mop);
+        let op = make_control_op(vec![0, 1], mop).unwrap();
         assert_eq!(num_indices(&op), 4);
         assert_eq!(get_index(&op, 0), 0);
         assert_eq!(get_index(&op, 1), 1);

@@ -1,31 +1,30 @@
 #[macro_use]
 extern crate bencher;
-extern crate qip;
 extern crate num;
+extern crate qip;
 
 use bencher::Bencher;
 
 use num::Complex;
-use qip::state_ops::*;
 use qip::state_ops::QubitOp::*;
+use qip::state_ops::*;
 
 /// Make the full op matrix from `ops`.
 /// Not very efficient, use only for debugging.
 fn make_ops_matrix(n: u64, ops: &Vec<&QubitOp>) -> Vec<Vec<Complex<f64>>> {
     let zeros: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
-    (0..1 << n).map(|i| {
-        let mut input = from_reals(&zeros);
-        let output = input.clone();
-        input[i] = Complex {
-            re: 1.0,
-            im: 0.0,
-        };
-        let (input, _) = ops.iter().fold((input, output), |(input, mut output), op| {
-            apply_op(n, op, &input, &mut output, 0, 0, true);
-            (output, input)
-        });
-        input
-    }).collect()
+    (0..1 << n)
+        .map(|i| {
+            let mut input = from_reals(&zeros);
+            let output = input.clone();
+            input[i] = Complex { re: 1.0, im: 0.0 };
+            let (input, _) = ops.iter().fold((input, output), |(input, mut output), op| {
+                apply_op(n, op, &input, &mut output, 0, 0, true);
+                (output, input)
+            });
+            input
+        })
+        .collect()
 }
 
 fn bench_identity(b: &mut Bencher) {
@@ -50,7 +49,7 @@ fn bench_identity(b: &mut Bencher) {
 fn bench_hadamard(b: &mut Bencher) {
     let n = 3;
 
-    let mult = (1.0/2.0f64).sqrt();
+    let mult = (1.0 / 2.0f64).sqrt();
     let mat = from_reals(&vec![mult, mult, mult, -mult]);
 
     let ops: Vec<QubitOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
@@ -71,7 +70,7 @@ fn bench_cidentity(b: &mut Bencher) {
     let n = 3;
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
-    let op = make_control_op((0..n - 1).collect(), Matrix(vec![n - 1], mat));
+    let op = make_control_op((0..n - 1).collect(), Matrix(vec![n - 1], mat)).unwrap();
 
     let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
@@ -102,7 +101,7 @@ fn bench_identity_larger(b: &mut Bencher) {
 fn bench_hadamard_larger(b: &mut Bencher) {
     let n = 8;
 
-    let mult = (1.0/2.0f64).sqrt();
+    let mult = (1.0 / 2.0f64).sqrt();
     let mat = from_reals(&vec![mult, mult, mult, -mult]);
 
     let ops: Vec<QubitOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
@@ -123,7 +122,8 @@ fn bench_cidentity_larger(b: &mut Bencher) {
     let n = 8;
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
-    let op = make_control_op((0..n - 1).collect(), Matrix(vec![n - 1], mat));
+    let op = make_matrix_op(vec![n - 1], mat).unwrap();
+    let op = make_control_op((0..n - 1).collect(), op).unwrap();
 
     let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
@@ -136,8 +136,9 @@ fn bench_cidentity_giant(b: &mut Bencher) {
     let n = 16;
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
-    let c_indices = (0 .. n - 1).collect();
-    let op = make_control_op(c_indices, Matrix(vec![n - 1], mat));
+    let c_indices = (0..n - 1).collect();
+    let op = make_matrix_op(vec![n - 1], mat).unwrap();
+    let op = make_control_op(c_indices, op).unwrap();
 
     let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
@@ -150,8 +151,9 @@ fn bench_cidentity_giant_halfprec(b: &mut Bencher) {
     let n = 16;
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
-    let c_indices = (0 .. n - 1).collect();
-    let op = make_control_op(c_indices, Matrix(vec![n - 1], mat));
+    let c_indices = (0..n - 1).collect();
+    let op = make_matrix_op(vec![n - 1], mat).unwrap();
+    let op = make_control_op(c_indices, op).unwrap();
 
     let base_vector: Vec<f32> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
@@ -160,7 +162,15 @@ fn bench_cidentity_giant_halfprec(b: &mut Bencher) {
     b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0, false));
 }
 
-benchmark_group!(benches, bench_identity, bench_hadamard, bench_cidentity,
-                 bench_identity_larger, bench_hadamard_larger, bench_cidentity_larger,
-                 bench_cidentity_giant, bench_cidentity_giant_halfprec);
+benchmark_group!(
+    benches,
+    bench_identity,
+    bench_hadamard,
+    bench_cidentity,
+    bench_identity_larger,
+    bench_hadamard_larger,
+    bench_cidentity_larger,
+    bench_cidentity_giant,
+    bench_cidentity_giant_halfprec
+);
 benchmark_main!(benches);

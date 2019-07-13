@@ -11,7 +11,11 @@ pub fn qfft<B: UnitaryBuilder>(builder: &mut B, q: Qubit) -> Qubit {
     builder.merge(qs)
 }
 
-fn rec_qfft<B: UnitaryBuilder>(builder: &mut B, mut used_qs: Vec<Qubit>, mut remaining_qs: Vec<Qubit>) -> Vec<Qubit> {
+fn rec_qfft<B: UnitaryBuilder>(
+    builder: &mut B,
+    mut used_qs: Vec<Qubit>,
+    mut remaining_qs: Vec<Qubit>,
+) -> Vec<Qubit> {
     let q = remaining_qs.pop();
     if let Some(q) = q {
         let mut q = builder.hadamard(q);
@@ -34,19 +38,12 @@ fn rec_qfft<B: UnitaryBuilder>(builder: &mut B, mut used_qs: Vec<Qubit>, mut rem
     }
 }
 
-pub fn make_rm_mat(m: u64) -> Vec<Complex<f64>>{
+pub fn make_rm_mat(m: u64) -> Vec<Complex<f64>> {
     let phi = 2.0 * std::f64::consts::PI / f64::from(1 << m);
-    vec![Complex {
-        re: 1.0,
-        im: 0.0
-    }, Complex {
-        re: 0.0,
-        im: 0.0
-    }, Complex {
-        re: 0.0,
-        im: 0.0
-    }, Complex {
-        re: 0.0,
-        im: phi
-    }.exp()]
+    vec![
+        Complex { re: 1.0, im: 0.0 },
+        Complex { re: 0.0, im: 0.0 },
+        Complex { re: 0.0, im: 0.0 },
+        Complex { re: 0.0, im: phi }.exp(),
+    ]
 }

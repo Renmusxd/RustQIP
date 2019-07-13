@@ -1,10 +1,10 @@
 extern crate num;
 extern crate qip;
 
-use qip::*;
-use qip::qubits::apply_function;
 use qip::pipeline::LocalQuantumState;
+use qip::qubits::apply_function;
 use qip::types::Precision;
+use qip::*;
 
 fn prepare_state<P: Precision>(n: u64) -> LocalQuantumState<P> {
     let mut b = OpBuilder::new();
@@ -21,25 +21,27 @@ fn prepare_state<P: Precision>(n: u64) -> LocalQuantumState<P> {
     s
 }
 
-fn apply_us(b: &mut UnitaryBuilder, search: Qubit, ancillary: Qubit) -> (Qubit, Qubit) {
+fn apply_us(
+    b: &mut UnitaryBuilder,
+    search: Qubit,
+    ancillary: Qubit,
+) -> Result<(Qubit, Qubit), &'static str> {
     let search = b.hadamard(search);
     let (search, ancillary) = apply_function(b, search, ancillary, |x| {
-        (0, if x == 0 {
-            std::f64::consts::PI
-        } else {
-            0.0
-        })
-    });
+        (0, if x == 0 { std::f64::consts::PI } else { 0.0 })
+    })?;
     let search = b.hadamard(search);
-
-    (search, ancillary)
+    Ok((search, ancillary))
 }
 
-fn apply_uw(b: &mut UnitaryBuilder, search: Qubit, ancillary: Qubit, x0: u64) -> (Qubit, Qubit) {
+fn apply_uw(
+    b: &mut UnitaryBuilder,
+    search: Qubit,
+    ancillary: Qubit,
+    x0: u64,
+) -> Result<(Qubit, Qubit), &'static str> {
     // Need to move the x0 value into the closure.
-    apply_function(b, search, ancillary, move |x| {
-        ((x == x0) as u64, 0.0)
-    })
+    apply_function(b, search, ancillary, move |x| ((x == x0) as u64, 0.0))
 }
 
 fn apply_grover_iteration<P: Precision>(x: u64, s: LocalQuantumState<P>) -> LocalQuantumState<P> {
@@ -47,9 +49,8 @@ fn apply_grover_iteration<P: Precision>(x: u64, s: LocalQuantumState<P>) -> Loca
     let q = b.qubit(s.n - 1).unwrap();
     let anc = b.qubit(1).unwrap();
 
-    let (q, anc) = apply_uw(&mut b, q, anc, x);
-    let (q, _) = apply_us(&mut b, q, anc);
-
+    let (q, anc) = apply_uw(&mut b, q, anc, x).unwrap();
+    let (q, _) = apply_us(&mut b, q, anc).unwrap();
     let (s, _) = run_with_state(&q, s).unwrap();
     s
 }
@@ -61,9 +62,9 @@ fn main() {
     let s = prepare_state::<f64>(n);
 
     let iters = 100;
-    let (s, states) = (0 .. iters).fold((s, vec![]), |(s, mut vecs), _| {
+    let (s, states) = (0..iters).fold((s, vec![]), |(s, mut vecs), _| {
         let s = apply_grover_iteration(x, s);
-        let indices: Vec<u64> = (0 .. n).collect();
+        let indices: Vec<u64> = (0..n).collect();
         let f = s.stochastic_measure(&indices)[x as usize];
         vecs.push(f);
         (s, vecs)

@@ -20,7 +20,7 @@ impl<'a, P: Precision> MatrixOpIterator<'a, P> {
         let upper = get_flat_index(n, row, 1 << n) as usize;
         MatrixOpIterator {
             n,
-            data: &data[lower .. upper],
+            data: &data[lower..upper],
             last_col: None,
         }
     }
@@ -48,15 +48,20 @@ impl<'a, P: Precision> std::iter::Iterator for MatrixOpIterator<'a, P> {
 }
 
 /// Iterator which provides the indices of nonzero columns for a given row of a COp
-pub struct ControlledOpIterator<P: Precision, It: std::iter::Iterator<Item=(u64, Complex<P>)>> {
+pub struct ControlledOpIterator<P: Precision, It: std::iter::Iterator<Item = (u64, Complex<P>)>> {
     row: u64,
     index_threshold: u64,
     op_iter: Option<It>,
     last_col: Option<u64>,
 }
 
-impl<P: Precision, It: std::iter::Iterator<Item=(u64, Complex<P>)>> ControlledOpIterator<P, It> {
-    pub fn new<F: FnOnce(u64) -> It>(row: u64, n_control_indices: u64, n_op_indices: u64, iter_builder: F) -> ControlledOpIterator<P, It> {
+impl<P: Precision, It: std::iter::Iterator<Item = (u64, Complex<P>)>> ControlledOpIterator<P, It> {
+    pub fn new<F: FnOnce(u64) -> It>(
+        row: u64,
+        n_control_indices: u64,
+        n_op_indices: u64,
+        iter_builder: F,
+    ) -> ControlledOpIterator<P, It> {
         let n_indices = n_control_indices + n_op_indices;
         let index_threshold = (1 << n_indices) - (1 << n_op_indices);
         let op_iter = if row >= index_threshold {
@@ -73,7 +78,9 @@ impl<P: Precision, It: std::iter::Iterator<Item=(u64, Complex<P>)>> ControlledOp
     }
 }
 
-impl<P: Precision, It: std::iter::Iterator<Item=(u64, Complex<P>)>> std::iter::Iterator for ControlledOpIterator<P, It> {
+impl<P: Precision, It: std::iter::Iterator<Item = (u64, Complex<P>)>> std::iter::Iterator
+    for ControlledOpIterator<P, It>
+{
     type Item = (u64, Complex<P>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -92,10 +99,15 @@ impl<P: Precision, It: std::iter::Iterator<Item=(u64, Complex<P>)>> std::iter::I
             } else {
                 self.last_col = Some(self.row);
             }
-            self.last_col.map(|c| (c, Complex::<P> {
-                re: P::one(),
-                im: P::zero()
-            }))
+            self.last_col.map(|c| {
+                (
+                    c,
+                    Complex::<P> {
+                        re: P::one(),
+                        im: P::zero(),
+                    },
+                )
+            })
         }
     }
 }
@@ -105,7 +117,7 @@ pub struct SwapOpIterator<P: Precision> {
     row: u64,
     half_n: u64,
     last_col: Option<u64>,
-    phantom: PhantomData<P>
+    phantom: PhantomData<P>,
 }
 
 impl<P: Precision> SwapOpIterator<P> {
@@ -114,7 +126,7 @@ impl<P: Precision> SwapOpIterator<P> {
             row,
             half_n: n_qubits >> 1,
             last_col: None,
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 }
@@ -131,10 +143,15 @@ impl<P: Precision> std::iter::Iterator for SwapOpIterator<P> {
         } else {
             self.last_col = None;
         }
-        self.last_col.map(|col| (col, Complex {
-            re: P::one(),
-            im: P::zero()
-        }))
+        self.last_col.map(|col| {
+            (
+                col,
+                Complex {
+                    re: P::one(),
+                    im: P::zero(),
+                },
+            )
+        })
     }
 }
 
@@ -145,11 +162,16 @@ pub struct FunctionOpIterator<P: Precision> {
     fx_xor_y: u64,
     theta: P,
     last_col: Option<u64>,
-    phantom: PhantomData<P>
+    phantom: PhantomData<P>,
 }
 
 impl<P: Precision> FunctionOpIterator<P> {
-    pub fn new<F: Fn(u64) -> (u64, f64)>(row: u64, input_n: u64, output_n: u64, f: F) -> FunctionOpIterator<P> {
+    pub fn new<F: Fn(u64) -> (u64, f64)>(
+        row: u64,
+        input_n: u64,
+        output_n: u64,
+        f: F,
+    ) -> FunctionOpIterator<P> {
         let x = row >> output_n;
         let (fx, theta) = f(flip_bits(input_n as usize, x));
         let y = row & ((1 << output_n) - 1);
@@ -161,7 +183,7 @@ impl<P: Precision> FunctionOpIterator<P> {
             fx_xor_y,
             theta,
             last_col: None,
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 }
@@ -176,7 +198,8 @@ impl<P: Precision> std::iter::Iterator for FunctionOpIterator<P> {
             let colbits = (self.x << self.output_n) | self.fx_xor_y;
             self.last_col = Some(colbits);
         };
-        self.last_col.map(|col| (col, Complex::from_polar(&P::one(), &self.theta)))
+        self.last_col
+            .map(|col| (col, Complex::from_polar(&P::one(), &self.theta)))
     }
 }
 
@@ -189,20 +212,19 @@ mod iterator_tests {
     #[test]
     fn test_mat_iterator() {
         let n = 1u64;
-        let mat: Vec<Vec<f64>> = (0..1 << n).map(|i| -> Vec<f64> {
-            let d = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
-            let it = MatrixOpIterator::new(i, n, &d);
-            let v: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
-            it.fold(v, |mut v, (indx, _)| {
-                v[indx as usize] = 1.0;
-                v
+        let mat: Vec<Vec<f64>> = (0..1 << n)
+            .map(|i| -> Vec<f64> {
+                let d = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
+                let it = MatrixOpIterator::new(i, n, &d);
+                let v: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
+                it.fold(v, |mut v, (indx, _)| {
+                    v[indx as usize] = 1.0;
+                    v
+                })
             })
-        }).collect();
+            .collect();
 
-        let expected = vec![
-            vec![0.0, 1.0],
-            vec![1.0, 0.0],
-        ];
+        let expected = vec![vec![0.0, 1.0], vec![1.0, 0.0]];
 
         assert_eq!(mat, expected);
     }
@@ -210,20 +232,22 @@ mod iterator_tests {
     #[test]
     fn test_swap_iterator() {
         let n = 2u64;
-        let mat: Vec<Vec<f64>> = (0..1 << n).map(|i| -> Vec<f64> {
-            let it = SwapOpIterator::<f64>::new(i, n);
-            let v: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
-            it.fold(v, |mut v, (indx, _)| {
-                v[indx as usize] = 1.0;
-                v
+        let mat: Vec<Vec<f64>> = (0..1 << n)
+            .map(|i| -> Vec<f64> {
+                let it = SwapOpIterator::<f64>::new(i, n);
+                let v: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
+                it.fold(v, |mut v, (indx, _)| {
+                    v[indx as usize] = 1.0;
+                    v
+                })
             })
-        }).collect();
+            .collect();
 
         let expected = vec![
             vec![1.0, 0.0, 0.0, 0.0],
             vec![0.0, 0.0, 1.0, 0.0],
             vec![0.0, 1.0, 0.0, 0.0],
-            vec![0.0, 0.0, 0.0, 1.0]
+            vec![0.0, 0.0, 0.0, 1.0],
         ];
 
         assert_eq!(mat, expected);
@@ -234,24 +258,24 @@ mod iterator_tests {
         let n = 2u64;
 
         let d = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
-        let builder = |r: u64| {
-            MatrixOpIterator::new(r, n >> 1, &d)
-        };
+        let builder = |r: u64| MatrixOpIterator::new(r, n >> 1, &d);
 
-        let mat: Vec<Vec<f64>> = (0..1 << n).map(|i| -> Vec<f64> {
-            let it = ControlledOpIterator::new(i, n >> 1, n >> 1, builder);
-            let v: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
-            it.fold(v, |mut v, (indx, _)| {
-                v[indx as usize] = 1.0;
-                v
+        let mat: Vec<Vec<f64>> = (0..1 << n)
+            .map(|i| -> Vec<f64> {
+                let it = ControlledOpIterator::new(i, n >> 1, n >> 1, builder);
+                let v: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
+                it.fold(v, |mut v, (indx, _)| {
+                    v[indx as usize] = 1.0;
+                    v
+                })
             })
-        }).collect();
+            .collect();
 
         let expected = vec![
             vec![1.0, 0.0, 0.0, 0.0],
             vec![0.0, 1.0, 0.0, 0.0],
             vec![0.0, 0.0, 0.0, 1.0],
-            vec![0.0, 0.0, 1.0, 0.0]
+            vec![0.0, 0.0, 1.0, 0.0],
         ];
         assert_eq!(mat, expected);
     }
@@ -259,25 +283,25 @@ mod iterator_tests {
     #[test]
     fn test_f_iterator() {
         let n = 2u64;
-        let mat: Vec<Vec<f64>> = (0..1 << n).map(|i| -> Vec<f64> {
-            let it = FunctionOpIterator::<f64>::new(i, n >> 1, n >> 1, |x| {
-                ((x != 1) as u64, 0.0)
-            });
-            let v: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
-            it.fold(v, |mut v, (indx, _)| {
-                v[indx as usize] = 1.0;
-                v
+        let mat: Vec<Vec<f64>> = (0..1 << n)
+            .map(|i| -> Vec<f64> {
+                let it =
+                    FunctionOpIterator::<f64>::new(i, n >> 1, n >> 1, |x| ((x != 1) as u64, 0.0));
+                let v: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
+                it.fold(v, |mut v, (indx, _)| {
+                    v[indx as usize] = 1.0;
+                    v
+                })
             })
-        }).collect();
+            .collect();
 
         let expected = vec![
             vec![0.0, 1.0, 0.0, 0.0],
             vec![1.0, 0.0, 0.0, 0.0],
             vec![0.0, 0.0, 1.0, 0.0],
-            vec![0.0, 0.0, 0.0, 1.0]
+            vec![0.0, 0.0, 0.0, 1.0],
         ];
 
         assert_eq!(mat, expected);
     }
 }
-

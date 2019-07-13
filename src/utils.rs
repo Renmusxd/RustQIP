@@ -40,10 +40,10 @@ pub fn get_bit(num: u64, bit_index: u64) -> bool {
 /// let selector = 0b010; // first take from off, then on, then off
 /// assert_eq!(entwine_bits(n, selector, off_bits, on_bits), 0b011);
 /// ```
-pub fn entwine_bits(n: u64, mut selector: u64, mut off_bits: u64, mut on_bits: u64) -> u64{
+pub fn entwine_bits(n: u64, mut selector: u64, mut off_bits: u64, mut on_bits: u64) -> u64 {
     let mut result = 0;
 
-    for i in 0 .. n {
+    for i in 0..n {
         if selector & 1 == 0 {
             let bit = off_bits & 1;
             off_bits >>= 1;
@@ -78,7 +78,7 @@ pub fn get_flat_index(nindices: u64, i: u64, j: u64) -> u64 {
 /// ```
 ///
 pub fn flip_bits(n: usize, num: u64) -> u64 {
-    (0 .. n).fold(0, |acc, i| {
+    (0..n).fold(0, |acc, i| {
         let bit = (num >> i) & 1;
         acc | (bit << (n - 1 - i))
     })
