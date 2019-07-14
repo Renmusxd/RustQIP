@@ -121,7 +121,7 @@ pub trait QuantumState<P: Precision> {
 pub struct LocalQuantumState<P: Precision> {
     // A bundle with the quantum state data.
     pub n: u64,
-    state: Vec<Complex<P>>,
+    pub state: Vec<Complex<P>>,
     arena: Vec<Complex<P>>,
     multithread: bool,
 }
