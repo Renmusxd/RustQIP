@@ -254,7 +254,7 @@ pub fn apply_op<P: Precision>(
         };
 
         // Get value for row and assign
-        *outputloc = sum_for_op_cols(nindices, matrow, &[&op], f);
+        *outputloc = sum_for_op_cols(nindices, matrow, &op, f);
     };
 
     // Generate output for each output row
@@ -262,6 +262,67 @@ pub fn apply_op<P: Precision>(
         output.par_iter_mut().enumerate().for_each(row_fn);
     } else {
         output.iter_mut().enumerate().for_each(row_fn);
+    }
+}
+
+/// Apply `ops` to the `input`, storing the results in `output`. If either start at a nonzero state
+/// index in their 0th index, use `input/output_offset`.
+/// This is much less efficient as compared to repeated applications of `apply_op`, if your ops can
+/// be applied in sequence, do so with `apply_op`.
+pub fn apply_ops<P: Precision>(
+    n: u64,
+    ops: &[&QubitOp],
+    input: &[Complex<P>],
+    output: &mut [Complex<P>],
+    input_offset: u64,
+    output_offset: u64,
+    multithread: bool,
+) {
+    match ops {
+        [op] => apply_op(n, op, input, output, input_offset, output_offset, multithread),
+        [] => {
+            // TODO (efficiently copy over, keeping offsets in mind.)
+            unimplemented!()
+        },
+        _ => {
+            let ops: Vec<_> = ops.iter().map(|op| clone_as_precision_op::<P>(op)).collect();
+
+            let mat_indices: Vec<u64> = ops.iter().map(|op| -> Vec<u64> {
+                (0..precision_num_indices(&op))
+                    .map(|i| precision_get_index(&op, i))
+                    .collect()
+            }).flatten().collect();
+
+            let row_fn = |(outputrow, outputloc): (usize, &mut Complex<P>)| {
+                let row = output_offset + (outputrow as u64);
+                let matrow = full_to_sub(n, &mat_indices, row);
+                // Maps from a op matrix column (from 0 to 2^nindices) to the value at that column
+                // for the row calculated above.
+                let f = |(i, val): (u64, Complex<P>)| -> Complex<P> {
+                    let colbits = sub_to_full(n, &mat_indices, i, row);
+                    if colbits < input_offset {
+                        Complex::default()
+                    } else {
+                        let vecrow = colbits - input_offset;
+                        if vecrow >= input.len() as u64 {
+                            Complex::default()
+                        } else {
+                            val * input[vecrow as usize]
+                        }
+                    }
+                };
+
+                // Get value for row and assign
+                *outputloc = sum_for_ops_cols(matrow, &ops, f);
+            };
+
+            // Generate output for each output row
+            if multithread {
+                output.par_iter_mut().enumerate().for_each(row_fn);
+            } else {
+                output.iter_mut().enumerate().for_each(row_fn);
+            }
+        }
     }
 }
 
@@ -371,5 +432,22 @@ mod state_ops_tests {
 
         let expected = from_reals(&[0.0, 1.0, 0.0, 0.0]);
         assert_eq!(expected, output);
+    }
+
+    #[test]
+    fn test_many_mat_swap() {
+        let n = 5;
+
+        let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
+        let ops: Vec<_> = (0..n).map(|indx| {
+            QubitOp::Matrix(vec![indx], mat.clone())
+        }).collect();
+        let r_ops: Vec<_> = ops.iter().collect();
+
+        let base_vector: Vec<f32> = (0..1 << n).map(|_| 0.0).collect();
+        let input = from_reals(&base_vector);
+        let mut output = from_reals(&base_vector);
+
+        apply_ops(n, &r_ops, &input, &mut output, 0, 0, false);
     }
 }
