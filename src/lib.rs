@@ -9,7 +9,7 @@ pub mod pipeline;
 pub mod pipeline_debug;
 pub mod qfft;
 pub mod qubit_chainer;
-pub mod qubit_iterators;
+pub mod iterators;
 pub mod qubits;
 pub mod state_ops;
 pub mod types;

@@ -7,8 +7,7 @@ use rayon::prelude::*;
 
 use PrecisionQubitOp::*;
 
-use crate::qubit_iterators::MatrixOpIterator;
-use crate::qubit_iterators::{ControlledOpIterator, FunctionOpIterator, SwapOpIterator};
+use crate::iterators::*;
 use crate::types::Precision;
 use crate::utils::*;
 
@@ -194,22 +193,6 @@ pub fn get_index(op: &QubitOp, i: usize) -> u64 {
     }
 }
 
-/// A private version of QubitOp with variable precision, this is used so we can change the f64
-/// default qubit op to a variable one at the beginning of execution and not at each operation.
-enum PrecisionQubitOp<'a, P: Precision> {
-    // Indices, Matrix data
-    Matrix(Vec<u64>, Vec<Complex<P>>),
-    // A indices, B indices
-    Swap(Vec<u64>, Vec<u64>),
-    // Control indices, Op indices, Op
-    Control(Vec<u64>, Vec<u64>, Box<PrecisionQubitOp<'a, P>>),
-    // Function which maps |x,y> to |x,f(x) xor y> where x,y are both m bits.
-    Function(
-        Vec<u64>,
-        Vec<u64>,
-        &'a (Fn(u64) -> (u64, f64) + Send + Sync),
-    ),
-}
 
 /// Convert &QubitOp to equivalent PrecisionQubitOp<P>
 fn clone_as_precision_op<P: Precision>(op: &QubitOp) -> PrecisionQubitOp<P> {
@@ -231,107 +214,6 @@ fn clone_as_precision_op<P: Precision>(op: &QubitOp) -> PrecisionQubitOp<P> {
             Box::new(clone_as_precision_op(op)),
         ),
         QubitOp::Function(inputs, outputs, f) => Function(inputs.clone(), outputs.clone(), f),
-    }
-}
-
-/// Get the number of indices represented by `op`
-fn precision_num_indices<P: Precision>(op: &PrecisionQubitOp<P>) -> usize {
-    match &op {
-        Matrix(indices, _) => indices.len(),
-        Swap(a, b) => a.len() + b.len(),
-        Control(cs, os, _) => cs.len() + os.len(),
-        Function(inputs, outputs, _) => inputs.len() + outputs.len(),
-    }
-}
-
-/// Get the `i`th qubit index for `op`
-fn precision_get_index<P: Precision>(op: &PrecisionQubitOp<P>, i: usize) -> u64 {
-    match &op {
-        Matrix(indices, _) => indices[i],
-        Swap(a, b) => {
-            if i < a.len() {
-                a[i]
-            } else {
-                b[i - a.len()]
-            }
-        }
-        Control(cs, os, _) => {
-            if i < cs.len() {
-                cs[i]
-            } else {
-                os[i - cs.len()]
-            }
-        }
-        Function(inputs, outputs, _) => {
-            if i < inputs.len() {
-                inputs[i]
-            } else {
-                outputs[i - inputs.len()]
-            }
-        }
-    }
-}
-
-/// Builds a ControlledOpIterator for the given `op`, then maps using `f` and sums.
-fn map_with_control_iterator<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(
-    row: u64,
-    op: &PrecisionQubitOp<P>,
-    n_control_indices: u64,
-    n_op_indices: u64,
-    f: F,
-) -> Complex<P> {
-    match op {
-        Matrix(_, data) => {
-            let iter_builder = |row: u64| MatrixOpIterator::new(row, n_op_indices, &data);
-            let it = ControlledOpIterator::new(row, n_control_indices, n_op_indices, iter_builder);
-            it.map(f).sum()
-        }
-        Swap(_, _) => {
-            let iter_builder = |row: u64| SwapOpIterator::new(row, n_op_indices);
-            let it = ControlledOpIterator::new(row, n_control_indices, n_op_indices, iter_builder);
-            it.map(f).sum()
-        }
-        Function(inputs, outputs, op_f) => {
-            let input_n = inputs.len() as u64;
-            let output_n = outputs.len() as u64;
-            let iter_builder = |row: u64| FunctionOpIterator::new(row, input_n, output_n, op_f);
-            let it = ControlledOpIterator::new(row, n_control_indices, n_op_indices, iter_builder);
-            it.map(f).sum()
-        }
-        // Control ops are automatically collapsed if made with helper, but implement this anyway
-        // just to account for possibility.
-        Control(c_indices, o_indices, op) => {
-            let n_control_indices = n_control_indices + c_indices.len() as u64;
-            let n_op_indices = o_indices.len() as u64;
-            map_with_control_iterator(row, op, n_control_indices, n_op_indices, f)
-        }
-    }
-}
-
-/// Using the function `f` which maps from a column and `row` to a complex value for the op matrix,
-/// sums for all nonzero entries for a given `op` more efficiently than trying each column between
-/// 0 and 2^nindices.
-/// This really needs to be cleaned up, but runs in a tight loop. This makes it hard since Box
-/// is unfeasible and the iterator types aren't the same size.
-fn sum_for_op_cols<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(
-    nindices: u64,
-    row: u64,
-    op: &PrecisionQubitOp<P>,
-    f: F,
-) -> Complex<P> {
-    match op {
-        Matrix(_, data) => MatrixOpIterator::new(row, nindices, &data).map(f).sum(),
-        Swap(_, _) => SwapOpIterator::new(row, nindices).map(f).sum(),
-        Control(c_indices, o_indices, op) => {
-            map_with_control_iterator(row, op, c_indices.len() as u64, o_indices.len() as u64, f)
-        }
-        Function(inputs, outputs, op_f) => {
-            let input_n = inputs.len() as u64;
-            let output_n = outputs.len() as u64;
-            FunctionOpIterator::new(row, input_n, output_n, op_f)
-                .map(f)
-                .sum()
-        }
     }
 }
 
@@ -372,7 +254,7 @@ pub fn apply_op<P: Precision>(
         };
 
         // Get value for row and assign
-        *outputloc = sum_for_op_cols(nindices, matrow, &op, f);
+        *outputloc = sum_for_op_cols(nindices, matrow, &[&op], f);
     };
 
     // Generate output for each output row
