@@ -87,6 +87,15 @@ impl<'a, B: UnitaryBuilder> SingleQubitChain<'a, B> {
         let q = self.builder.mat(name, self.q, mat)?;
         Ok(Self::new(self.builder, q))
     }
+    /// Apply a sparse matrix operation to the contained qubit.
+    pub fn apply_sparse_mat(
+        self,
+        name: &str,
+        mat: Vec<Vec<(u64, Complex<f64>)>>,
+    ) -> Result<Self, &'static str> {
+        let q = self.builder.sparse_mat(name, self.q, mat)?;
+        Ok(Self::new(self.builder, q))
+    }
     /// Apply the NOT operation to the contained qubit.
     pub fn not(self) -> Self {
         let q = self.builder.not(self.q);

@@ -8,7 +8,6 @@ use bencher::Bencher;
 use num::Complex;
 use qip::state_ops::QubitOp::*;
 use qip::state_ops::*;
-use std::borrow::Borrow;
 
 /// Make the full op matrix from `ops`.
 /// Not very efficient, use only for debugging.
@@ -180,7 +179,6 @@ fn bench_apply_two_swaps_small(b: &mut Bencher) {
     });
 }
 
-
 fn bench_apply_two_swaps_small_multiops(b: &mut Bencher) {
     let n = 3;
 
@@ -200,7 +198,6 @@ fn bench_apply_two_swaps_small_multiops(b: &mut Bencher) {
     });
 }
 
-
 fn bench_apply_two_swaps_large(b: &mut Bencher) {
     let n = 16;
 
@@ -217,7 +214,6 @@ fn bench_apply_two_swaps_large(b: &mut Bencher) {
         apply_op(n, &op2, &input, &mut output, 0, 0, false);
     });
 }
-
 
 fn bench_apply_two_swaps_large_multiops(b: &mut Bencher) {
     let n = 16;
@@ -238,34 +234,31 @@ fn bench_apply_two_swaps_large_multiops(b: &mut Bencher) {
     });
 }
 
-
 fn bench_apply_many_swaps_small(b: &mut Bencher) {
     let n = 5;
 
     let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
-    let ops: Vec<_> = (0 .. n).map(|indx| {
-        make_matrix_op(vec![indx], mat.clone()).unwrap()
-    }).collect();
+    let ops: Vec<_> = (0..n)
+        .map(|indx| make_matrix_op(vec![indx], mat.clone()).unwrap())
+        .collect();
 
     let base_vector: Vec<f32> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
     let mut output = from_reals(&base_vector);
 
     b.iter(|| {
-        ops.iter().for_each(|op| {
-            apply_op(n, op, &input, &mut output, 0, 0, false)
-        })
+        ops.iter()
+            .for_each(|op| apply_op(n, op, &input, &mut output, 0, 0, false))
     });
 }
-
 
 fn bench_apply_many_swaps_small_multiops(b: &mut Bencher) {
     let n = 5;
 
     let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
-    let ops: Vec<_> = (0 .. n).map(|indx| {
-        make_matrix_op(vec![indx], mat.clone()).unwrap()
-    }).collect();
+    let ops: Vec<_> = (0..n)
+        .map(|indx| make_matrix_op(vec![indx], mat.clone()).unwrap())
+        .collect();
     let r_ops: Vec<_> = ops.iter().collect();
 
     let base_vector: Vec<f32> = (0..1 << n).map(|_| 0.0).collect();
@@ -281,29 +274,27 @@ fn bench_apply_many_swaps_large(b: &mut Bencher) {
     let n = 10;
 
     let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
-    let ops: Vec<_> = (0 .. n).map(|indx| {
-        make_matrix_op(vec![indx], mat.clone()).unwrap()
-    }).collect();
+    let ops: Vec<_> = (0..n)
+        .map(|indx| make_matrix_op(vec![indx], mat.clone()).unwrap())
+        .collect();
 
     let base_vector: Vec<f32> = (0..1 << n).map(|_| 0.0).collect();
     let input = from_reals(&base_vector);
     let mut output = from_reals(&base_vector);
 
     b.iter(|| {
-        ops.iter().for_each(|op| {
-            apply_op(n, op, &input, &mut output, 0, 0, false)
-        })
+        ops.iter()
+            .for_each(|op| apply_op(n, op, &input, &mut output, 0, 0, false))
     });
 }
-
 
 fn bench_apply_many_swaps_large_multiops(b: &mut Bencher) {
     let n = 10;
 
     let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
-    let ops: Vec<_> = (0 .. n).map(|indx| {
-        make_matrix_op(vec![indx], mat.clone()).unwrap()
-    }).collect();
+    let ops: Vec<_> = (0..n)
+        .map(|indx| make_matrix_op(vec![indx], mat.clone()).unwrap())
+        .collect();
     let r_ops: Vec<_> = ops.iter().collect();
 
     let base_vector: Vec<f32> = (0..1 << n).map(|_| 0.0).collect();
@@ -314,7 +305,6 @@ fn bench_apply_many_swaps_large_multiops(b: &mut Bencher) {
         apply_ops(n, &r_ops, &input, &mut output, 0, 0, false);
     });
 }
-
 
 benchmark_group!(
     benches,
