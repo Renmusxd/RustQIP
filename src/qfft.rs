@@ -25,7 +25,7 @@ fn rec_qfft<B: UnitaryBuilder>(
             let m = (i + 2) as u64;
             let mut cbuilder = builder.with_context(cq);
             // Rm is a 2x2 matrix, so cannot panic on unwrap.
-            q = cbuilder.mat("Rm", q, make_rm_mat(m).as_slice()).unwrap();
+            q = cbuilder.mat("Rm", q, make_rm_mat(m)).unwrap();
             pushing_qs.push(cbuilder.release_qubit());
         }
         pushing_qs.reverse();

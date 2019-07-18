@@ -10,11 +10,14 @@ use PrecisionQubitOp::*;
 use crate::iterators::*;
 use crate::types::Precision;
 use crate::utils::*;
+use std::cmp::{max, min};
 
 /// Types of unitary ops which can be applied to a state.
 pub enum QubitOp {
     // Indices, Matrix data
     Matrix(Vec<u64>, Vec<Complex<f64>>),
+    // Indices, Matrix data
+    SparseMatrix(Vec<u64>, Vec<Vec<(u64, Complex<f64>)>>),
     // A indices, B indices
     Swap(Vec<u64>, Vec<u64>),
     // Control indices, Op indices, Op
@@ -25,16 +28,88 @@ pub enum QubitOp {
 
 /// Make a Matrix QubitOp
 pub fn make_matrix_op(indices: Vec<u64>, dat: Vec<Complex<f64>>) -> Result<QubitOp, &'static str> {
+    let expected_mat_size = 1 << (2 * indices.len());
     if indices.is_empty() {
         Err("Must supply at least one op index")
+    } else if dat.len() != expected_mat_size {
+        Err("Matrix data not correct size for 2^n by 2^n matrix")
     } else {
-        let expected_mat_size = 1 << (2 * indices.len());
-        if dat.len() != expected_mat_size {
-            Err("Matrix data not correct size for 2^n by 2^n matrix")
-        } else {
-            Ok(QubitOp::Matrix(indices, dat))
-        }
+        Ok(QubitOp::Matrix(indices, dat))
     }
+}
+
+/// Make a SparseMatrix QubitOp from a vector of rows (with `(column, value)`).
+/// natural_order indicates that the lowest indexed qubit is the least significant bit in `column`
+/// and `row` where `row` is the index of `dat`.
+pub fn make_sparse_matrix_op(
+    indices: Vec<u64>,
+    dat: Vec<Vec<(u64, Complex<f64>)>>,
+    natural_order: bool,
+) -> Result<QubitOp, &'static str> {
+    let n = indices.len();
+    let expected_mat_size = 1 << n;
+    if indices.is_empty() {
+        Err("Must supply at least one op index")
+    } else if dat.len() != expected_mat_size {
+        Err("SparseMatrix data not correct size for 2^n rows")
+    } else {
+        // Each row needs at least one entry
+        dat.iter().try_for_each(|v| {
+            if v.is_empty() {
+                Err("All rows of SparseMatrix must have data")
+            } else {
+                Ok(())
+            }
+        })?;
+
+        let dat = if natural_order {
+            let mut dat: Vec<_> = dat
+                .into_iter()
+                .map(|v| {
+                    v.into_iter()
+                        .map(|(indx, c)| (flip_bits(n, indx), c))
+                        .collect()
+                })
+                .enumerate()
+                .collect();
+            dat.sort_by_key(|(indx, _)| flip_bits(n, *indx as u64));
+            dat.into_iter().map(|(_, c)| c).collect()
+        } else {
+            dat
+        };
+
+        Ok(QubitOp::SparseMatrix(indices, dat))
+    }
+}
+
+/// Make a SparseMatrix QubitOp from a vector of rows (with `(column, value)`) build from a function
+/// `f` which takes row numbers.
+/// natural_order indicates that the lowest indexed qubit is the least significant bit in `row` and
+/// the output `column` from `f`
+pub fn make_sparse_matrix_from_function<F: Fn(u64) -> Vec<(u64, Complex<f64>)>>(
+    indices: Vec<u64>,
+    f: F,
+    natural_order: bool,
+) -> Result<QubitOp, &'static str> {
+    let n = indices.len();
+    let v: Vec<_> = (0..1 << n as u64)
+        .map(|indx| {
+            let indx = if natural_order {
+                flip_bits(n, indx)
+            } else {
+                indx
+            };
+            let v = f(indx);
+            if natural_order {
+                v.into_iter()
+                    .map(|(indx, c)| (flip_bits(n, indx), c))
+                    .collect()
+            } else {
+                v
+            }
+        })
+        .collect();
+    make_sparse_matrix_op(indices, v, false)
 }
 
 /// Make a Swap QubitOp
@@ -159,6 +234,7 @@ pub fn sub_to_full(n: u64, mat_indices: &[u64], sub_index: u64, base: u64) -> u6
 pub fn num_indices(op: &QubitOp) -> usize {
     match &op {
         QubitOp::Matrix(indices, _) => indices.len(),
+        QubitOp::SparseMatrix(indices, _) => indices.len(),
         QubitOp::Swap(a, b) => a.len() + b.len(),
         QubitOp::Control(cs, os, _) => cs.len() + os.len(),
         QubitOp::Function(inputs, outputs, _) => inputs.len() + outputs.len(),
@@ -169,6 +245,7 @@ pub fn num_indices(op: &QubitOp) -> usize {
 pub fn get_index(op: &QubitOp, i: usize) -> u64 {
     match &op {
         QubitOp::Matrix(indices, _) => indices[i],
+        QubitOp::SparseMatrix(indices, _) => indices[i],
         QubitOp::Swap(a, b) => {
             if i < a.len() {
                 a[i]
@@ -193,12 +270,11 @@ pub fn get_index(op: &QubitOp, i: usize) -> u64 {
     }
 }
 
-
 /// Convert &QubitOp to equivalent PrecisionQubitOp<P>
 fn clone_as_precision_op<P: Precision>(op: &QubitOp) -> PrecisionQubitOp<P> {
     match op {
         QubitOp::Matrix(indices, data) => {
-            let data: Vec<Complex<P>> = data
+            let data: Vec<_> = data
                 .iter()
                 .map(|c| Complex {
                     re: P::from(c.re).unwrap(),
@@ -206,6 +282,25 @@ fn clone_as_precision_op<P: Precision>(op: &QubitOp) -> PrecisionQubitOp<P> {
                 })
                 .collect();
             Matrix(indices.clone(), data)
+        }
+        QubitOp::SparseMatrix(indices, data) => {
+            let data: Vec<Vec<_>> = data
+                .iter()
+                .map(|v| {
+                    v.iter()
+                        .map(|(col, c)| {
+                            (
+                                *col,
+                                Complex {
+                                    re: P::from(c.re).unwrap(),
+                                    im: P::from(c.im).unwrap(),
+                                },
+                            )
+                        })
+                        .collect()
+                })
+                .collect();
+            SparseMatrix(indices.clone(), data)
         }
         QubitOp::Swap(a_indices, b_indices) => Swap(a_indices.clone(), b_indices.clone()),
         QubitOp::Control(c_indices, o_indices, op) => Control(
@@ -279,19 +374,55 @@ pub fn apply_ops<P: Precision>(
     multithread: bool,
 ) {
     match ops {
-        [op] => apply_op(n, op, input, output, input_offset, output_offset, multithread),
+        [op] => apply_op(
+            n,
+            op,
+            input,
+            output,
+            input_offset,
+            output_offset,
+            multithread,
+        ),
         [] => {
-            // TODO (efficiently copy over, keeping offsets in mind.)
-            unimplemented!()
-        },
-        _ => {
-            let ops: Vec<_> = ops.iter().map(|op| clone_as_precision_op::<P>(op)).collect();
+            let lower = max(input_offset, output_offset);
+            let upper = min(
+                input_offset + input.len() as u64,
+                output_offset + output.len() as u64,
+            );
+            let input_lower = (lower - input_offset) as usize;
+            let input_upper = (upper - input_offset) as usize;
+            let output_lower = (lower - output_offset) as usize;
+            let output_upper = (upper - output_offset) as usize;
 
-            let mat_indices: Vec<u64> = ops.iter().map(|op| -> Vec<u64> {
-                (0..precision_num_indices(&op))
-                    .map(|i| precision_get_index(&op, i))
-                    .collect()
-            }).flatten().collect();
+            if multithread {
+                let input_iter = input[input_lower..input_upper].par_iter();
+                let output_iter = output[output_lower..output_upper].par_iter_mut();
+                input_iter
+                    .zip(output_iter)
+                    .for_each(|(input, out)| *out = *input);
+            } else {
+                let input_iter = input[input_lower..input_upper].iter();
+                let output_iter = output[output_lower..output_upper].iter_mut();
+                input_iter
+                    .zip(output_iter)
+                    .for_each(|(input, out)| *out = *input);
+            }
+        }
+        _ => {
+            let ops: Vec<_> = ops
+                .iter()
+                .map(|op| clone_as_precision_op::<P>(op))
+                .collect();
+
+            let mat_indices: Vec<u64> = ops
+                .iter()
+                .map(|op| -> Vec<u64> {
+                    (0..precision_num_indices(&op))
+                        .map(|i| precision_get_index(&op, i))
+                        .collect()
+                })
+                .flatten()
+                .collect();
 
             let row_fn = |(outputrow, outputloc): (usize, &mut Complex<P>)| {
                 let row = output_offset + (outputrow as u64);
@@ -439,9 +570,9 @@ mod state_ops_tests {
         let n = 5;
 
         let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
-        let ops: Vec<_> = (0..n).map(|indx| {
-            QubitOp::Matrix(vec![indx], mat.clone())
-        }).collect();
+        let ops: Vec<_> = (0..n)
+            .map(|indx| QubitOp::Matrix(vec![indx], mat.clone()))
+            .collect();
         let r_ops: Vec<_> = ops.iter().collect();
 
         let base_vector: Vec<f32> = (0..1 << n).map(|_| 0.0).collect();
@@ -449,5 +580,36 @@ mod state_ops_tests {
         let mut output = from_reals(&base_vector);
 
         apply_ops(n, &r_ops, &input, &mut output, 0, 0, false);
+    }
+
+    #[test]
+    fn test_make_sparse_mat() {
+        let one = Complex::<f64> { re: 1.0, im: 0.0 };
+        let expected_dat = vec![
+            vec![(1, one)],
+            vec![(0, one)],
+            vec![(3, one)],
+            vec![(2, one)],
+        ];
+        let op1 = make_sparse_matrix_op(vec![0, 1], expected_dat.clone(), false).unwrap();
+        let op2 = make_sparse_matrix_op(
+            vec![0, 1],
+            vec![
+                vec![(2, one)],
+                vec![(3, one)],
+                vec![(0, one)],
+                vec![(1, one)],
+            ],
+            true,
+        )
+        .unwrap();
+
+        // Both should not be in natural order.
+        if let QubitOp::SparseMatrix(_, data) = op1 {
+            assert_eq!(data, expected_dat);
+        }
+        if let QubitOp::SparseMatrix(_, data) = op2 {
+            assert_eq!(data, expected_dat);
+        }
     }
 }

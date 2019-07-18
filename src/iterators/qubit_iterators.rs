@@ -47,6 +47,41 @@ impl<'a, P: Precision> std::iter::Iterator for MatrixOpIterator<'a, P> {
     }
 }
 
+/// Iterator which provides the indices of nonzero columns for a given row of a matrix
+pub struct SparseMatrixOpIterator<'a, P: Precision> {
+    data: &'a [(u64, Complex<P>)],
+    last_index: Option<u64>,
+}
+
+impl<'a, P: Precision> SparseMatrixOpIterator<'a, P> {
+    pub fn new(row: u64, data: &'a [Vec<(u64, Complex<P>)>]) -> SparseMatrixOpIterator<P> {
+        SparseMatrixOpIterator {
+            data: &data[row as usize],
+            last_index: None,
+        }
+    }
+}
+
+impl<'a, P: Precision> std::iter::Iterator for SparseMatrixOpIterator<'a, P> {
+    type Item = (u64, Complex<P>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let pos = if let Some(last_index) = self.last_index {
+            last_index + 1
+        } else {
+            0
+        };
+
+        if pos as usize >= self.data.len() {
+            self.last_index = None;
+            None
+        } else {
+            self.last_index = Some(pos);
+            Some(self.data[pos as usize])
+        }
+    }
+}
+
 /// Iterator which provides the indices of nonzero columns for a given row of a COp
 pub struct ControlledOpIterator<P: Precision, It: std::iter::Iterator<Item = (u64, Complex<P>)>> {
     row: u64,
@@ -216,6 +251,27 @@ mod iterator_tests {
             .map(|i| -> Vec<f64> {
                 let d = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
                 let it = MatrixOpIterator::new(i, n, &d);
+                let v: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
+                it.fold(v, |mut v, (indx, _)| {
+                    v[indx as usize] = 1.0;
+                    v
+                })
+            })
+            .collect();
+
+        let expected = vec![vec![0.0, 1.0], vec![1.0, 0.0]];
+
+        assert_eq!(mat, expected);
+    }
+
+    #[test]
+    fn test_sparse_mat_iterator() {
+        let n = 1u64;
+        let one = Complex { re: 1.0, im: 0.0 };
+        let mat: Vec<Vec<f64>> = (0..1 << n)
+            .map(|i| -> Vec<f64> {
+                let d = vec![vec![(1, one)], vec![(0, one)]];
+                let it = SparseMatrixOpIterator::new(i, &d);
                 let v: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
                 it.fold(v, |mut v, (indx, _)| {
                     v[indx as usize] = 1.0;

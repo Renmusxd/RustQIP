@@ -218,14 +218,30 @@ pub trait UnitaryBuilder {
     /// Build a generic matrix op, apply to `q`, if `q` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
     /// size for the number of indices in `q` (mat.len() == 2^(2n)).
-    fn mat(&mut self, name: &str, q: Qubit, mat: &[Complex<f64>]) -> Result<Qubit, &'static str>;
+    fn mat(&mut self, name: &str, q: Qubit, mat: Vec<Complex<f64>>) -> Result<Qubit, &'static str>;
 
     /// Build a matrix op from real numbers, apply to `q`, if `q` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
     /// size for the number of indices in `q` (mat.len() == 2^(2n)).
     fn real_mat(&mut self, name: &str, q: Qubit, mat: &[f64]) -> Result<Qubit, &'static str> {
-        self.mat(name, q, from_reals(mat).as_slice())
+        self.mat(name, q, from_reals(mat))
     }
+
+    /// Build a sparse matrix op, apply to `q`, if `q` is multiple indices and
+    /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
+    /// size for the number of indices in `q` (mat.len() == 2^n).
+    fn sparse_mat(&mut self, name: &str, q: Qubit, mat: Vec<Vec<(u64, Complex<f64>)>>) -> Result<Qubit, &'static str>;
+
+    /// Build a sparse matrix op from real numbers, apply to `q`, if `q` is multiple indices and
+    /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
+    /// size for the number of indices in `q` (mat.len() == 2^n).
+    fn real_sparse_mat(&mut self, name: &str, q: Qubit, mat: &[Vec<(u64, f64)>]) -> Result<Qubit, &'static str> {
+        let mat = mat.iter().map(|v| v.iter().cloned().map(|(c,r)| {
+            (c, Complex { re: r, im: 0.0 })
+        }).collect()).collect();
+        self.sparse_mat(name, q, mat)
+    }
+
 
     /// Apply NOT to `q`, if `q` is multiple indices, apply to each
     fn not(&mut self, q: Qubit) -> Qubit {
@@ -242,7 +258,7 @@ pub trait UnitaryBuilder {
         self.mat(
             "Y",
             q,
-            from_tuples(&[(0.0, 0.0), (0.0, -1.0), (0.0, 0.0), (0.0, 1.0)]).as_slice(),
+            from_tuples(&[(0.0, 0.0), (0.0, -1.0), (0.0, 0.0), (0.0, 1.0)]),
         )
         .unwrap()
     }
@@ -343,6 +359,11 @@ pub trait UnitaryBuilder {
         make_matrix_op(q.indices.clone(), data)
     }
 
+    /// Build a sparse matrix op
+    fn make_sparse_mat_op(&self, q: &Qubit, data: Vec<Vec<(u64, Complex<f64>)>>) -> Result<QubitOp, &'static str> {
+        make_sparse_matrix_op(q.indices.clone(), data, false)
+    }
+
     /// Build a swap op. qa and qb must have the same number of indices.
     fn make_swap_op(&self, qa: &Qubit, qb: &Qubit) -> Result<QubitOp, &'static str> {
         make_swap_op(qa.indices.clone(), qb.indices.clone())
@@ -441,17 +462,33 @@ impl UnitaryBuilder for OpBuilder {
         }
     }
 
-    fn mat(&mut self, name: &str, q: Qubit, mat: &[Complex<f64>]) -> Result<Qubit, &'static str> {
+    fn mat(&mut self, name: &str, q: Qubit, mat: Vec<Complex<f64>>) -> Result<Qubit, &'static str> {
         // Special case for broadcasting ops
         if q.indices.len() > 1 && mat.len() == (2 * 2) {
             let qs = self.split_all(q);
             let qs = qs
                 .into_iter()
-                .map(|q| self.mat(name, q, mat).unwrap())
+                .map(|q| self.mat(name, q, mat.clone()).unwrap())
                 .collect();
             Ok(self.merge_with_op(qs, None))
         } else {
-            let op = self.make_mat_op(&q, mat.to_vec())?;
+            let op = self.make_mat_op(&q, mat)?;
+            let name = String::from(name);
+            Ok(self.merge_with_op(vec![q], Some((name, op))))
+        }
+    }
+
+    fn sparse_mat(&mut self, name: &str, q: Qubit, mat: Vec<Vec<(u64, Complex<f64>)>>) -> Result<Qubit, &'static str> {
+        // Special case for broadcasting ops
+        if q.indices.len() > 1 && mat.len() == (2 * 2) {
+            let qs = self.split_all(q);
+            let qs = qs
+                .into_iter()
+                .map(|q| self.sparse_mat(name, q, mat.clone()).unwrap())
+                .collect();
+            Ok(self.merge_with_op(qs, None))
+        } else {
+            let op = self.make_sparse_mat_op(&q, mat)?;
             let name = String::from(name);
             Ok(self.merge_with_op(vec![q], Some((name, op))))
         }
@@ -532,17 +569,39 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         }
     }
 
-    fn mat(&mut self, name: &str, q: Qubit, mat: &[Complex<f64>]) -> Result<Qubit, &'static str> {
+    fn mat(&mut self, name: &str, q: Qubit, mat: Vec<Complex<f64>>) -> Result<Qubit, &'static str> {
         // Special case for applying mat to each qubit in collection.
         if q.indices.len() > 1 && mat.len() == (2 * 2) {
             let qs = self.split_all(q);
             let qs = qs
                 .into_iter()
-                .map(|q| self.mat(name, q, mat).unwrap())
+                .map(|q| self.mat(name, q, mat.clone()).unwrap())
                 .collect();
             Ok(self.merge_with_op(qs, None))
         } else {
-            let op = self.make_mat_op(&q, mat.to_vec())?;
+            let op = self.make_mat_op(&q, mat)?;
+            let cq = self.get_conditional_qubit();
+            let cq_indices = cq.indices.clone();
+            let name = format!("C({})", name);
+            let q = self.merge_with_op(vec![cq, q], Some((name, op)));
+            let (cq, q) = self.split_absolute(q, cq_indices).unwrap();
+
+            self.set_conditional_qubit(cq);
+            Ok(q)
+        }
+    }
+
+    fn sparse_mat(&mut self, name: &str, q: Qubit, mat: Vec<Vec<(u64, Complex<f64>)>>) -> Result<Qubit, &'static str> {
+        // Special case for applying mat to each qubit in collection.
+        if q.indices.len() > 1 && mat.len() == (2 * 2) {
+            let qs = self.split_all(q);
+            let qs = qs
+                .into_iter()
+                .map(|q| self.sparse_mat(name, q, mat.clone()).unwrap())
+                .collect();
+            Ok(self.merge_with_op(qs, None))
+        } else {
+            let op = self.make_sparse_mat_op(&q, mat)?;
             let cq = self.get_conditional_qubit();
             let cq_indices = cq.indices.clone();
             let name = format!("C({})", name);
@@ -601,6 +660,16 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
             Some(cq) => make_control_op(
                 cq.indices.clone(),
                 self.parent_builder.make_mat_op(q, data)?,
+            ),
+            None => panic!("Conditional context builder failed to populate qubit."),
+        }
+    }
+
+    fn make_sparse_mat_op(&self, q: &Qubit, data: Vec<Vec<(u64, Complex<f64>)>>) -> Result<QubitOp, &'static str> {
+        match &self.conditioned_qubit {
+            Some(cq) => make_control_op(
+                cq.indices.clone(),
+                self.parent_builder.make_sparse_mat_op(q, data)?,
             ),
             None => panic!("Conditional context builder failed to populate qubit."),
         }

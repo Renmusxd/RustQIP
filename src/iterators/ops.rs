@@ -7,6 +7,8 @@ use num::Complex;
 pub enum PrecisionQubitOp<'a, P: Precision> {
     // Indices, Matrix data
     Matrix(Vec<u64>, Vec<Complex<P>>),
+    // Indices, per row [(col, value)]
+    SparseMatrix(Vec<u64>, Vec<Vec<(u64, Complex<P>)>>),
     // A indices, B indices
     Swap(Vec<u64>, Vec<u64>),
     // Control indices, Op indices, Op
@@ -23,6 +25,7 @@ pub enum PrecisionQubitOp<'a, P: Precision> {
 pub fn precision_num_indices<P: Precision>(op: &PrecisionQubitOp<P>) -> usize {
     match &op {
         PrecisionQubitOp::Matrix(indices, _) => indices.len(),
+        PrecisionQubitOp::SparseMatrix(indices, _) => indices.len(),
         PrecisionQubitOp::Swap(a, b) => a.len() + b.len(),
         PrecisionQubitOp::Control(cs, os, _) => cs.len() + os.len(),
         PrecisionQubitOp::Function(inputs, outputs, _) => inputs.len() + outputs.len(),
@@ -33,6 +36,7 @@ pub fn precision_num_indices<P: Precision>(op: &PrecisionQubitOp<P>) -> usize {
 pub fn precision_get_index<P: Precision>(op: &PrecisionQubitOp<P>, i: usize) -> u64 {
     match &op {
         PrecisionQubitOp::Matrix(indices, _) => indices[i],
+        PrecisionQubitOp::SparseMatrix(indices, _) => indices[i],
         PrecisionQubitOp::Swap(a, b) => {
             if i < a.len() {
                 a[i]

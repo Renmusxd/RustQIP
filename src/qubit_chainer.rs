@@ -83,7 +83,7 @@ impl<'a, B: UnitaryBuilder> SingleQubitChain<'a, B> {
         Ok(VecQubitChain::new(self.builder, qs))
     }
     /// Apply a matrix operation to the contained qubit.
-    pub fn apply_mat(self, name: &str, mat: &[Complex<f64>]) -> Result<Self, &'static str> {
+    pub fn apply_mat(self, name: &str, mat: Vec<Complex<f64>>) -> Result<Self, &'static str> {
         let q = self.builder.mat(name, self.q, mat)?;
         Ok(Self::new(self.builder, q))
     }
