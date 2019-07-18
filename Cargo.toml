@@ -1,6 +1,6 @@
 [package]
 name = "qip"
-version = "0.1.7"
+version = "0.1.8"
 authors = ["sumnernh@gmail.com <sumnernh@gmail.com>"]
 description = "A library for efficient quantum computing simulations."
 license = "MIT"
