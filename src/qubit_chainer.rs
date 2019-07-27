@@ -92,8 +92,9 @@ impl<'a, B: UnitaryBuilder> SingleQubitChain<'a, B> {
         self,
         name: &str,
         mat: Vec<Vec<(u64, Complex<f64>)>>,
+        natural_order: bool,
     ) -> Result<Self, &'static str> {
-        let q = self.builder.sparse_mat(name, self.q, mat)?;
+        let q = self.builder.sparse_mat(name, self.q, mat, natural_order)?;
         Ok(Self::new(self.builder, q))
     }
     /// Apply the NOT operation to the contained qubit.

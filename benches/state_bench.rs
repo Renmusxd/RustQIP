@@ -306,12 +306,25 @@ fn bench_apply_many_swaps_large_multiops(b: &mut Bencher) {
     });
 }
 
+fn bench_identity_sparse(b: &mut Bencher) {
+    let n = 3;
+
+    let one = Complex::<f64> { re: 1.0, im: 0.0 };
+    let mat = (0..1 << n).map(|indx| vec![(indx, one)]).collect();
+    let op = SparseMatrix((0..n).collect(), mat);
+
+    let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
+    let input = from_reals(&base_vector);
+    let mut output = from_reals(&base_vector);
+
+    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0, false));
+}
 
 fn bench_identity_larger_sparse(b: &mut Bencher) {
     let n = 8;
 
     let one = Complex::<f64> { re: 1.0, im: 0.0 };
-    let mat = (0 .. 1 << n).map(|indx| vec![(indx, one)]).collect();
+    let mat = (0..1 << n).map(|indx| vec![(indx, one)]).collect();
     let op = SparseMatrix((0..n).collect(), mat);
 
     let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
@@ -339,6 +352,7 @@ benchmark_group!(
     bench_apply_many_swaps_small_multiops,
     bench_apply_many_swaps_large,
     bench_apply_many_swaps_large_multiops,
+    bench_identity_sparse,
     bench_identity_larger_sparse
 );
 benchmark_main!(benches);

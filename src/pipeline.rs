@@ -15,6 +15,7 @@ use crate::qubits::*;
 use crate::state_ops::*;
 use crate::types::Precision;
 use crate::utils;
+use crate::utils::flip_bits;
 
 pub enum StateModifierType {
     UnitaryOp(QubitOp),
@@ -203,12 +204,56 @@ impl<P: Precision> LocalQuantumState<P> {
             cvec[(delta_index + template) as usize] = val;
         });
 
+        let arena = vec![
+            Complex {
+                re: P::zero(),
+                im: P::zero()
+            };
+            cvec.len()
+        ];
         LocalQuantumState {
             n,
             state: cvec.clone(),
-            arena: cvec,
+            arena,
             multithread,
         }
+    }
+
+    pub fn new_from_full_state(
+        n: u64,
+        state: Vec<Complex<P>>,
+        natural_order: bool,
+        multithread: bool,
+    ) -> Result<LocalQuantumState<P>, &'static str> {
+        if state.len() != 1 << n as usize {
+            return Err("State is not correct size");
+        }
+
+        let arena = vec![
+            Complex {
+                re: P::zero(),
+                im: P::zero()
+            };
+            state.len()
+        ];
+
+        let state = if natural_order {
+            let mut state: Vec<_> = state
+                .into_iter()
+                .enumerate()
+                .collect();
+            state.sort_by_key(|(indx, _)| flip_bits(n as usize, *indx as u64));
+            state.into_iter().map(|(_, c)| c).collect()
+        } else {
+            state
+        };
+
+        Ok(LocalQuantumState {
+            n,
+            state,
+            arena,
+            multithread,
+        })
     }
 
     /// Clone the state in either the `natural_order` or the internal order.

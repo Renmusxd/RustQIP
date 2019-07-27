@@ -6,6 +6,7 @@ use num::complex::Complex;
 use crate::pipeline::*;
 use crate::state_ops::*;
 use crate::types::Precision;
+use crate::utils::flip_bits;
 
 /// Possible relations to a parent qubit
 pub enum Parent {
@@ -235,7 +236,36 @@ pub trait UnitaryBuilder {
         name: &str,
         q: Qubit,
         mat: Vec<Vec<(u64, Complex<f64>)>>,
+        natural_order: bool,
     ) -> Result<Qubit, &'static str>;
+
+    fn sparse_mat_from_fn(
+        &mut self,
+        name: &str,
+        q: Qubit,
+        f: Box<Fn(u64) -> Vec<(u64, Complex<f64>)>>,
+        natural_order: bool,
+    ) -> Result<Qubit, &'static str> {
+        let n = q.indices.len();
+        let mat: Vec<_> = (0..1 << n as u64)
+            .map(|indx| {
+                let indx = if natural_order {
+                    flip_bits(n, indx)
+                } else {
+                    indx
+                };
+                let v = f(indx);
+                if natural_order {
+                    v.into_iter()
+                        .map(|(indx, c)| (flip_bits(n, indx), c))
+                        .collect()
+                } else {
+                    v
+                }
+            })
+            .collect();
+        self.sparse_mat(name, q, mat, false)
+    }
 
     /// Build a sparse matrix op from real numbers, apply to `q`, if `q` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
@@ -245,6 +275,7 @@ pub trait UnitaryBuilder {
         name: &str,
         q: Qubit,
         mat: &[Vec<(u64, f64)>],
+        natural_order: bool,
     ) -> Result<Qubit, &'static str> {
         let mat = mat
             .iter()
@@ -255,7 +286,7 @@ pub trait UnitaryBuilder {
                     .collect()
             })
             .collect();
-        self.sparse_mat(name, q, mat)
+        self.sparse_mat(name, q, mat, natural_order)
     }
 
     /// Apply NOT to `q`, if `q` is multiple indices, apply to each
@@ -379,8 +410,9 @@ pub trait UnitaryBuilder {
         &self,
         q: &Qubit,
         data: Vec<Vec<(u64, Complex<f64>)>>,
+        natural_order: bool,
     ) -> Result<QubitOp, &'static str> {
-        make_sparse_matrix_op(q.indices.clone(), data, false)
+        make_sparse_matrix_op(q.indices.clone(), data, natural_order)
     }
 
     /// Build a swap op. qa and qb must have the same number of indices.
@@ -409,6 +441,17 @@ pub trait UnitaryBuilder {
 
 /// Helper function for Boxing static functions and applying using the given UnitaryBuilder.
 pub fn apply_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
+    b: &mut UnitaryBuilder,
+    q_in: Qubit,
+    q_out: Qubit,
+    f: F,
+) -> Result<(Qubit, Qubit), &'static str> {
+    b.apply_function(q_in, q_out, Box::new(f))
+}
+
+/// Helper function for Boxing static functions and building sparse mats using the given
+/// UnitaryBuilder.
+pub fn apply_sparse_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
     b: &mut UnitaryBuilder,
     q_in: Qubit,
     q_out: Qubit,
@@ -502,17 +545,21 @@ impl UnitaryBuilder for OpBuilder {
         name: &str,
         q: Qubit,
         mat: Vec<Vec<(u64, Complex<f64>)>>,
+        natural_order: bool,
     ) -> Result<Qubit, &'static str> {
         // Special case for broadcasting ops
         if q.indices.len() > 1 && mat.len() == (2 * 2) {
             let qs = self.split_all(q);
             let qs = qs
                 .into_iter()
-                .map(|q| self.sparse_mat(name, q, mat.clone()).unwrap())
+                .map(|q| {
+                    self.sparse_mat(name, q, mat.clone(), natural_order)
+                        .unwrap()
+                })
                 .collect();
             Ok(self.merge_with_op(qs, None))
         } else {
-            let op = self.make_sparse_mat_op(&q, mat)?;
+            let op = self.make_sparse_mat_op(&q, mat, natural_order)?;
             let name = String::from(name);
             Ok(self.merge_with_op(vec![q], Some((name, op))))
         }
@@ -620,17 +667,21 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         name: &str,
         q: Qubit,
         mat: Vec<Vec<(u64, Complex<f64>)>>,
+        natural_order: bool,
     ) -> Result<Qubit, &'static str> {
         // Special case for applying mat to each qubit in collection.
         if q.indices.len() > 1 && mat.len() == (2 * 2) {
             let qs = self.split_all(q);
             let qs = qs
                 .into_iter()
-                .map(|q| self.sparse_mat(name, q, mat.clone()).unwrap())
+                .map(|q| {
+                    self.sparse_mat(name, q, mat.clone(), natural_order)
+                        .unwrap()
+                })
                 .collect();
             Ok(self.merge_with_op(qs, None))
         } else {
-            let op = self.make_sparse_mat_op(&q, mat)?;
+            let op = self.make_sparse_mat_op(&q, mat, natural_order)?;
             let cq = self.get_conditional_qubit();
             let cq_indices = cq.indices.clone();
             let name = format!("C({})", name);
@@ -698,11 +749,13 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         &self,
         q: &Qubit,
         data: Vec<Vec<(u64, Complex<f64>)>>,
+        natural_order: bool,
     ) -> Result<QubitOp, &'static str> {
         match &self.conditioned_qubit {
             Some(cq) => make_control_op(
                 cq.indices.clone(),
-                self.parent_builder.make_sparse_mat_op(q, data)?,
+                self.parent_builder
+                    .make_sparse_mat_op(q, data, natural_order)?,
             ),
             None => panic!("Conditional context builder failed to populate qubit."),
         }
