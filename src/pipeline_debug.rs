@@ -135,7 +135,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
         println!("{}", tmp.join(" "));
     }
 
-    fn measure(&mut self, indices: &[u64], _: Option<MeasuredCondition<P>>) -> (u64, P) {
+    fn measure(&mut self, indices: &[u64], _: Option<MeasuredCondition<P>>, _: f64) -> (u64, P) {
         let mut tmp: Vec<String> = vec![];
         for i in 0u64..self.n {
             if indices.contains(&i) {
@@ -150,7 +150,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
         (0, P::zero())
     }
 
-    fn soft_measure(&self, _: &[u64], _: Option<u64>) -> (u64, P) {
+    fn soft_measure(&mut self, _: &[u64], _: Option<u64>, _: f64) -> (u64, P) {
         (0, P::zero())
     }
 
@@ -158,11 +158,11 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
         P::zero()
     }
 
-    fn stochastic_measure(&self, _indices: &[u64]) -> Vec<P> {
+    fn stochastic_measure(&mut self, _: &[u64], _: f64) -> Vec<P> {
         vec![]
     }
 
-    fn get_state(self, _natural_order: bool) -> Vec<Complex<P>> {
+    fn get_state(self, _: bool) -> Vec<Complex<P>> {
         vec![]
     }
 }

@@ -23,7 +23,11 @@ pub enum QubitOp {
     // Control indices, Op indices, Op
     Control(Vec<u64>, Vec<u64>, Box<QubitOp>),
     // Function which maps |x,y> to |x,f(x) xor y>
-    Function(Vec<u64>, Vec<u64>, Box<Fn(u64) -> (u64, f64) + Send + Sync>),
+    Function(
+        Vec<u64>,
+        Vec<u64>,
+        Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
+    ),
 }
 
 /// Make a Matrix QubitOp
@@ -160,7 +164,7 @@ pub fn make_control_op(mut c_indices: Vec<u64>, op: QubitOp) -> Result<QubitOp, 
 pub fn make_function_op(
     input_indices: Vec<u64>,
     output_indices: Vec<u64>,
-    f: Box<Fn(u64) -> (u64, f64) + Send + Sync>,
+    f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
 ) -> Result<QubitOp, &'static str> {
     if input_indices.is_empty() || output_indices.is_empty() {
         Err("Input and Output indices must not be empty")

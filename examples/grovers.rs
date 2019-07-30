@@ -63,9 +63,9 @@ fn main() {
 
     let iters = 100;
     let (s, states) = (0..iters).fold((s, vec![]), |(s, mut vecs), _| {
-        let s = apply_grover_iteration(x, s);
+        let mut s = apply_grover_iteration(x, s);
         let indices: Vec<u64> = (0..n).collect();
-        let f = s.stochastic_measure(&indices)[x as usize];
+        let f = s.stochastic_measure(&indices, 0.0)[x as usize];
         vecs.push(f);
         (s, vecs)
     });

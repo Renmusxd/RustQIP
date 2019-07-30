@@ -19,8 +19,8 @@ use crate::utils::flip_bits;
 
 pub enum StateModifierType {
     UnitaryOp(QubitOp),
-    MeasureState(u64, Vec<u64>),
-    StochasticMeasureState(u64, Vec<u64>),
+    MeasureState(u64, Vec<u64>, f64),
+    StochasticMeasureState(u64, Vec<u64>, f64),
 }
 
 pub struct StateModifier {
@@ -37,16 +37,34 @@ impl StateModifier {
     }
 
     pub fn new_measurement(name: String, id: u64, indices: Vec<u64>) -> StateModifier {
+        StateModifier::new_measurement_basis(name, id, indices, 0.0)
+    }
+
+    pub fn new_measurement_basis(
+        name: String,
+        id: u64,
+        indices: Vec<u64>,
+        angle: f64,
+    ) -> StateModifier {
         StateModifier {
             name,
-            modifier: StateModifierType::MeasureState(id, indices),
+            modifier: StateModifierType::MeasureState(id, indices, angle),
         }
     }
 
     pub fn new_stochastic_measurement(name: String, id: u64, indices: Vec<u64>) -> StateModifier {
+        StateModifier::new_stochastic_measurement_basis(name, id, indices, 0.0)
+    }
+
+    pub fn new_stochastic_measurement_basis(
+        name: String,
+        id: u64,
+        indices: Vec<u64>,
+        angle: f64,
+    ) -> StateModifier {
         StateModifier {
             name,
-            modifier: StateModifierType::StochasticMeasureState(id, indices),
+            modifier: StateModifierType::StochasticMeasureState(id, indices, angle),
         }
     }
 }
@@ -98,18 +116,23 @@ pub trait QuantumState<P: Precision> {
     fn apply_op_with_name(&mut self, name: Option<&str>, op: &QubitOp);
 
     /// Mutate self with measurement, return result as index and probability
-    fn measure(&mut self, indices: &[u64], measured: Option<MeasuredCondition<P>>) -> (u64, P);
+    fn measure(
+        &mut self,
+        indices: &[u64],
+        measured: Option<MeasuredCondition<P>>,
+        angle: f64,
+    ) -> (u64, P);
 
     /// Perform calculations of `measure` without mutating result. Returns a possible measured value
     /// and associated probability.
-    fn soft_measure(&self, indices: &[u64], measured: Option<u64>) -> (u64, P);
+    fn soft_measure(&mut self, indices: &[u64], measured: Option<u64>, angle: f64) -> (u64, P);
 
     /// Give the total magnitude represented by this state. Most often 1.0
     fn state_magnitude(&self) -> P;
 
     /// Measure stochastically, do not alter internal state.
     /// Returns a vector of size 2^indices.len()
-    fn stochastic_measure(&self, indices: &[u64]) -> Vec<P>;
+    fn stochastic_measure(&mut self, indices: &[u64], angle: f64) -> Vec<P>;
 
     /// Consume the QuantumState object and return the state as a vector of complex numbers.
     /// `natural_order` means that qubit with index 0 is the least significant index bit, otherwise
@@ -238,10 +261,7 @@ impl<P: Precision> LocalQuantumState<P> {
         ];
 
         let state = if natural_order {
-            let mut state: Vec<_> = state
-                .into_iter()
-                .enumerate()
-                .collect();
+            let mut state: Vec<_> = state.into_iter().enumerate().collect();
             state.sort_by_key(|(indx, _)| flip_bits(n as usize, *indx as u64));
             state.into_iter().map(|(_, c)| c).collect()
         } else {
@@ -273,6 +293,20 @@ impl<P: Precision> LocalQuantumState<P> {
             self.arena.clone()
         } else {
             self.state.clone()
+        }
+    }
+
+    /// Rotate to a new computational basis:
+    /// `|0'> =  cos(angle)|0> + sin(angle)|1>`
+    /// `|1'> = -sin(angle)|0> + cos(angle)|1>`
+    pub fn rotate_basis(&mut self, indices: &[u64], angle: f64) {
+        if angle != 0.0 {
+            let (sangle, cangle) = angle.sin_cos();
+            let basis_mat = from_reals(&[cangle, -sangle, sangle, cangle]);
+            indices.into_iter().for_each(|indx| {
+                let op = make_matrix_op(vec![*indx], basis_mat.clone()).unwrap();
+                self.apply_op(&op);
+            });
         }
     }
 
@@ -328,7 +362,13 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
         std::mem::swap(&mut self.state, &mut self.arena);
     }
 
-    fn measure(&mut self, indices: &[u64], measured: Option<MeasuredCondition<P>>) -> (u64, P) {
+    fn measure(
+        &mut self,
+        indices: &[u64],
+        measured: Option<MeasuredCondition<P>>,
+        angle: f64,
+    ) -> (u64, P) {
+        self.rotate_basis(indices, angle);
         let measured_result = measure(
             self.n,
             indices,
@@ -338,17 +378,21 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
             measured,
             self.multithread,
         );
+        self.rotate_basis(indices, -angle);
+
         std::mem::swap(&mut self.state, &mut self.arena);
         measured_result
     }
 
-    fn soft_measure(&self, indices: &[u64], measured: Option<u64>) -> (u64, P) {
+    fn soft_measure(&mut self, indices: &[u64], measured: Option<u64>, angle: f64) -> (u64, P) {
+        self.rotate_basis(indices, angle);
         let m = if let Some(m) = measured {
             m
         } else {
             soft_measure(self.n, indices, &self.state, None, self.multithread)
         };
         let p = measure_prob(self.n, m, indices, &self.state, None, self.multithread);
+        self.rotate_basis(indices, -angle);
         (m, p)
     }
 
@@ -356,8 +400,11 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
         prob_magnitude(&self.state, self.multithread)
     }
 
-    fn stochastic_measure(&self, indices: &[u64]) -> Vec<P> {
-        measure_probs(self.n, indices, &self.state, None, self.multithread)
+    fn stochastic_measure(&mut self, indices: &[u64], angle: f64) -> Vec<P> {
+        self.rotate_basis(indices, angle);
+        let probs = measure_probs(self.n, indices, &self.state, None, self.multithread);
+        self.rotate_basis(indices, -angle);
+        probs
     }
 
     fn get_state(mut self, natural_order: bool) -> Vec<Complex<P>> {
@@ -388,12 +435,12 @@ fn fold_modify_state<P: Precision, QS: QuantumState<P>>(
     let (mut s, mut mr) = acc;
     match &modifier.modifier {
         StateModifierType::UnitaryOp(op) => s.apply_op_with_name(Some(&modifier.name), op),
-        StateModifierType::MeasureState(id, indices) => {
-            let result = s.measure(indices, None);
+        StateModifierType::MeasureState(id, indices, angle) => {
+            let result = s.measure(indices, None, *angle);
             mr.results.insert(id.clone(), result);
         }
-        StateModifierType::StochasticMeasureState(id, indices) => {
-            let result = s.stochastic_measure(indices);
+        StateModifierType::StochasticMeasureState(id, indices, angle) => {
+            let result = s.stochastic_measure(indices, *angle);
             mr.stochastic_results.insert(id.clone(), result);
         }
     }

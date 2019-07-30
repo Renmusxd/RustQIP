@@ -207,6 +207,9 @@ pub trait NonUnitaryBuilder {
     /// Add a measure op to the pipeline for `q` and return a reference which can
     /// later be used to access the measured value from the results of `pipeline::run`.
     fn measure(&mut self, q: Qubit) -> (Qubit, u64);
+
+    /// Measure in the basis of `cos(phase)|0> + sin(phase)|1>`
+    fn measure_basis(&mut self, q: Qubit, phase: f64) -> (Qubit, u64);
 }
 
 /// A builder which support unitary operations
@@ -243,7 +246,7 @@ pub trait UnitaryBuilder {
         &mut self,
         name: &str,
         q: Qubit,
-        f: Box<Fn(u64) -> Vec<(u64, Complex<f64>)>>,
+        f: Box<dyn Fn(u64) -> Vec<(u64, Complex<f64>)>>,
         natural_order: bool,
     ) -> Result<Qubit, &'static str> {
         let n = q.indices.len();
@@ -507,9 +510,17 @@ impl OpBuilder {
 
 impl NonUnitaryBuilder for OpBuilder {
     fn measure(&mut self, q: Qubit) -> (Qubit, u64) {
+        self.measure_basis(q, 0.0)
+    }
+
+    fn measure_basis(&mut self, q: Qubit, angle: f64) -> (Qubit, u64) {
         let id = self.get_op_id();
-        let modifier =
-            StateModifier::new_measurement(String::from("measure"), id, q.indices.clone());
+        let modifier = StateModifier::new_measurement_basis(
+            String::from("measure"),
+            id,
+            q.indices.clone(),
+            angle,
+        );
         let modifier = Some(modifier);
         let q = Qubit::merge_with_modifier(id, vec![q], modifier);
         (q, id)
@@ -569,7 +580,7 @@ impl UnitaryBuilder for OpBuilder {
         &mut self,
         q_in: Qubit,
         q_out: Qubit,
-        f: Box<Fn(u64) -> (u64, f64) + Send + Sync>,
+        f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<(Qubit, Qubit), &'static str> {
         let op = self.make_function_op(&q_in, &q_out, f)?;
         let in_indices = q_in.indices.clone();
@@ -591,7 +602,9 @@ impl UnitaryBuilder for OpBuilder {
         qs: Vec<Qubit>,
         named_operator: Option<(String, QubitOp)>,
     ) -> Qubit {
-        let modifier = named_operator.map(|(name, op)| StateModifier::new_unitary(name, op));
+        let modifier = named_operator.map(|(name, op)| {
+            StateModifier::new_unitary(name, op)
+        });
         Qubit::merge_with_modifier(self.get_op_id(), qs, modifier)
     }
 
@@ -610,7 +623,7 @@ impl UnitaryBuilder for OpBuilder {
 
 /// An op builder which depends on the value of a given qubit (COPs)
 pub struct ConditionalContextBuilder<'a> {
-    parent_builder: &'a mut UnitaryBuilder,
+    parent_builder: &'a mut dyn UnitaryBuilder,
     conditioned_qubit: Option<Qubit>,
 }
 
@@ -711,7 +724,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         &mut self,
         q_in: Qubit,
         q_out: Qubit,
-        f: Box<Fn(u64) -> (u64, f64) + Send + Sync>,
+        f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<(Qubit, Qubit), &'static str> {
         let op = self.make_function_op(&q_in, &q_out, f)?;
         let cq = self.get_conditional_qubit();
@@ -775,7 +788,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         &self,
         q_in: &Qubit,
         q_out: &Qubit,
-        f: Box<Fn(u64) -> (u64, f64) + Send + Sync>,
+        f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<QubitOp, &'static str> {
         match &self.conditioned_qubit {
             Some(cq) => {
