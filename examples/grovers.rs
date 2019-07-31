@@ -22,7 +22,7 @@ fn prepare_state<P: Precision>(n: u64) -> LocalQuantumState<P> {
 }
 
 fn apply_us(
-    b: &mut UnitaryBuilder,
+    b: &mut dyn UnitaryBuilder,
     search: Qubit,
     ancillary: Qubit,
 ) -> Result<(Qubit, Qubit), &'static str> {
@@ -35,7 +35,7 @@ fn apply_us(
 }
 
 fn apply_uw(
-    b: &mut UnitaryBuilder,
+    b: &mut dyn UnitaryBuilder,
     search: Qubit,
     ancillary: Qubit,
     x0: u64,

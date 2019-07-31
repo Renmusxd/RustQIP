@@ -307,7 +307,7 @@ pub trait UnitaryBuilder {
         self.mat(
             "Y",
             q,
-            from_tuples(&[(0.0, 0.0), (0.0, -1.0), (0.0, 0.0), (0.0, 1.0)]),
+            from_tuples(&[(0.0, 0.0), (0.0, -1.0), (0.0, 1.0), (0.0, 0.0)]),
         )
         .unwrap()
     }
