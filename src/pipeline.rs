@@ -8,6 +8,7 @@ use std::collections::{BinaryHeap, VecDeque};
 use num::complex::Complex;
 use rayon::prelude::*;
 
+use self::num::{One, Zero};
 use crate::measurement_ops::{
     measure, measure_prob, measure_probs, prob_magnitude, soft_measure, MeasuredCondition,
 };
@@ -17,7 +18,6 @@ use crate::types::Precision;
 use crate::utils;
 use crate::utils::flip_bits;
 use std::rc::Rc;
-use self::num::{One, Zero};
 
 pub type SideChannelModifierFn = dyn Fn(&[u64]) -> Result<Vec<StateModifier>, &'static str>;
 
@@ -277,10 +277,7 @@ impl<P: Precision> LocalQuantumState<P> {
             cvec[(delta_index + template) as usize] = val;
         });
 
-        let arena = vec![
-            Complex::zero();
-            cvec.len()
-        ];
+        let arena = vec![Complex::zero(); cvec.len()];
         LocalQuantumState {
             n,
             state: cvec.clone(),
@@ -299,10 +296,7 @@ impl<P: Precision> LocalQuantumState<P> {
             return Err("State is not correct size");
         }
 
-        let arena = vec![
-            Complex::zero();
-            state.len()
-        ];
+        let arena = vec![Complex::zero(); state.len()];
 
         let state = if natural_order {
             let mut state: Vec<_> = state.into_iter().enumerate().collect();
@@ -511,21 +505,25 @@ fn fold_modify_state<P: Precision, QS: QuantumState<P>>(
     }
 }
 
-pub fn get_required_state_size<P: Precision>(
-    frontier: &[&Qubit],
-    states: &[QubitInitialState<P>],
-) -> u64 {
-    let max_init_n = states
+pub fn get_required_state_size_from_frontier(frontier: &[&Qubit]) -> u64 {
+    frontier
         .iter()
-        .map(|(indices, _)| indices)
+        .map(|q| &q.indices)
         .cloned()
         .flatten()
         .max()
         .map(|m| m + 1)
-        .unwrap_or(0);
-    let max_qubit_n = frontier
+        .unwrap_or(0)
+}
+
+pub fn get_required_state_size<P: Precision>(
+    frontier: &[&Qubit],
+    states: &[QubitInitialState<P>],
+) -> u64 {
+    let max_qubit_n = get_required_state_size_from_frontier(frontier);
+    let max_init_n = states
         .iter()
-        .map(|q| &q.indices)
+        .map(|(indices, _)| indices)
         .cloned()
         .flatten()
         .max()
@@ -538,9 +536,9 @@ pub fn get_required_state_size<P: Precision>(
 pub fn run<P: Precision, QS: QuantumState<P>>(
     q: &Qubit,
 ) -> Result<(QS, MeasuredResults<P>), &'static str> {
-    run_with_statebuilder(q, |qs| -> QS {
-        let n: u64 = qs.iter().map(|q| q.indices.len() as u64).sum();
-        QS::new(n)
+    run_with_statebuilder(q, |qs| -> Result<QS, &'static str> {
+        let n = get_required_state_size_from_frontier(&qs);
+        Ok(QS::new(n))
     })
 }
 
@@ -548,18 +546,22 @@ pub fn run_with_init<P: Precision, QS: QuantumState<P>>(
     q: &Qubit,
     states: &[QubitInitialState<P>],
 ) -> Result<(QS, MeasuredResults<P>), &'static str> {
-    run_with_statebuilder(q, |qs| -> QS {
-        let n: u64 = qs.iter().map(|q| q.indices.len() as u64).sum();
-        QS::new_from_initial_states(n, states)
+    run_with_statebuilder(q, |qs| -> Result<QS, &'static str> {
+        let n = get_required_state_size(&qs, states);
+        Ok(QS::new_from_initial_states(n, states))
     })
 }
 
-pub fn run_with_statebuilder<P: Precision, QS: QuantumState<P>, F: FnOnce(Vec<&Qubit>) -> QS>(
+pub fn run_with_statebuilder<
+    P: Precision,
+    QS: QuantumState<P>,
+    F: FnOnce(Vec<&Qubit>) -> Result<QS, &'static str>,
+>(
     q: &Qubit,
     state_builder: F,
 ) -> Result<(QS, MeasuredResults<P>), &'static str> {
     let (frontier, ops) = get_opfns_and_frontier(q);
-    let state = state_builder(frontier);
+    let state = state_builder(frontier)?;
     run_with_state_and_ops(&ops, state)
 }
 

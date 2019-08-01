@@ -4,9 +4,9 @@ use std::marker::PhantomData;
 
 use num::complex::Complex;
 
+use self::num::One;
 use crate::types::Precision;
 use crate::utils::*;
-use self::num::One;
 
 /// Iterator which provides the indices of nonzero columns for a given row of a matrix
 pub struct MatrixOpIterator<'a, P: Precision> {
@@ -135,12 +135,7 @@ impl<P: Precision, It: std::iter::Iterator<Item = (u64, Complex<P>)>> std::iter:
             } else {
                 self.last_col = Some(self.row);
             }
-            self.last_col.map(|c| {
-                (
-                    c,
-                    Complex::<P>::one(),
-                )
-            })
+            self.last_col.map(|c| (c, Complex::<P>::one()))
         }
     }
 }
@@ -176,12 +171,7 @@ impl<P: Precision> std::iter::Iterator for SwapOpIterator<P> {
         } else {
             self.last_col = None;
         }
-        self.last_col.map(|col| {
-            (
-                col,
-                Complex::<P>::one(),
-            )
-        })
+        self.last_col.map(|col| (col, Complex::<P>::one()))
     }
 }
 
@@ -237,8 +227,8 @@ impl<P: Precision> std::iter::Iterator for FunctionOpIterator<P> {
 mod iterator_tests {
     use crate::state_ops::from_reals;
 
-    use super::*;
     use super::num::One;
+    use super::*;
 
     #[test]
     fn test_mat_iterator() {

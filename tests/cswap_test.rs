@@ -28,10 +28,9 @@ fn setup_cswap_circuit(
     // Define circuit
     let q1 = b.hadamard(q1);
 
-    let mut c = b.with_context(q1);
-    let _ = c.swap(q2, q3)?;
-    let q1 = c.release_qubit();
-
+    let (q1, _) = condition(&mut b, q1, (q2, q3), |c, (q2, q3)| {
+        c.swap(q2, q3)
+    }).unwrap();
     let q1 = b.hadamard(q1);
 
     let (q1, m1) = b.measure(q1);

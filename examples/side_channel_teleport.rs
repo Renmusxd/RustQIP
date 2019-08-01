@@ -2,6 +2,7 @@ extern crate qip;
 extern crate rand;
 use qip::pipeline::MeasurementHandle;
 use qip::*;
+use qip::common_circuits::epr_pair;
 
 fn run_alice(
     b: &mut OpBuilder,
@@ -16,9 +17,9 @@ fn run_alice(
     let q_random = b.real_mat("Rotate", q_random, &[cangle, -sangle, sangle, cangle])?;
 
     // Alice prepares her state: a|0> + b|1>
-    let mut c = b.with_context(q_random);
-    let q_alice = c.not(epr_alice);
-    let q_random = c.release_qubit();
+    let (q_random, q_alice) = condition(b, q_random, epr_alice, |c, q| {
+        Ok(c.not(q))
+    })?;
     let q_random = b.hadamard(q_random);
 
     // Now she measures her two particles
@@ -64,14 +65,9 @@ fn main() -> Result<(), &'static str> {
     let random_angle = rand::random::<f64>() * std::f64::consts::FRAC_PI_2;
 
     let mut b = OpBuilder::new();
-    let q_alice = b.qubit(1)?;
-    let q_bob = b.qubit(1)?;
 
     // EPR pair
-    let q_alice = b.hadamard(q_alice);
-    let mut c = b.with_context(q_alice);
-    let epr_bob = c.not(q_bob);
-    let epr_alice = c.release_qubit();
+    let (epr_alice, epr_bob) = epr_pair(&mut b, 1);
 
     // Give Alice her EPR qubit
     let handle = run_alice(&mut b, epr_alice, random_angle)?;

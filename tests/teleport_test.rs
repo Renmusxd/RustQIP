@@ -1,4 +1,5 @@
 extern crate qip;
+use qip::common_circuits::epr_pair;
 use qip::pipeline::MeasurementHandle;
 use qip::*;
 
@@ -15,9 +16,9 @@ fn run_alice(
     let q_random = b.real_mat("Rotate", q_random, &[cangle, -sangle, sangle, cangle])?;
 
     // Alice prepares her state: a|0> + b|1>
-    let mut c = b.with_context(q_random);
-    let q_alice = c.not(epr_alice);
-    let q_random = c.release_qubit();
+    let (q_random, q_alice) = condition(b, q_random, epr_alice, |b, q| {
+        Ok(b.not(q))
+    })?;
     let q_random = b.hadamard(q_random);
 
     // Now she measures her two particles
@@ -49,6 +50,9 @@ fn run_bob(
 
     // Now Bob's qubit should be in Alice's state, let's check by faking some stochastic measurement
     let (q_bob, handle) = b.stochastic_measure(q_bob);
+
+    run_debug(&q_bob)?;
+
     let (_, mut measured) = run_local::<f64>(&q_bob)?;
     let ps = measured.pop_stochastic_measurements(handle).unwrap();
 
@@ -67,19 +71,21 @@ fn assert_almost_eq(a: f64, b: f64, prec: i32) {
 
 #[test]
 fn test_teleport() -> Result<(), &'static str> {
-    for i in 0 .. 90 {
+    for i in 0..90 {
         // Can only measure angles between 0 and 90 degrees
-        let random_angle= std::f64::consts::PI * i as f64 / 180.0;
+        let random_angle = std::f64::consts::PI * i as f64 / 180.0;
 
         let mut b = OpBuilder::new();
         let q_alice = b.qubit(1)?;
         let q_bob = b.qubit(1)?;
 
-        // EPR pair
+        //        // EPR pair
         let q_alice = b.hadamard(q_alice);
-        let mut c = b.with_context(q_alice);
+        let mut c = b.with_condition(q_alice);
         let epr_bob = c.not(q_bob);
         let epr_alice = c.release_qubit();
+
+//        let (epr_alice, epr_bob) = epr_pair(&mut b, 1);
 
         // Give Alice her EPR qubit
         let handle = run_alice(&mut b, epr_alice, random_angle)?;

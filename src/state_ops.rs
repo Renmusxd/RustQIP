@@ -7,11 +7,11 @@ use rayon::prelude::*;
 
 use PrecisionQubitOp::*;
 
+use self::num::One;
 use crate::iterators::*;
 use crate::types::Precision;
 use crate::utils::*;
 use std::cmp::{max, min};
-use self::num::One;
 
 /// Types of unitary ops which can be applied to a state.
 pub enum QubitOp {

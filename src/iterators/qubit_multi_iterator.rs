@@ -1,7 +1,7 @@
 extern crate num;
+use self::num::One;
 use crate::types::Precision;
 use num::Complex;
-use self::num::One;
 
 /// Iterator which provides the indices of nonzero columns for a given row of a matrix
 pub struct MultiOpIterator<'a, P: Precision> {
@@ -34,10 +34,7 @@ impl<'a, P: Precision> std::iter::Iterator for MultiOpIterator<'a, P> {
             self.overflow = false;
             None
         } else {
-            let init = (
-                0u64,
-                Complex::one(),
-            );
+            let init = (0u64, Complex::one());
             let ret_val = self
                 .curr_poss
                 .iter()
@@ -102,13 +99,7 @@ mod multi_iter_tests {
         let it = MultiOpIterator::new(&ns, &r_entry);
         let v: Vec<_> = it.collect();
 
-        assert_eq!(
-            v,
-            vec![
-                (0, Complex::one()),
-                (2, Complex::one())
-            ]
-        );
+        assert_eq!(v, vec![(0, Complex::one()), (2, Complex::one())]);
     }
 
     #[test]
@@ -121,13 +112,7 @@ mod multi_iter_tests {
         let it = MultiOpIterator::new(&ns, &r_entry);
         let v: Vec<_> = it.collect();
 
-        assert_eq!(
-            v,
-            vec![
-                (0, Complex::one()),
-                (1, Complex::one())
-            ]
-        );
+        assert_eq!(v, vec![(0, Complex::one()), (1, Complex::one())]);
     }
 
     #[test]

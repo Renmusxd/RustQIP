@@ -248,8 +248,8 @@ type SideChannelHelperFn =
 pub trait UnitaryBuilder {
     // Things like X, Y, Z, NOT, H, SWAP, ... go here
 
-    /// Build a builder which uses `q` as context.
-    fn with_context(&mut self, q: Qubit) -> ConditionalContextBuilder;
+    /// Build a builder which uses `q` as a condition.
+    fn with_condition(&mut self, q: Qubit) -> ConditionalContextBuilder;
 
     /// Build a generic matrix op, apply to `q`, if `q` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
@@ -342,12 +342,13 @@ pub trait UnitaryBuilder {
 
     /// Transforms `|psi>` to `e^{i*theta}|psi>`
     fn phase(&mut self, q: Qubit, theta: f64) -> Qubit {
-        let phase = Complex {
-            re: 0.0,
-            im: theta
-        }.exp();
-        self.mat("Phase", q, vec![phase, Complex::zero(),
-                                            Complex::zero(), phase]).unwrap()
+        let phase = Complex { re: 0.0, im: theta }.exp();
+        self.mat(
+            "Phase",
+            q,
+            vec![phase, Complex::zero(), Complex::zero(), phase],
+        )
+        .unwrap()
     }
 
     /// Apply SWAP to `qa` and `qb`
@@ -615,7 +616,7 @@ impl NonUnitaryBuilder for OpBuilder {
 }
 
 impl UnitaryBuilder for OpBuilder {
-    fn with_context(&mut self, q: Qubit) -> ConditionalContextBuilder {
+    fn with_condition(&mut self, q: Qubit) -> ConditionalContextBuilder {
         ConditionalContextBuilder {
             parent_builder: self,
             conditioned_qubit: Some(q),
@@ -763,7 +764,7 @@ impl<'a> ConditionalContextBuilder<'a> {
 }
 
 impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
-    fn with_context(&mut self, q: Qubit) -> ConditionalContextBuilder {
+    fn with_condition(&mut self, q: Qubit) -> ConditionalContextBuilder {
         ConditionalContextBuilder {
             parent_builder: self,
             conditioned_qubit: Some(q),
@@ -943,7 +944,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
                   ms: &[u64]|
                   -> Result<Vec<Qubit>, &'static str> {
                 let (cq, q) = b.split(q, conditioned_indices.clone())?;
-                let mut b = b.with_context(cq);
+                let mut b = b.with_condition(cq);
                 f(&mut b, q, ms)
             },
         );

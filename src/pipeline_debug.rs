@@ -6,7 +6,7 @@ use num::complex::Complex;
 
 use crate::measurement_ops::MeasuredCondition;
 use crate::pipeline;
-use crate::pipeline::{InitialState, QuantumState};
+use crate::pipeline::{get_required_state_size_from_frontier, InitialState, QuantumState};
 use crate::qubits::Qubit;
 use crate::state_ops::{get_index, num_indices, QubitOp};
 use crate::types::Precision;
@@ -169,8 +169,8 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
 
 pub fn run_debug(q: &Qubit) -> Result<(), &'static str> {
     pipeline::run_with_statebuilder(q, |qs| {
-        let n: u64 = qs.iter().map(|q| -> u64 { q.n() }).sum();
-        PrintPipeline::<f32>::new(n)
+        let n = get_required_state_size_from_frontier(&qs);
+        Ok(PrintPipeline::<f32>::new(n))
     })
     .map(|_| ())
 }
