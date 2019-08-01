@@ -662,14 +662,18 @@ pub fn get_owned_opfns(q: Qubit) -> Vec<StateModifier> {
                         }
                         heap.extend(parents);
                     }
-                    Parent::Shared(q) => if let Ok(q) = Rc::try_unwrap(q) {
-                        heap.push(q)
-                    },
+                    Parent::Shared(q) => {
+                        if let Ok(q) = Rc::try_unwrap(q) {
+                            heap.push(q)
+                        }
+                    }
                 }
             }
             if let Some(deps) = q.deps {
-                deps.into_iter().for_each(|q| if let Ok(q) = Rc::try_unwrap(q) {
-                    heap.push(q)
+                deps.into_iter().for_each(|q| {
+                    if let Ok(q) = Rc::try_unwrap(q) {
+                        heap.push(q)
+                    }
                 })
             }
         }

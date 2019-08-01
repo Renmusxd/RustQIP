@@ -1,6 +1,6 @@
 extern crate qip;
-use qip::*;
 use qip::pipeline::MeasurementHandle;
+use qip::*;
 
 fn run_alice(
     b: &mut OpBuilder,
@@ -57,7 +57,6 @@ fn run_bob(
     // theta = atan(sqrt(ps[1]/ps[0]))
     Ok(ps[1].sqrt().atan2(ps[0].sqrt()))
 }
-
 
 fn assert_almost_eq(a: f64, b: f64, prec: i32) {
     let mult = 10.0f64.powi(prec);

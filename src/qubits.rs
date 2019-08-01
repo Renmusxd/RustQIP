@@ -48,10 +48,7 @@ impl Qubit {
         qubits: Vec<Qubit>,
         modifier: Option<StateModifier>,
     ) -> Qubit {
-        let all_indices = qubits.iter()
-            .map(|q| q.indices.clone())
-            .flatten()
-            .collect();
+        let all_indices = qubits.iter().map(|q| q.indices.clone()).flatten().collect();
 
         Qubit {
             indices: all_indices,
@@ -243,6 +240,8 @@ type SingleQubitSideChannelFn =
     dyn Fn(&mut dyn UnitaryBuilder, Qubit, &[u64]) -> Result<Qubit, &'static str>;
 type SideChannelFn =
     dyn Fn(&mut dyn UnitaryBuilder, Vec<Qubit>, &[u64]) -> Result<Vec<Qubit>, &'static str>;
+type SideChannelHelperFn =
+    dyn Fn(&mut dyn UnitaryBuilder, Qubit, &[u64]) -> Result<Vec<Qubit>, &'static str>;
 
 /// A builder which support unitary operations
 pub trait UnitaryBuilder {
@@ -468,6 +467,7 @@ pub trait UnitaryBuilder {
     /// qubit and handle.
     fn stochastic_measure(&mut self, q: Qubit) -> (Qubit, u64);
 
+    /// Create a circuit portion which depends on the classical results of measuring some qubits.
     fn single_qubit_classical_sidechannel(
         &mut self,
         q: Qubit,
@@ -490,11 +490,31 @@ pub trait UnitaryBuilder {
         .unwrap()
     }
 
+    /// Create a circuit portion which depends on the classical results of measuring some qubits.
     fn classical_sidechannel(
         &mut self,
         qs: Vec<Qubit>,
         handles: &[MeasurementHandle],
         f: Box<SideChannelFn>,
+    ) -> Vec<Qubit> {
+        let index_groups: Vec<_> = qs.iter().map(|q| &q.indices).cloned().collect();
+        let f = Box::new(
+            move |b: &mut dyn UnitaryBuilder,
+                  q: Qubit,
+                  ms: &[u64]|
+                  -> Result<Vec<Qubit>, &'static str> {
+                let (qs, _) = b.split_absolute_many(q, index_groups.clone())?;
+                f(b, qs, ms)
+            },
+        );
+        self.sidechannel_helper(qs, handles, f)
+    }
+
+    fn sidechannel_helper(
+        &mut self,
+        qs: Vec<Qubit>,
+        handles: &[MeasurementHandle],
+        f: Box<SideChannelHelperFn>,
     ) -> Vec<Qubit>;
 }
 
@@ -674,23 +694,20 @@ impl UnitaryBuilder for OpBuilder {
         (q, id)
     }
 
-    fn classical_sidechannel(
+    fn sidechannel_helper(
         &mut self,
         qs: Vec<Qubit>,
         handles: &[MeasurementHandle],
-        f: Box<SideChannelFn>,
+        f: Box<SideChannelHelperFn>,
     ) -> Vec<Qubit> {
         let index_groups: Vec<_> = qs.iter().map(|q| &q.indices).cloned().collect();
-        let req_qubits = index_groups.iter().flatten().max().unwrap() + 1;
+        let req_qubits = self.qubit_index + 1;
 
-        let index_groups_clone: Vec<_> = index_groups.to_vec();
         let f = Box::new(
             move |measurements: &[u64]| -> Result<Vec<StateModifier>, &'static str> {
                 let mut b = Self::new();
                 let q = b.qubit(req_qubits)?;
-                let index_groups = index_groups_clone.to_vec();
-                let (qs, _) = b.split_absolute_many(q, index_groups)?;
-                let qs = f(&mut b, qs, measurements)?;
+                let qs = f(&mut b, q, measurements)?;
                 let q = b.merge(qs);
                 Ok(get_owned_opfns(q))
             },
@@ -900,13 +917,25 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         self.parent_builder.stochastic_measure(q)
     }
 
-    // TODO
-    fn classical_sidechannel(
+    fn sidechannel_helper(
         &mut self,
-        q: Vec<Qubit>,
+        qs: Vec<Qubit>,
         handles: &[MeasurementHandle],
-        f: Box<SideChannelFn>,
+        f: Box<SideChannelHelperFn>,
     ) -> Vec<Qubit> {
-        unimplemented!()
+        let cq = self.get_conditional_qubit();
+        let conditioned_indices = cq.indices.clone();
+        self.set_conditional_qubit(cq);
+        let f = Box::new(
+            move |b: &mut dyn UnitaryBuilder,
+                  q: Qubit,
+                  ms: &[u64]|
+                  -> Result<Vec<Qubit>, &'static str> {
+                let (cq, q) = b.split(q, conditioned_indices.clone())?;
+                let mut b = b.with_context(cq);
+                f(&mut b, q, ms)
+            },
+        );
+        self.parent_builder.sidechannel_helper(qs, handles, f)
     }
 }
