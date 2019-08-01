@@ -16,11 +16,15 @@ use crate::state_ops::*;
 use crate::types::Precision;
 use crate::utils;
 use crate::utils::flip_bits;
+use std::rc::Rc;
+
+pub type SideChannelModifierFn = dyn Fn(&[u64]) -> Result<Vec<StateModifier>, &'static str>;
 
 pub enum StateModifierType {
     UnitaryOp(QubitOp),
     MeasureState(u64, Vec<u64>, f64),
     StochasticMeasureState(u64, Vec<u64>, f64),
+    SideChannelModifiers(Vec<MeasurementHandle>, Box<SideChannelModifierFn>),
 }
 
 pub struct StateModifier {
@@ -67,6 +71,55 @@ impl StateModifier {
             modifier: StateModifierType::StochasticMeasureState(id, indices, angle),
         }
     }
+
+    pub fn new_side_channel(
+        name: String,
+        handles: &[MeasurementHandle],
+        f: Box<SideChannelModifierFn>,
+    ) -> StateModifier {
+        StateModifier {
+            name,
+            modifier: StateModifierType::SideChannelModifiers(handles.to_vec(), f),
+        }
+    }
+}
+
+pub struct MeasurementHandle {
+    pub qubit: Rc<Qubit>,
+}
+
+impl MeasurementHandle {
+    pub fn get_id(&self) -> u64 {
+        self.qubit.id
+    }
+}
+
+impl Clone for MeasurementHandle {
+    fn clone(&self) -> Self {
+        MeasurementHandle {
+            qubit: self.qubit.clone(),
+        }
+    }
+}
+
+impl std::cmp::Eq for MeasurementHandle {}
+
+impl std::cmp::PartialEq for MeasurementHandle {
+    fn eq(&self, other: &MeasurementHandle) -> bool {
+        self.qubit == other.qubit
+    }
+}
+
+impl std::cmp::Ord for MeasurementHandle {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.qubit.cmp(&other.qubit)
+    }
+}
+
+impl std::cmp::PartialOrd for MeasurementHandle {
+    fn partial_cmp(&self, other: &MeasurementHandle) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Default)]
@@ -81,8 +134,8 @@ impl<P: Precision> MeasuredResults<P> {
     }
 
     /// Retrieve the measurement and likelihood for a given handle.
-    pub fn get_measurement(&self, handle: u64) -> Option<(u64, P)> {
-        self.results.get(&handle).cloned()
+    pub fn get_measurement(&self, handle: &MeasurementHandle) -> Option<(u64, P)> {
+        self.results.get(&handle.get_id()).cloned()
     }
 
     /// Clone the stochastic set of measurements for a given handle.
@@ -303,7 +356,7 @@ impl<P: Precision> LocalQuantumState<P> {
         if angle != 0.0 {
             let (sangle, cangle) = angle.sin_cos();
             let basis_mat = from_reals(&[cangle, -sangle, sangle, cangle]);
-            indices.into_iter().for_each(|indx| {
+            indices.iter().for_each(|indx| {
                 let op = make_matrix_op(vec![*indx], basis_mat.clone()).unwrap();
                 self.apply_op(&op);
             });
@@ -431,23 +484,43 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
 fn fold_modify_state<P: Precision, QS: QuantumState<P>>(
     acc: (QS, MeasuredResults<P>),
     modifier: &StateModifier,
-) -> (QS, MeasuredResults<P>) {
+) -> Result<(QS, MeasuredResults<P>), &'static str> {
     let (mut s, mut mr) = acc;
     match &modifier.modifier {
-        StateModifierType::UnitaryOp(op) => s.apply_op_with_name(Some(&modifier.name), op),
+        StateModifierType::UnitaryOp(op) => {
+            s.apply_op_with_name(Some(&modifier.name), op);
+            Ok((s, mr))
+        }
         StateModifierType::MeasureState(id, indices, angle) => {
             let result = s.measure(indices, None, *angle);
             mr.results.insert(id.clone(), result);
+            Ok((s, mr))
         }
         StateModifierType::StochasticMeasureState(id, indices, angle) => {
             let result = s.stochastic_measure(indices, *angle);
             mr.stochastic_results.insert(id.clone(), result);
+            Ok((s, mr))
+        }
+        StateModifierType::SideChannelModifiers(handles, f) => {
+            let measured_values: Vec<_> = handles
+                .iter()
+                .map(|handle| mr.get_measurement(handle))
+                .collect();
+            measured_values.iter().try_for_each(|x| match x {
+                Some(_) => Ok(()),
+                None => Err("Not all measurements found"),
+            })?;
+            let measured_values: Vec<_> = measured_values
+                .into_iter()
+                .map(|m| m.map(|(m, _)| m).unwrap())
+                .collect();
+            let modifiers = f(&measured_values)?;
+            modifiers.iter().try_fold((s, mr), fold_modify_state)
         }
     }
-    (s, mr)
 }
 
-fn get_required_state_size<P: Precision>(
+pub fn get_required_state_size<P: Precision>(
     frontier: &[&Qubit],
     states: &[QubitInitialState<P>],
 ) -> u64 {
@@ -471,7 +544,9 @@ fn get_required_state_size<P: Precision>(
 }
 
 /// Builds a default state of size `n`
-pub fn run<P: Precision, QS: QuantumState<P>>(q: &Qubit) -> (QS, MeasuredResults<P>) {
+pub fn run<P: Precision, QS: QuantumState<P>>(
+    q: &Qubit,
+) -> Result<(QS, MeasuredResults<P>), &'static str> {
     run_with_statebuilder(q, |qs| -> QS {
         let n: u64 = qs.iter().map(|q| q.indices.len() as u64).sum();
         QS::new(n)
@@ -481,7 +556,7 @@ pub fn run<P: Precision, QS: QuantumState<P>>(q: &Qubit) -> (QS, MeasuredResults
 pub fn run_with_init<P: Precision, QS: QuantumState<P>>(
     q: &Qubit,
     states: &[QubitInitialState<P>],
-) -> (QS, MeasuredResults<P>) {
+) -> Result<(QS, MeasuredResults<P>), &'static str> {
     run_with_statebuilder(q, |qs| -> QS {
         let n: u64 = qs.iter().map(|q| q.indices.len() as u64).sum();
         QS::new_from_initial_states(n, states)
@@ -491,7 +566,7 @@ pub fn run_with_init<P: Precision, QS: QuantumState<P>>(
 pub fn run_with_statebuilder<P: Precision, QS: QuantumState<P>, F: FnOnce(Vec<&Qubit>) -> QS>(
     q: &Qubit,
     state_builder: F,
-) -> (QS, MeasuredResults<P>) {
+) -> Result<(QS, MeasuredResults<P>), &'static str> {
     let (frontier, ops) = get_opfns_and_frontier(q);
     let state = state_builder(frontier);
     run_with_state_and_ops(&ops, state)
@@ -508,12 +583,14 @@ pub fn run_with_state<P: Precision, QS: QuantumState<P>>(
     if req_n != state.n() {
         Err("Provided state n is not the required value for this circuit.")
     } else {
-        Ok(run_with_state_and_ops(&ops, state))
+        run_with_state_and_ops(&ops, state)
     }
 }
 
 /// `run` the pipeline using `LocalQuantumState`.
-pub fn run_local<P: Precision>(q: &Qubit) -> (LocalQuantumState<P>, MeasuredResults<P>) {
+pub fn run_local<P: Precision>(
+    q: &Qubit,
+) -> Result<(LocalQuantumState<P>, MeasuredResults<P>), &'static str> {
     run(q)
 }
 
@@ -521,20 +598,20 @@ pub fn run_local<P: Precision>(q: &Qubit) -> (LocalQuantumState<P>, MeasuredResu
 pub fn run_local_with_init<P: Precision>(
     q: &Qubit,
     states: &[QubitInitialState<P>],
-) -> (LocalQuantumState<P>, MeasuredResults<P>) {
+) -> Result<(LocalQuantumState<P>, MeasuredResults<P>), &'static str> {
     run_with_init(q, states)
 }
 
 fn run_with_state_and_ops<P: Precision, QS: QuantumState<P>>(
     ops: &[&StateModifier],
     state: QS,
-) -> (QS, MeasuredResults<P>) {
+) -> Result<(QS, MeasuredResults<P>), &'static str> {
     ops.iter()
         .cloned()
-        .fold((state, MeasuredResults::new()), fold_modify_state)
+        .try_fold((state, MeasuredResults::new()), fold_modify_state)
 }
 
-fn get_opfns_and_frontier(q: &Qubit) -> (Vec<&Qubit>, Vec<&StateModifier>) {
+pub fn get_opfns_and_frontier(q: &Qubit) -> (Vec<&Qubit>, Vec<&StateModifier>) {
     let mut heap = BinaryHeap::new();
     heap.push(q);
     let mut frontier_qubits: Vec<&Qubit> = vec![];
@@ -551,19 +628,56 @@ fn get_opfns_and_frontier(q: &Qubit) -> (Vec<&Qubit>, Vec<&StateModifier>) {
                     }
                     Parent::Shared(parent) => {
                         let parent = parent.as_ref();
-                        if !qubit_in_heap(parent, &heap) {
+                        if !in_heap(parent, &heap) {
                             heap.push(parent);
                         }
                     }
                 },
                 None => frontier_qubits.push(q),
             }
+            if let Some(deps) = &q.deps {
+                deps.iter().for_each(|q| {
+                    let q = q.as_ref();
+                    if !in_heap(q, &heap) {
+                        heap.push(q);
+                    }
+                })
+            }
         }
     }
     (frontier_qubits, fn_queue.into_iter().collect())
 }
 
-fn qubit_in_heap(q: &Qubit, heap: &BinaryHeap<&Qubit>) -> bool {
+pub fn get_owned_opfns(q: Qubit) -> Vec<StateModifier> {
+    let mut heap = BinaryHeap::new();
+    heap.push(q);
+    let mut fn_queue = VecDeque::new();
+    while !heap.is_empty() {
+        if let Some(q) = heap.pop() {
+            if let Some(parent) = q.parent {
+                match parent {
+                    Parent::Owned(parents, modifier) => {
+                        if let Some(modifier) = modifier {
+                            fn_queue.push_front(modifier);
+                        }
+                        heap.extend(parents);
+                    }
+                    Parent::Shared(q) => if let Ok(q) = Rc::try_unwrap(q) {
+                        heap.push(q)
+                    },
+                }
+            }
+            if let Some(deps) = q.deps {
+                deps.into_iter().for_each(|q| if let Ok(q) = Rc::try_unwrap(q) {
+                    heap.push(q)
+                })
+            }
+        }
+    }
+    fn_queue.into_iter().collect()
+}
+
+fn in_heap<T: Eq>(q: T, heap: &BinaryHeap<T>) -> bool {
     for hq in heap {
         if hq == &q {
             return true;
@@ -590,7 +704,7 @@ pub fn make_circuit_matrix<P: Precision>(
                 utils::flip_bits(n as usize, i as u64)
             };
             let (state, _) =
-                run_local_with_init(&q, &[(indices.clone(), InitialState::Index(indx))]);
+                run_local_with_init(&q, &[(indices.clone(), InitialState::Index(indx))]).unwrap();
             (0..state.state.len())
                 .map(|i| {
                     let indx = if natural_order {

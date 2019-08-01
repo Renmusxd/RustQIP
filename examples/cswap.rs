@@ -26,15 +26,15 @@ fn main() -> Result<(), &'static str> {
     let (q1, m1) = b.measure(q1);
 
     // Print circuit diagram
-    qip::run_debug(&q1);
+    qip::run_debug(&q1)?;
 
     // Run circuit
     let (_, measured) = run_local_with_init::<f64>(
         &q1,
         &[h2.make_init_from_index(0)?, h3.make_init_from_index(1)?],
-    );
+    )?;
 
-    println!("{:?}", measured.get_measurement(m1));
+    println!("{:?}", measured.get_measurement(&m1));
 
     Ok(())
 }

@@ -6,7 +6,6 @@ use num::complex::Complex;
 use crate::pipeline::*;
 use crate::state_ops::*;
 use crate::types::Precision;
-use crate::utils::flip_bits;
 
 /// Possible relations to a parent qubit
 pub enum Parent {
@@ -18,6 +17,7 @@ pub enum Parent {
 pub struct Qubit {
     pub indices: Vec<u64>,
     pub parent: Option<Parent>,
+    pub deps: Option<Vec<Rc<Qubit>>>,
     pub id: u64,
 }
 
@@ -29,6 +29,7 @@ impl Qubit {
             Ok(Qubit {
                 indices,
                 parent: None,
+                deps: None,
                 id,
             })
         }
@@ -47,16 +48,15 @@ impl Qubit {
         qubits: Vec<Qubit>,
         modifier: Option<StateModifier>,
     ) -> Qubit {
-        let mut all_indices = Vec::new();
-
-        for q in qubits.iter() {
-            all_indices.extend(q.indices.iter());
-        }
-        all_indices.sort();
+        let all_indices = qubits.iter()
+            .map(|q| q.indices.clone())
+            .flatten()
+            .collect();
 
         Qubit {
             indices: all_indices,
             parent: Some(Parent::Owned(qubits, modifier)),
+            deps: None,
             id,
         }
     }
@@ -114,14 +114,41 @@ impl Qubit {
             Qubit {
                 indices: selected_indices,
                 parent: Some(Parent::Shared(shared_parent.clone())),
+                deps: None,
                 id: ida,
             },
             Qubit {
                 indices: remaining,
                 parent: Some(Parent::Shared(shared_parent.clone())),
+                deps: None,
                 id: idb,
             },
         ))
+    }
+
+    pub fn make_measurement_handle(id: u64, q: Qubit) -> (Qubit, MeasurementHandle) {
+        let indices = q.indices.clone();
+        let shared_parent = Rc::new(q);
+        (
+            Qubit {
+                indices,
+                parent: Some(Parent::Shared(shared_parent.clone())),
+                deps: None,
+                id,
+            },
+            MeasurementHandle {
+                qubit: shared_parent,
+            },
+        )
+    }
+
+    pub fn add_deps(q: Qubit, deps: Vec<Rc<Qubit>>) -> Qubit {
+        Qubit {
+            indices: q.indices,
+            parent: q.parent,
+            deps: Some(deps),
+            id: q.id,
+        }
     }
 
     /// Get number of qubits in this Qubit object
@@ -206,11 +233,16 @@ impl QubitHandle {
 pub trait NonUnitaryBuilder {
     /// Add a measure op to the pipeline for `q` and return a reference which can
     /// later be used to access the measured value from the results of `pipeline::run`.
-    fn measure(&mut self, q: Qubit) -> (Qubit, u64);
+    fn measure(&mut self, q: Qubit) -> (Qubit, MeasurementHandle);
 
     /// Measure in the basis of `cos(phase)|0> + sin(phase)|1>`
-    fn measure_basis(&mut self, q: Qubit, phase: f64) -> (Qubit, u64);
+    fn measure_basis(&mut self, q: Qubit, phase: f64) -> (Qubit, MeasurementHandle);
 }
+
+type SingleQubitSideChannelFn =
+    dyn Fn(&mut dyn UnitaryBuilder, Qubit, &[u64]) -> Result<Qubit, &'static str>;
+type SideChannelFn =
+    dyn Fn(&mut dyn UnitaryBuilder, Vec<Qubit>, &[u64]) -> Result<Vec<Qubit>, &'static str>;
 
 /// A builder which support unitary operations
 pub trait UnitaryBuilder {
@@ -250,23 +282,7 @@ pub trait UnitaryBuilder {
         natural_order: bool,
     ) -> Result<Qubit, &'static str> {
         let n = q.indices.len();
-        let mat: Vec<_> = (0..1 << n as u64)
-            .map(|indx| {
-                let indx = if natural_order {
-                    flip_bits(n, indx)
-                } else {
-                    indx
-                };
-                let v = f(indx);
-                if natural_order {
-                    v.into_iter()
-                        .map(|(indx, c)| (flip_bits(n, indx), c))
-                        .collect()
-                } else {
-                    v
-                }
-            })
-            .collect();
+        let mat = make_sparse_matrix_from_function(n, f, natural_order);
         self.sparse_mat(name, q, mat, false)
     }
 
@@ -341,7 +357,7 @@ pub trait UnitaryBuilder {
         &mut self,
         q_in: Qubit,
         q_out: Qubit,
-        f: Box<Fn(u64) -> (u64, f64) + Send + Sync>,
+        f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<(Qubit, Qubit), &'static str>;
 
     /// Merge the qubits in `qs` into a single qubit.
@@ -379,14 +395,23 @@ pub trait UnitaryBuilder {
         &mut self,
         q: Qubit,
         index_groups: Vec<Vec<u64>>,
-    ) -> Result<(Vec<Qubit>, Qubit), &'static str> {
-        Ok(index_groups
+    ) -> Result<(Vec<Qubit>, Option<Qubit>), &'static str> {
+        index_groups
             .into_iter()
-            .fold((vec![], q), |(mut qs, q), indices| {
-                let (hq, tq) = self.split_absolute(q, indices).unwrap();
-                qs.push(hq);
-                (qs, tq)
-            }))
+            .try_fold((vec![], Some(q)), |(mut qs, q), indices| {
+                if let Some(q) = q {
+                    if q.indices == indices {
+                        qs.push(q);
+                        Ok((qs, None))
+                    } else {
+                        let (hq, tq) = self.split_absolute(q, indices)?;
+                        qs.push(hq);
+                        Ok((qs, Some(tq)))
+                    }
+                } else {
+                    Ok((qs, None))
+                }
+            })
     }
 
     /// Split `q` into a single qubit for each index.
@@ -398,7 +423,9 @@ pub trait UnitaryBuilder {
             indices.pop();
             // Cannot fail since all indices are from q.
             let (mut qs, q) = self.split_absolute_many(q, indices).unwrap();
-            qs.push(q);
+            if let Some(q) = q {
+                qs.push(q);
+            };
             qs
         }
     }
@@ -428,7 +455,7 @@ pub trait UnitaryBuilder {
         &self,
         q_in: &Qubit,
         q_out: &Qubit,
-        f: Box<Fn(u64) -> (u64, f64) + Send + Sync>,
+        f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<QubitOp, &'static str> {
         make_function_op(q_in.indices.clone(), q_out.indices.clone(), f)
     }
@@ -440,11 +467,40 @@ pub trait UnitaryBuilder {
     /// Measure all qubit states and probabilities, does not edit state (thus Unitary). Returns
     /// qubit and handle.
     fn stochastic_measure(&mut self, q: Qubit) -> (Qubit, u64);
+
+    fn single_qubit_classical_sidechannel(
+        &mut self,
+        q: Qubit,
+        handles: &[MeasurementHandle],
+        f: Box<SingleQubitSideChannelFn>,
+    ) -> Qubit {
+        self.classical_sidechannel(
+            vec![q],
+            handles,
+            Box::new(
+                move |b: &mut dyn UnitaryBuilder,
+                      mut qs: Vec<Qubit>,
+                      measurements: &[u64]|
+                      -> Result<Vec<Qubit>, &'static str> {
+                    Ok(vec![f(b, qs.pop().unwrap(), measurements)?])
+                },
+            ),
+        )
+        .pop()
+        .unwrap()
+    }
+
+    fn classical_sidechannel(
+        &mut self,
+        qs: Vec<Qubit>,
+        handles: &[MeasurementHandle],
+        f: Box<SideChannelFn>,
+    ) -> Vec<Qubit>;
 }
 
 /// Helper function for Boxing static functions and applying using the given UnitaryBuilder.
 pub fn apply_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
-    b: &mut UnitaryBuilder,
+    b: &mut dyn UnitaryBuilder,
     q_in: Qubit,
     q_out: Qubit,
     f: F,
@@ -455,7 +511,7 @@ pub fn apply_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
 /// Helper function for Boxing static functions and building sparse mats using the given
 /// UnitaryBuilder.
 pub fn apply_sparse_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
-    b: &mut UnitaryBuilder,
+    b: &mut dyn UnitaryBuilder,
     q_in: Qubit,
     q_out: Qubit,
     f: F,
@@ -509,11 +565,11 @@ impl OpBuilder {
 }
 
 impl NonUnitaryBuilder for OpBuilder {
-    fn measure(&mut self, q: Qubit) -> (Qubit, u64) {
+    fn measure(&mut self, q: Qubit) -> (Qubit, MeasurementHandle) {
         self.measure_basis(q, 0.0)
     }
 
-    fn measure_basis(&mut self, q: Qubit, angle: f64) -> (Qubit, u64) {
+    fn measure_basis(&mut self, q: Qubit, angle: f64) -> (Qubit, MeasurementHandle) {
         let id = self.get_op_id();
         let modifier = StateModifier::new_measurement_basis(
             String::from("measure"),
@@ -523,7 +579,7 @@ impl NonUnitaryBuilder for OpBuilder {
         );
         let modifier = Some(modifier);
         let q = Qubit::merge_with_modifier(id, vec![q], modifier);
-        (q, id)
+        Qubit::make_measurement_handle(self.get_op_id(), q)
     }
 }
 
@@ -602,9 +658,7 @@ impl UnitaryBuilder for OpBuilder {
         qs: Vec<Qubit>,
         named_operator: Option<(String, QubitOp)>,
     ) -> Qubit {
-        let modifier = named_operator.map(|(name, op)| {
-            StateModifier::new_unitary(name, op)
-        });
+        let modifier = named_operator.map(|(name, op)| StateModifier::new_unitary(name, op));
         Qubit::merge_with_modifier(self.get_op_id(), qs, modifier)
     }
 
@@ -618,6 +672,41 @@ impl UnitaryBuilder for OpBuilder {
         let modifier = Some(modifier);
         let q = Qubit::merge_with_modifier(id, vec![q], modifier);
         (q, id)
+    }
+
+    fn classical_sidechannel(
+        &mut self,
+        qs: Vec<Qubit>,
+        handles: &[MeasurementHandle],
+        f: Box<SideChannelFn>,
+    ) -> Vec<Qubit> {
+        let index_groups: Vec<_> = qs.iter().map(|q| &q.indices).cloned().collect();
+        let req_qubits = index_groups.iter().flatten().max().unwrap() + 1;
+
+        let index_groups_clone: Vec<_> = index_groups.to_vec();
+        let f = Box::new(
+            move |measurements: &[u64]| -> Result<Vec<StateModifier>, &'static str> {
+                let mut b = Self::new();
+                let q = b.qubit(req_qubits)?;
+                let index_groups = index_groups_clone.to_vec();
+                let (qs, _) = b.split_absolute_many(q, index_groups)?;
+                let qs = f(&mut b, qs, measurements)?;
+                let q = b.merge(qs);
+                Ok(get_owned_opfns(q))
+            },
+        );
+
+        let modifier = Some(StateModifier::new_side_channel(
+            String::from("SideInputCircuit"),
+            handles,
+            f,
+        ));
+        let q = Qubit::merge_with_modifier(self.get_op_id(), qs, modifier);
+
+        let deps = handles.iter().map(|m| m.qubit.clone()).collect();
+        let q = Qubit::add_deps(q, deps);
+        let (qs, _) = self.split_absolute_many(q, index_groups).unwrap();
+        qs
     }
 }
 
@@ -809,5 +898,15 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
 
     fn stochastic_measure(&mut self, q: Qubit) -> (Qubit, u64) {
         self.parent_builder.stochastic_measure(q)
+    }
+
+    // TODO
+    fn classical_sidechannel(
+        &mut self,
+        q: Vec<Qubit>,
+        handles: &[MeasurementHandle],
+        f: Box<SideChannelFn>,
+    ) -> Vec<Qubit> {
+        unimplemented!()
     }
 }

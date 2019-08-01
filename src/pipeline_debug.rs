@@ -167,9 +167,9 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
     }
 }
 
-pub fn run_debug(q: &Qubit) {
+pub fn run_debug(q: &Qubit) -> Result<(), &'static str> {
     pipeline::run_with_statebuilder(q, |qs| {
         let n: u64 = qs.iter().map(|q| -> u64 { q.n() }).sum();
         PrintPipeline::<f32>::new(n)
-    });
+    }).map(|_| ())
 }

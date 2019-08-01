@@ -86,17 +86,16 @@ pub fn make_sparse_matrix_op(
     }
 }
 
-/// Make a SparseMatrix QubitOp from a vector of rows (with `(column, value)`) build from a function
+/// Make a vector of vectors of rows (with `(column, value)`) built from a function
 /// `f` which takes row numbers.
 /// natural_order indicates that the lowest indexed qubit is the least significant bit in `row` and
 /// the output `column` from `f`
 pub fn make_sparse_matrix_from_function<F: Fn(u64) -> Vec<(u64, Complex<f64>)>>(
-    indices: Vec<u64>,
+    n: usize,
     f: F,
     natural_order: bool,
-) -> Result<QubitOp, &'static str> {
-    let n = indices.len();
-    let v: Vec<_> = (0..1 << n as u64)
+) -> Vec<Vec<(u64, Complex<f64>)>> {
+    (0..1 << n as u64)
         .map(|indx| {
             let indx = if natural_order {
                 flip_bits(n, indx)
@@ -112,8 +111,7 @@ pub fn make_sparse_matrix_from_function<F: Fn(u64) -> Vec<(u64, Complex<f64>)>>(
                 v
             }
         })
-        .collect();
-    make_sparse_matrix_op(indices, v, false)
+        .collect()
 }
 
 /// Make a Swap QubitOp

@@ -1,8 +1,7 @@
 extern crate qip;
 extern crate rand;
-use qip::*;
 use qip::pipeline::LocalQuantumState;
-use qip::state_ops::from_reals;
+use qip::*;
 
 fn run_alice(initial_angle: f64) -> Result<(LocalQuantumState<f64>, u64), &'static str> {
     let mut b = OpBuilder::new();
@@ -14,7 +13,7 @@ fn run_alice(initial_angle: f64) -> Result<(LocalQuantumState<f64>, u64), &'stat
 
     // Create Alice's state
     let (sangle, cangle) = initial_angle.sin_cos();
-    let q_random = b.real_mat("Rotate",  q_random, &[cangle, -sangle, sangle, cangle])?;
+    let q_random = b.real_mat("Rotate", q_random, &[cangle, -sangle, sangle, cangle])?;
 
     // EPR it
     let q_alice = b.hadamard(q_alice);
@@ -32,25 +31,29 @@ fn run_alice(initial_angle: f64) -> Result<(LocalQuantumState<f64>, u64), &'stat
     let q = b.merge(vec![q_random, q_alice]);
     let (q, handle) = b.measure(q);
 
-    let (state, measured) = run_local::<f64>(&q);
-    let (m, _) = measured.get_measurement(handle).unwrap();
+    let (state, measured) = run_local::<f64>(&q)?;
+    let (m, _) = measured.get_measurement(&handle).unwrap();
+
+    println!("Measured: {:02b}", m);
 
     Ok((state, m))
 }
 
 fn run_bob(state: LocalQuantumState<f64>, measured: u64) -> Result<f64, &'static str> {
     let mut b = OpBuilder::new();
-    b.qubit(2)?; // Alices qubits aren't used here.
-    let q_bob = b.qubit(1)?;
+    let q = b.qubit(3)?;
+    let (q_bob, _) = b.split(q, vec![2])?;
 
+    // Based on the classical bits sent by Alice, Bob should apply a gate
     let q_bob = match measured {
         0b00 => q_bob,
         0b10 => b.x(q_bob),
         0b01 => b.z(q_bob),
         0b11 => b.y(q_bob),
-        _ => panic!("Shouldn't be possible")
+        _ => panic!("Shouldn't be possible"),
     };
 
+    // Now Bob's qubit should be in Alice's state, let's check by faking some stochastic measurement
     let (q_bob, handle) = b.stochastic_measure(q_bob);
     let (_, mut measured) = run_with_state(&q_bob, state)?;
     let ps = measured.pop_stochastic_measurements(handle).unwrap();
@@ -67,7 +70,10 @@ fn main() -> Result<(), &'static str> {
     let (state, measured) = run_alice(random_angle)?;
     let teleported_angle = run_bob(state, measured)?;
 
-    println!("Alice's angle: {:?}\tBob's angle: {:?}", random_angle, teleported_angle);
+    println!(
+        "Alice's angle: {:?}\tBob's angle: {:?}",
+        random_angle, teleported_angle
+    );
 
     Ok(())
 }
