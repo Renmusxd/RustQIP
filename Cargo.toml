@@ -1,6 +1,6 @@
 [package]
 name = "qip"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["sumnernh@gmail.com <sumnernh@gmail.com>"]
 description = "A library for efficient quantum computing simulations."
 license = "MIT"
@@ -10,8 +10,8 @@ edition = "2018"
 name = "qip"
 
 [dependencies]
-num = "^0.2.0"
-rayon = "^1.0.3"
+num = "^0.2"
+rayon = "^1.0"
 bencher = "^0.1.5"
 rand = "^0.6"
 

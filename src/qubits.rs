@@ -925,7 +925,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
     ) -> Vec<Qubit> {
         let cq = self.get_conditional_qubit();
         let conditioned_indices = cq.indices.clone();
-        self.set_conditional_qubit(cq);
+        let cindices_clone = conditioned_indices.clone();
         let f = Box::new(
             move |b: &mut dyn UnitaryBuilder,
                   q: Qubit,
@@ -936,6 +936,13 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
                 f(&mut b, q, ms)
             },
         );
-        self.parent_builder.sidechannel_helper(qs, handles, f)
+        let qs = self.parent_builder.sidechannel_helper(qs, handles, f);
+        let index_groups: Vec<_> = qs.iter().map(|q| q.indices.clone()).collect();
+        let q = self.merge(qs);
+        let q = self.merge(vec![cq, q]);
+        let (cq, q) = self.split(q, cindices_clone).unwrap();
+        self.set_conditional_qubit(cq);
+        let (qs, _) = self.split_absolute_many(q, index_groups).unwrap();
+        qs
     }
 }
