@@ -11,6 +11,7 @@ use crate::iterators::*;
 use crate::types::Precision;
 use crate::utils::*;
 use std::cmp::{max, min};
+use self::num::One;
 
 /// Types of unitary ops which can be applied to a state.
 pub enum QubitOp {
@@ -471,10 +472,7 @@ pub fn make_op_matrix<P: Precision>(
         .map(|i| {
             let mut input = from_reals(&zeros);
             let mut output = input.clone();
-            input[i] = Complex {
-                re: P::one(),
-                im: P::zero(),
-            };
+            input[i] = Complex::one();
             apply_op(n, op, &input, &mut output, 0, 0, multithread);
             output.clone()
         })
@@ -586,7 +584,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_make_sparse_mat() {
-        let one = Complex::<f64> { re: 1.0, im: 0.0 };
+        let one = Complex::<f64>::one();
         let expected_dat = vec![
             vec![(1, one)],
             vec![(0, one)],

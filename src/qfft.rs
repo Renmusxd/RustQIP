@@ -3,6 +3,7 @@ extern crate num;
 use num::complex::Complex;
 
 use crate::qubits::{Qubit, UnitaryBuilder};
+use self::num::{One, Zero};
 
 pub fn qfft<B: UnitaryBuilder>(builder: &mut B, q: Qubit) -> Qubit {
     let mut qs = builder.split_all(q);
@@ -41,9 +42,9 @@ fn rec_qfft<B: UnitaryBuilder>(
 pub fn make_rm_mat(m: u64) -> Vec<Complex<f64>> {
     let phi = 2.0 * std::f64::consts::PI / f64::from(1 << m);
     vec![
-        Complex { re: 1.0, im: 0.0 },
-        Complex { re: 0.0, im: 0.0 },
-        Complex { re: 0.0, im: 0.0 },
+        Complex::one(),
+        Complex::zero(),
+        Complex::zero(),
         Complex { re: 0.0, im: phi }.exp(),
     ]
 }

@@ -5,6 +5,7 @@ use super::qubit_iterators::*;
 use crate::iterators::{precision_num_indices, MultiOpIterator};
 use crate::types::Precision;
 use num::Complex;
+use self::num::Zero;
 
 /// Using the function `f` which maps from a column and `row` to a complex value for the op matrix,
 /// sums for all nonzero entries for a given `op` more efficiently than trying each column between
@@ -17,10 +18,7 @@ pub fn sum_for_op_cols<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(
     op: &PrecisionQubitOp<P>,
     f: F,
 ) -> Complex<P> {
-    let init = Complex {
-        re: P::zero(),
-        im: P::zero(),
-    };
+    let init = Complex::zero();
     fold_for_op_cols(nindices, row, op, init, |acc, entry| acc + f(entry))
 }
 

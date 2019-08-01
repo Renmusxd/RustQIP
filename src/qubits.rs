@@ -6,6 +6,7 @@ use num::complex::Complex;
 use crate::pipeline::*;
 use crate::state_ops::*;
 use crate::types::Precision;
+use num::Zero;
 
 /// Possible relations to a parent qubit
 pub enum Parent {
@@ -337,6 +338,16 @@ pub trait UnitaryBuilder {
         let inv_sqrt = 1.0f64 / 2.0f64.sqrt();
         self.real_mat("H", q, &[inv_sqrt, inv_sqrt, inv_sqrt, -inv_sqrt])
             .unwrap()
+    }
+
+    /// Transforms `|psi>` to `e^{i*theta}|psi>`
+    fn phase(&mut self, q: Qubit, theta: f64) -> Qubit {
+        let phase = Complex {
+            re: 0.0,
+            im: theta
+        }.exp();
+        self.mat("Phase", q, vec![phase, Complex::zero(),
+                                            Complex::zero(), phase]).unwrap()
     }
 
     /// Apply SWAP to `qa` and `qb`

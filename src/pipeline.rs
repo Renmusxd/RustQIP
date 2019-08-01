@@ -17,6 +17,7 @@ use crate::types::Precision;
 use crate::utils;
 use crate::utils::flip_bits;
 use std::rc::Rc;
+use self::num::{One, Zero};
 
 pub type SideChannelModifierFn = dyn Fn(&[u64]) -> Result<Vec<StateModifier>, &'static str>;
 
@@ -240,17 +241,13 @@ impl<P: Precision> LocalQuantumState<P> {
             }
         });
 
-        let init = Complex::<P> {
-            re: P::one(),
-            im: P::zero(),
-        };
         // Go through each combination of full index locations
         (0..1 << n_fullindices).for_each(|i| {
             // Calculate the offset from template, and the product of fullstates.
             let (delta_index, _, val) =
                 states
                     .iter()
-                    .fold((0u64, 0u64, init), |acc, (indices, state)| {
+                    .fold((0u64, 0u64, Complex::one()), |acc, (indices, state)| {
                         if let InitialState::FullState(vals) = state {
                             let (superindex_acc, sub_index_offset, val_acc) = acc;
                             // Now we need to make additions to the superindex by adding bits based on
@@ -281,10 +278,7 @@ impl<P: Precision> LocalQuantumState<P> {
         });
 
         let arena = vec![
-            Complex {
-                re: P::zero(),
-                im: P::zero()
-            };
+            Complex::zero();
             cvec.len()
         ];
         LocalQuantumState {
@@ -306,10 +300,7 @@ impl<P: Precision> LocalQuantumState<P> {
         }
 
         let arena = vec![
-            Complex {
-                re: P::zero(),
-                im: P::zero()
-            };
+            Complex::zero();
             state.len()
         ];
 

@@ -6,6 +6,7 @@ use num::complex::Complex;
 
 use crate::types::Precision;
 use crate::utils::*;
+use self::num::One;
 
 /// Iterator which provides the indices of nonzero columns for a given row of a matrix
 pub struct MatrixOpIterator<'a, P: Precision> {
@@ -137,10 +138,7 @@ impl<P: Precision, It: std::iter::Iterator<Item = (u64, Complex<P>)>> std::iter:
             self.last_col.map(|c| {
                 (
                     c,
-                    Complex::<P> {
-                        re: P::one(),
-                        im: P::zero(),
-                    },
+                    Complex::<P>::one(),
                 )
             })
         }
@@ -181,10 +179,7 @@ impl<P: Precision> std::iter::Iterator for SwapOpIterator<P> {
         self.last_col.map(|col| {
             (
                 col,
-                Complex {
-                    re: P::one(),
-                    im: P::zero(),
-                },
+                Complex::<P>::one(),
             )
         })
     }
@@ -243,6 +238,7 @@ mod iterator_tests {
     use crate::state_ops::from_reals;
 
     use super::*;
+    use super::num::One;
 
     #[test]
     fn test_mat_iterator() {
@@ -267,7 +263,7 @@ mod iterator_tests {
     #[test]
     fn test_sparse_mat_iterator() {
         let n = 1u64;
-        let one = Complex { re: 1.0, im: 0.0 };
+        let one = Complex::<f64>::one();
         let mat: Vec<Vec<f64>> = (0..1 << n)
             .map(|i| -> Vec<f64> {
                 let d = vec![vec![(1, one)], vec![(0, one)]];

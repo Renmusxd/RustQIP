@@ -1,6 +1,7 @@
 extern crate num;
 use crate::types::Precision;
 use num::Complex;
+use self::num::One;
 
 /// Iterator which provides the indices of nonzero columns for a given row of a matrix
 pub struct MultiOpIterator<'a, P: Precision> {
@@ -35,10 +36,7 @@ impl<'a, P: Precision> std::iter::Iterator for MultiOpIterator<'a, P> {
         } else {
             let init = (
                 0u64,
-                Complex {
-                    re: P::one(),
-                    im: P::zero(),
-                },
+                Complex::one(),
             );
             let ret_val = self
                 .curr_poss
@@ -83,10 +81,7 @@ mod multi_iter_tests {
 
     #[test]
     fn test_trivial() {
-        let one = Complex {
-            re: 1.0f64,
-            im: 0.0f64,
-        };
+        let one = Complex::one();
         let entry1 = [(1, one)];
         let entry2 = [(0, one)];
         let r_entry: [&[(u64, Complex<f64>)]; 2] = [&entry1, &entry2];
@@ -99,10 +94,7 @@ mod multi_iter_tests {
 
     #[test]
     fn test_nontrivial() {
-        let one = Complex {
-            re: 1.0f64,
-            im: 0.0f64,
-        };
+        let one = Complex::one();
         let entry1 = [(0, one), (1, one)];
         let entry2 = [(0, one)];
         let r_entry: [&[(u64, Complex<f64>)]; 2] = [&entry1, &entry2];
@@ -113,18 +105,15 @@ mod multi_iter_tests {
         assert_eq!(
             v,
             vec![
-                (0, Complex { re: 1.0, im: 0.0 }),
-                (2, Complex { re: 1.0, im: 0.0 })
+                (0, Complex::one()),
+                (2, Complex::one())
             ]
         );
     }
 
     #[test]
     fn test_nontrivial_other() {
-        let one = Complex {
-            re: 1.0f64,
-            im: 0.0f64,
-        };
+        let one = Complex::one();
         let entry1 = [(0, one)];
         let entry2 = [(0, one), (1, one)];
         let r_entry: [&[(u64, Complex<f64>)]; 2] = [&entry1, &entry2];
@@ -135,8 +124,8 @@ mod multi_iter_tests {
         assert_eq!(
             v,
             vec![
-                (0, Complex { re: 1.0, im: 0.0 }),
-                (1, Complex { re: 1.0, im: 0.0 })
+                (0, Complex::one()),
+                (1, Complex::one())
             ]
         );
     }
@@ -144,10 +133,7 @@ mod multi_iter_tests {
     #[test]
     fn test_mat_iterator() {
         let n = 1u64;
-        let one = Complex {
-            re: 1.0f64,
-            im: 0.0f64,
-        };
+        let one = Complex::one();
         let mat: Vec<Vec<f64>> = (0..1 << n)
             .map(|i| -> Vec<f64> {
                 let entry = [(1 - i, one)];
@@ -170,10 +156,7 @@ mod multi_iter_tests {
     #[test]
     fn test_double_mat_identity() {
         let n = 2u64;
-        let one = Complex {
-            re: 1.0f64,
-            im: 0.0f64,
-        };
+        let one = Complex::one();
         let mat: Vec<Vec<f64>> = (0..1 << n)
             .map(|i| -> Vec<f64> {
                 let entry1 = [((i & 2) >> 1, one)];
@@ -202,10 +185,7 @@ mod multi_iter_tests {
     #[test]
     fn test_double_mat_swap() {
         let n = 2u64;
-        let one = Complex {
-            re: 1.0f64,
-            im: 0.0f64,
-        };
+        let one = Complex::one();
         let mat: Vec<Vec<f64>> = (0..1 << n)
             .map(|i| -> Vec<f64> {
                 let entry1 = [((!i & 2) >> 1, one)];
