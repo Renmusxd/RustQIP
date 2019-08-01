@@ -60,7 +60,8 @@ fn run_bob(
 }
 
 fn main() -> Result<(), &'static str> {
-    let random_angle = rand::random::<f64>() * std::f64::consts::FRAC_2_PI;
+    // Can only measure angles between 0 and 90 degrees
+    let random_angle = rand::random::<f64>() * std::f64::consts::FRAC_PI_2;
 
     let mut b = OpBuilder::new();
     let q_alice = b.qubit(1)?;

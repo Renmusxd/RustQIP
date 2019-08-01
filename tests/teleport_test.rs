@@ -67,25 +67,27 @@ fn assert_almost_eq(a: f64, b: f64, prec: i32) {
 
 #[test]
 fn test_teleport() -> Result<(), &'static str> {
-    let random_angle = rand::random::<f64>() * std::f64::consts::FRAC_2_PI;
+    for i in 0 .. 90 {
+        // Can only measure angles between 0 and 90 degrees
+        let random_angle= std::f64::consts::PI * i as f64 / 180.0;
 
-    let mut b = OpBuilder::new();
-    let q_alice = b.qubit(1)?;
-    let q_bob = b.qubit(1)?;
+        let mut b = OpBuilder::new();
+        let q_alice = b.qubit(1)?;
+        let q_bob = b.qubit(1)?;
 
-    // EPR pair
-    let q_alice = b.hadamard(q_alice);
-    let mut c = b.with_context(q_alice);
-    let epr_bob = c.not(q_bob);
-    let epr_alice = c.release_qubit();
+        // EPR pair
+        let q_alice = b.hadamard(q_alice);
+        let mut c = b.with_context(q_alice);
+        let epr_bob = c.not(q_bob);
+        let epr_alice = c.release_qubit();
 
-    // Give Alice her EPR qubit
-    let handle = run_alice(&mut b, epr_alice, random_angle)?;
+        // Give Alice her EPR qubit
+        let handle = run_alice(&mut b, epr_alice, random_angle)?;
 
-    // Give Bob his and the classical measurements Alice made
-    let teleported_angle = run_bob(&mut b, epr_bob, handle)?;
+        // Give Bob his and the classical measurements Alice made
+        let teleported_angle = run_bob(&mut b, epr_bob, handle)?;
 
-    assert_almost_eq(random_angle, teleported_angle, 10);
-
+        assert_almost_eq(random_angle, teleported_angle, 10);
+    }
     Ok(())
 }

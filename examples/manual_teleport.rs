@@ -65,7 +65,8 @@ fn run_bob(state: LocalQuantumState<f64>, measured: u64) -> Result<f64, &'static
 }
 
 fn main() -> Result<(), &'static str> {
-    let random_angle = rand::random::<f64>() * std::f64::consts::FRAC_2_PI;
+    // Can only measure angles between 0 and 90 degrees
+    let random_angle = rand::random::<f64>() * std::f64::consts::FRAC_PI_2;
 
     let (state, measured) = run_alice(random_angle)?;
     let teleported_angle = run_bob(state, measured)?;
