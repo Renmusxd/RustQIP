@@ -385,6 +385,11 @@ impl<P: Precision> LocalQuantumState<P> {
         })
     }
 
+    /// Return a mutable reference to the internal state.
+    pub fn state_ref(&mut self) -> &mut Vec<Complex<P>> {
+        &mut self.state
+    }
+
     /// Clone the state in either the `natural_order` or the internal order.
     pub fn clone_state(&mut self, natural_order: bool) -> Vec<Complex<P>> {
         if natural_order {
