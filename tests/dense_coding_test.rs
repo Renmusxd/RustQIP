@@ -1,14 +1,14 @@
 extern crate qip;
 
-use qip::*;
 use qip::common_circuits::epr_pair;
+use qip::*;
 
 fn run_alice(b: &mut OpBuilder, epr_alice: Qubit, bit_a: bool, bit_b: bool) -> Qubit {
     match (bit_a, bit_b) {
         (false, false) => epr_alice,
         (false, true) => b.x(epr_alice),
         (true, false) => b.z(epr_alice),
-        (true, true) => b.y(epr_alice)
+        (true, true) => b.y(epr_alice),
     }
 }
 

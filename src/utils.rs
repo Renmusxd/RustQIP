@@ -65,7 +65,7 @@ pub fn get_flat_index(nindices: u64, i: u64, j: u64) -> u64 {
     (i * mat_side) + j
 }
 
-/// Flips the bits in `num` from ith position to (n-i)th position.
+/// Flips the bits in `num` from `i`th position to `(n-i)`th position.
 ///
 /// # Example
 ///

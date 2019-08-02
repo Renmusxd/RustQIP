@@ -17,23 +17,66 @@ use crate::state_ops::*;
 use crate::types::Precision;
 use crate::utils;
 use crate::utils::flip_bits;
+use std::fmt;
 use std::rc::Rc;
 
+/// A functions which maps measured values to a series of StateModifiers which will be applied to
+/// the state.
 pub type SideChannelModifierFn = dyn Fn(&[u64]) -> Result<Vec<StateModifier>, &'static str>;
 
+/// The set of ways to modify a QuantumState
 pub enum StateModifierType {
+    /// Ops such as matrices, swaps, and conditions
     UnitaryOp(QubitOp),
+    /// Measurements of the quantum state
     MeasureState(u64, Vec<u64>, f64),
+    /// Stochastic measurements which don't affect the state.
     StochasticMeasureState(u64, Vec<u64>, f64),
+    /// Subsections of the circuit which depend on measured values.
     SideChannelModifiers(Vec<MeasurementHandle>, Box<SideChannelModifierFn>),
 }
 
+impl fmt::Debug for StateModifierType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let to_strs = |indices: &Vec<u64>| {
+            indices
+                .iter()
+                .map(|x| x.clone().to_string())
+                .collect::<Vec<String>>()
+        };
+
+        match self {
+            StateModifierType::UnitaryOp(op) => write!(f, "UnitaryOp[{:?}]", op),
+            StateModifierType::MeasureState(id, indices, angle) => write!(
+                f,
+                "MeasureState[{:?}, {:?}, {:?}]",
+                id,
+                to_strs(indices),
+                angle
+            ),
+            StateModifierType::StochasticMeasureState(id, indices, angle) => write!(
+                f,
+                "StochasticMeasureState[{:?}, {:?}, {:?}]",
+                id,
+                to_strs(indices),
+                angle
+            ),
+            StateModifierType::SideChannelModifiers(handle, _) => {
+                write!(f, "SideChannelModifiers[{:?}]", handle)
+            }
+        }
+    }
+}
+
+/// A named state modifier.
+#[derive(Debug)]
 pub struct StateModifier {
     name: String,
     modifier: StateModifierType,
 }
 
 impl StateModifier {
+    /// Create a new unitary state modifier (matrices, swaps, ...)
     pub fn new_unitary(name: String, op: QubitOp) -> StateModifier {
         StateModifier {
             name,
@@ -41,10 +84,13 @@ impl StateModifier {
         }
     }
 
+    /// Create a new measurement state modifier.
     pub fn new_measurement(name: String, id: u64, indices: Vec<u64>) -> StateModifier {
         StateModifier::new_measurement_basis(name, id, indices, 0.0)
     }
 
+    /// Create a new measurement state modifier on an off-computational basis:
+    /// `cos(angle)|0> + sin(angle)|1>`
     pub fn new_measurement_basis(
         name: String,
         id: u64,
@@ -57,10 +103,14 @@ impl StateModifier {
         }
     }
 
+    /// Create a new stochastic measurement which doesn't affect the state but gives the adds
+    /// the chance of each state.
     pub fn new_stochastic_measurement(name: String, id: u64, indices: Vec<u64>) -> StateModifier {
         StateModifier::new_stochastic_measurement_basis(name, id, indices, 0.0)
     }
 
+    /// Create a new stochastic measurement state modifier on an off-computational basis:
+    /// `cos(angle)|0> + sin(angle)|1>`
     pub fn new_stochastic_measurement_basis(
         name: String,
         id: u64,
@@ -73,6 +123,8 @@ impl StateModifier {
         }
     }
 
+    /// Create a new side channel state modifier which builds part of the circuit dependent on
+    /// the measured values from previous steps.
     pub fn new_side_channel(
         name: String,
         handles: &[MeasurementHandle],
@@ -85,11 +137,26 @@ impl StateModifier {
     }
 }
 
+/// A handle which can be used to retrieve measured values.
+#[derive(Debug)]
 pub struct MeasurementHandle {
-    pub qubit: Rc<Qubit>,
+    qubit: Rc<Qubit>,
 }
 
 impl MeasurementHandle {
+    /// Build a new MeasurementHandle from a qubit being measured.
+    pub fn new(qubit: &Rc<Qubit>) -> Self {
+        MeasurementHandle {
+            qubit: qubit.clone(),
+        }
+    }
+
+    /// Get a cloned reference of the measured qubit.
+    pub fn clone_qubit(&self) -> Rc<Qubit> {
+        self.qubit.clone()
+    }
+
+    /// Get the id of this MeasurementHandle
     pub fn get_id(&self) -> u64 {
         self.qubit.id
     }
@@ -123,13 +190,15 @@ impl std::cmp::PartialOrd for MeasurementHandle {
     }
 }
 
-#[derive(Default)]
+/// A struct which provides the measured values from the circuit.
+#[derive(Default, Debug)]
 pub struct MeasuredResults<P: Precision> {
     results: HashMap<u64, (u64, P)>,
     stochastic_results: HashMap<u64, Vec<P>>,
 }
 
 impl<P: Precision> MeasuredResults<P> {
+    /// Make a new MeasuredResults container.
     pub fn new() -> MeasuredResults<P> {
         MeasuredResults::default()
     }
@@ -196,10 +265,11 @@ pub trait QuantumState<P: Precision> {
 
 /// A basic representation of a quantum state, given by a vector of complex numbers stored
 /// locally on the machine (plus an arena of equal size to work in).
+#[derive(Debug)]
 pub struct LocalQuantumState<P: Precision> {
     // A bundle with the quantum state data.
-    pub n: u64,
-    pub state: Vec<Complex<P>>,
+    n: u64,
+    state: Vec<Complex<P>>,
     arena: Vec<Complex<P>>,
     multithread: bool,
 }
@@ -286,6 +356,7 @@ impl<P: Precision> LocalQuantumState<P> {
         }
     }
 
+    /// Make a new LocalQuantumState from a fully defined state.
     pub fn new_from_full_state(
         n: u64,
         state: Vec<Complex<P>>,
@@ -348,6 +419,7 @@ impl<P: Precision> LocalQuantumState<P> {
         }
     }
 
+    /// Set whether the state will use multithreading.
     pub fn set_multithreading(&mut self, multithread: bool) {
         self.multithread = multithread;
     }
@@ -364,11 +436,16 @@ impl<P: Precision> Clone for LocalQuantumState<P> {
     }
 }
 
+/// An initial state supplier for building quantum states.
+#[derive(Debug)]
 pub enum InitialState<P: Precision> {
+    /// A fully qualified state, each |x> has an amplitude
     FullState(Vec<Complex<P>>),
+    /// A single index with the whole weight.
     Index(u64),
 }
 
+/// A set of indices and their initial state.
 pub type QubitInitialState<P> = (Vec<u64>, InitialState<P>);
 
 impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
@@ -505,6 +582,8 @@ fn fold_modify_state<P: Precision, QS: QuantumState<P>>(
     }
 }
 
+/// Return the required number of qubits for a given frontier of qubits (those in the circuit
+/// with no parent qubits).
 pub fn get_required_state_size_from_frontier(frontier: &[&Qubit]) -> u64 {
     frontier
         .iter()
@@ -516,6 +595,8 @@ pub fn get_required_state_size_from_frontier(frontier: &[&Qubit]) -> u64 {
         .unwrap_or(0)
 }
 
+/// Return the required number of qubits for a given frontier of qubits (those in the circuit
+/// with no parent qubits) and a set of initial states.
 pub fn get_required_state_size<P: Precision>(
     frontier: &[&Qubit],
     states: &[QubitInitialState<P>],
@@ -542,6 +623,7 @@ pub fn run<P: Precision, QS: QuantumState<P>>(
     })
 }
 
+/// Run the circuit, starting by building the quantum state QS with a set of initial states.
 pub fn run_with_init<P: Precision, QS: QuantumState<P>>(
     q: &Qubit,
     states: &[QubitInitialState<P>],
@@ -552,6 +634,7 @@ pub fn run_with_init<P: Precision, QS: QuantumState<P>>(
     })
 }
 
+/// Run the circuit using a function to build the initial state.
 pub fn run_with_statebuilder<
     P: Precision,
     QS: QuantumState<P>,
@@ -565,6 +648,7 @@ pub fn run_with_statebuilder<
     run_with_state_and_ops(&ops, state)
 }
 
+/// Run the circuit with a given starting state.
 pub fn run_with_state<P: Precision, QS: QuantumState<P>>(
     q: &Qubit,
     state: QS,
@@ -604,6 +688,8 @@ fn run_with_state_and_ops<P: Precision, QS: QuantumState<P>>(
         .try_fold((state, MeasuredResults::new()), fold_modify_state)
 }
 
+/// Get the frontier of a circuit as well as references to all the StateModifiers needed in the
+/// correct order.
 pub fn get_opfns_and_frontier(q: &Qubit) -> (Vec<&Qubit>, Vec<&StateModifier>) {
     let mut heap = BinaryHeap::new();
     heap.push(q);
@@ -641,6 +727,7 @@ pub fn get_opfns_and_frontier(q: &Qubit) -> (Vec<&Qubit>, Vec<&StateModifier>) {
     (frontier_qubits, fn_queue.into_iter().collect())
 }
 
+/// Deconstruct the circuit and own all the StateModifiers needed to run it.
 pub fn get_owned_opfns(q: Qubit) -> Vec<StateModifier> {
     let mut heap = BinaryHeap::new();
     heap.push(q);

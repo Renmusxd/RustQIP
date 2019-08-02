@@ -1,24 +1,62 @@
 extern crate num;
 use crate::types::Precision;
 use num::Complex;
+use std::fmt;
 
 /// A private version of QubitOp with variable precision, this is used so we can change the f64
 /// default qubit op to a variable one at the beginning of execution and not at each operation.
 pub enum PrecisionQubitOp<'a, P: Precision> {
-    // Indices, Matrix data
+    /// Indices, Matrix data
     Matrix(Vec<u64>, Vec<Complex<P>>),
-    // Indices, per row [(col, value)]
+    /// Indices, per row [(col, value)]
     SparseMatrix(Vec<u64>, Vec<Vec<(u64, Complex<P>)>>),
-    // A indices, B indices
+    /// A indices, B indices
     Swap(Vec<u64>, Vec<u64>),
-    // Control indices, Op indices, Op
+    /// Control indices, Op indices, Op
     Control(Vec<u64>, Vec<u64>, Box<PrecisionQubitOp<'a, P>>),
-    // Function which maps |x,y> to |x,f(x) xor y> where x,y are both m bits.
+    /// Function which maps |x,y> to |x,f(x) xor y> where x,y are both m bits.
     Function(
         Vec<u64>,
         Vec<u64>,
-        &'a (Fn(u64) -> (u64, f64) + Send + Sync),
+        &'a (dyn Fn(u64) -> (u64, f64) + Send + Sync),
     ),
+}
+
+impl<'a, P: Precision> fmt::Debug for PrecisionQubitOp<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let (name, indices) = match self {
+            PrecisionQubitOp::Matrix(indices, _) => ("Matrix".to_string(), indices.clone()),
+            PrecisionQubitOp::SparseMatrix(indices, _) => {
+                ("SparseMatrix".to_string(), indices.clone())
+            }
+            PrecisionQubitOp::Swap(a_indices, b_indices) => {
+                let indices: Vec<_> = a_indices
+                    .iter()
+                    .cloned()
+                    .chain(b_indices.iter().cloned())
+                    .collect();
+                ("Swap".to_string(), indices)
+            }
+            PrecisionQubitOp::Control(indices, _, op) => {
+                let name = format!("C({:?})", *op);
+                (name, indices.clone())
+            }
+            PrecisionQubitOp::Function(a_indices, b_indices, _) => {
+                let indices: Vec<_> = a_indices
+                    .iter()
+                    .cloned()
+                    .chain(b_indices.iter().cloned())
+                    .collect();
+                ("F".to_string(), indices)
+            }
+        };
+        let int_strings = indices
+            .iter()
+            .map(|x| x.clone().to_string())
+            .collect::<Vec<String>>();
+
+        write!(f, "{}[{}]", name, int_strings.join(", "))
+    }
 }
 
 /// Get the number of indices represented by `op`

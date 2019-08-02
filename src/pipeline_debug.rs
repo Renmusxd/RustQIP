@@ -167,6 +167,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
     }
 }
 
+/// Print out an ASCII representation of the circuit.
 pub fn run_debug(q: &Qubit) -> Result<(), &'static str> {
     pipeline::run_with_statebuilder(q, |qs| {
         let n = get_required_state_size_from_frontier(&qs);

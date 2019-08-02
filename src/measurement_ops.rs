@@ -24,7 +24,7 @@ pub fn prob_magnitude<P: Precision>(input: &[Complex<P>], multithread: bool) -> 
 /// (as for distributed computation)
 ///
 /// Keep in mind that qubits are big-endian to match kron product standards.
-/// |abc> means q0=a, q1=b, q2=c
+/// `|abc>` means `q0=a`, `q1=b`, `q2=c`
 ///
 /// # Examples
 /// ```
@@ -120,7 +120,7 @@ pub fn measure_probs<P: Precision>(
 /// `measure_prob` for details.
 ///
 /// Keep in mind that qubits are big-endian to match kron product standards.
-/// |abc> means q0=a, q1=b, q2=c
+/// `|abc>` means `q0=a`, `q1=b`, `q2=c`
 ///
 /// # Examples
 /// ```
@@ -168,8 +168,13 @@ pub fn soft_measure<P: Precision>(
         .sum()
 }
 
+/// A set of measured results we want to receive (used to avoid the randomness of measurement if
+/// a given result is desired).
+#[derive(Debug)]
 pub struct MeasuredCondition<P: Precision> {
+    /// Value which was measured
     pub measured: u64,
+    /// Chance of having received that value if known.
     pub prob: Option<P>,
 }
 
@@ -205,7 +210,7 @@ pub fn measure<P: Precision>(
 /// Normalize the output state such that it matches only states which produce the `measured`
 /// result and has the same magnitude.
 /// This is done by zeroing out the states which cannot give `measured`, and dividing the remaining
-/// by the sqrt(1/p) for p=`measured_prob`. See `measure_prob` for details.
+/// by the `sqrt(1/p)` for p=`measured_prob`. See `measure_prob` for details.
 pub fn measure_state<P: Precision>(
     n: u64,
     indices: &[u64],

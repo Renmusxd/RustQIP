@@ -1,14 +1,14 @@
 extern crate qip;
 
-use qip::*;
 use qip::common_circuits::epr_pair;
+use qip::*;
 
 fn run_alice(b: &mut OpBuilder, epr_alice: Qubit, bit_a: bool, bit_b: bool) -> Qubit {
     match (bit_a, bit_b) {
         (false, false) => epr_alice,
         (false, true) => b.x(epr_alice),
         (true, false) => b.z(epr_alice),
-        (true, true) => b.y(epr_alice)
+        (true, true) => b.y(epr_alice),
     }
 }
 
@@ -37,7 +37,10 @@ fn main() -> Result<(), &'static str> {
         let q_alice = run_alice(&mut b, epr_alice, bit_a, bit_b);
         let (bob_a, bob_b) = run_bob(&mut b, q_alice, epr_bob);
 
-        println!("Alice: ({:?},{:?})  \tBob: ({:?},{:?})", bit_a, bit_b, bob_a, bob_b);
+        println!(
+            "Alice: ({:?},{:?})  \tBob: ({:?},{:?})",
+            bit_a, bit_b, bob_a, bob_b
+        );
     }
 
     Ok(())

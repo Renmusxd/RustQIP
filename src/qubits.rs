@@ -9,16 +9,25 @@ use crate::types::Precision;
 use num::Zero;
 
 /// Possible relations to a parent qubit
+#[derive(Debug)]
 pub enum Parent {
+    /// A set of owned parents by a given qubit, that qubit has the union of all indices of
+    /// its parents. The transition is governed by the StateModifier if present.
     Owned(Vec<Qubit>, Option<StateModifier>),
+    /// A single shared parent, the child has a subsection of the indices of the parent.
     Shared(Rc<Qubit>),
 }
 
 /// A qubit object, possible representing multiple physical qubit indices.
 pub struct Qubit {
+    /// The set of indices represented by this qubit.
     pub indices: Vec<u64>,
+    /// The parent(s) of this qubit (prior in time in the quantum circuit).
     pub parent: Option<Parent>,
+    /// Additional dependencies for this qubit (such as if it relies on the classical measurements
+    /// of other qubits).
     pub deps: Option<Vec<Rc<Qubit>>>,
+    /// The unique ID of this qubit.
     pub id: u64,
 }
 
@@ -124,22 +133,23 @@ impl Qubit {
         ))
     }
 
+    /// Make a measurement handle and a qubit which depends on that measurement.
     pub fn make_measurement_handle(id: u64, q: Qubit) -> (Qubit, MeasurementHandle) {
         let indices = q.indices.clone();
         let shared_parent = Rc::new(q);
+        let handle = MeasurementHandle::new(&shared_parent);
         (
             Qubit {
                 indices,
-                parent: Some(Parent::Shared(shared_parent.clone())),
+                parent: Some(Parent::Shared(shared_parent)),
                 deps: None,
                 id,
             },
-            MeasurementHandle {
-                qubit: shared_parent,
-            },
+            handle,
         )
     }
 
+    /// Add additional qubit dependencies to a given qubit.
     pub fn add_deps(q: Qubit, deps: Vec<Rc<Qubit>>) -> Qubit {
         Qubit {
             indices: q.indices,
@@ -192,11 +202,14 @@ impl fmt::Debug for Qubit {
     }
 }
 
+/// A qubit handle for using when setting initial states for the circuit.
+#[derive(Debug)]
 pub struct QubitHandle {
     indices: Vec<u64>,
 }
 
 impl QubitHandle {
+    /// Make an initial state for the handle using an index: `|index>`
     pub fn make_init_from_index<P: Precision>(
         &self,
         index: u64,
@@ -207,6 +220,8 @@ impl QubitHandle {
             Err("Index too large for QubitHandle")
         }
     }
+
+    /// Make an initial state for the handle given a fully qualified state: `a|0> + b|1> + c|2> ...`
     pub fn make_init_from_state<P: Precision>(
         &self,
         state: Vec<Complex<P>>,
@@ -216,14 +231,6 @@ impl QubitHandle {
         } else {
             Err("State not correct size for QubitHandle (must be 2^n)")
         }
-    }
-
-    pub fn init_index<P: Precision>(&self, index: u64) -> QubitInitialState<P> {
-        self.make_init_from_index(index).unwrap()
-    }
-
-    pub fn init_state<P: Precision>(&self, state: Vec<Complex<P>>) -> QubitInitialState<P> {
-        self.make_init_from_state(state).unwrap()
     }
 }
 
@@ -237,10 +244,18 @@ pub trait NonUnitaryBuilder {
     fn measure_basis(&mut self, q: Qubit, phase: f64) -> (Qubit, MeasurementHandle);
 }
 
+/// A function which takes a builder, a qubit, and a set of measured values, and constructs a
+/// circuit, outputting the resulting qubit.
 type SingleQubitSideChannelFn =
     dyn Fn(&mut dyn UnitaryBuilder, Qubit, &[u64]) -> Result<Qubit, &'static str>;
+
+/// A function which takes a builder, a vec of qubits, and a set of measured values, and constructs a
+/// circuit, outputting the resulting qubits.
 type SideChannelFn =
     dyn Fn(&mut dyn UnitaryBuilder, Vec<Qubit>, &[u64]) -> Result<Vec<Qubit>, &'static str>;
+
+/// A function which takes a builder, a qubit with possibly extra indices, and a set of measured
+/// values, and constructs a circuit, outputting the resulting qubit.
 type SideChannelHelperFn =
     dyn Fn(&mut dyn UnitaryBuilder, Qubit, &[u64]) -> Result<Vec<Qubit>, &'static str>;
 
@@ -274,6 +289,9 @@ pub trait UnitaryBuilder {
         natural_order: bool,
     ) -> Result<Qubit, &'static str>;
 
+    /// Build a sparse matrix op from `f`, apply to `q`, if `q` is multiple indices and
+    /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
+    /// size for the number of indices in `q` (mat.len() == 2^n).
     fn sparse_mat_from_fn(
         &mut self,
         name: &str,
@@ -522,6 +540,12 @@ pub trait UnitaryBuilder {
         self.sidechannel_helper(qs, handles, f)
     }
 
+    /// A helper function for the classical_sidechannel. Takes a set of qubits to pass to the
+    /// subcircuit, a set of handles whose measured values will also be passed, and a function
+    /// which matches to description of `SideChannelHelperFn`. Returns a set of qubits whose indices
+    /// match those of the input qubits.
+    /// This shouldn't be called in circuits, and is a helper to `classical_sidechannel` and
+    /// `single_qubit_classical_sidechannel`.
     fn sidechannel_helper(
         &mut self,
         qs: Vec<Qubit>,
@@ -552,7 +576,7 @@ pub fn apply_sparse_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
 }
 
 /// A basic builder for unitary and non-unitary ops.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct OpBuilder {
     qubit_index: u64,
     op_id: u64,
@@ -732,7 +756,7 @@ impl UnitaryBuilder for OpBuilder {
         ));
         let q = Qubit::merge_with_modifier(self.get_op_id(), qs, modifier);
 
-        let deps = handles.iter().map(|m| m.qubit.clone()).collect();
+        let deps = handles.iter().map(|m| m.clone_qubit()).collect();
         let q = Qubit::add_deps(q, deps);
         let (qs, _) = self.split_absolute_many(q, index_groups).unwrap();
         qs
@@ -743,6 +767,12 @@ impl UnitaryBuilder for OpBuilder {
 pub struct ConditionalContextBuilder<'a> {
     parent_builder: &'a mut dyn UnitaryBuilder,
     conditioned_qubit: Option<Qubit>,
+}
+
+impl<'a> fmt::Debug for ConditionalContextBuilder<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ConditionalContextBuilder({:?})", self.conditioned_qubit)
+    }
 }
 
 impl<'a> ConditionalContextBuilder<'a> {

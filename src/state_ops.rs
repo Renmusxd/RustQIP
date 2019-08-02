@@ -12,23 +12,59 @@ use crate::iterators::*;
 use crate::types::Precision;
 use crate::utils::*;
 use std::cmp::{max, min};
+use std::fmt;
 
 /// Types of unitary ops which can be applied to a state.
 pub enum QubitOp {
-    // Indices, Matrix data
+    /// Indices, Matrix data
     Matrix(Vec<u64>, Vec<Complex<f64>>),
-    // Indices, Matrix data
+    /// Indices, Matrix data
     SparseMatrix(Vec<u64>, Vec<Vec<(u64, Complex<f64>)>>),
-    // A indices, B indices
+    /// A indices, B indices
     Swap(Vec<u64>, Vec<u64>),
-    // Control indices, Op indices, Op
+    /// Control indices, Op indices, Op
     Control(Vec<u64>, Vec<u64>, Box<QubitOp>),
-    // Function which maps |x,y> to |x,f(x) xor y>
+    /// Function which maps |x,y> to |x,f(x) xor y>
     Function(
         Vec<u64>,
         Vec<u64>,
         Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ),
+}
+
+impl fmt::Debug for QubitOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let (name, indices) = match self {
+            QubitOp::Matrix(indices, _) => ("Matrix".to_string(), indices.clone()),
+            QubitOp::SparseMatrix(indices, _) => ("SparseMatrix".to_string(), indices.clone()),
+            QubitOp::Swap(a_indices, b_indices) => {
+                let indices: Vec<_> = a_indices
+                    .iter()
+                    .cloned()
+                    .chain(b_indices.iter().cloned())
+                    .collect();
+                ("Swap".to_string(), indices)
+            }
+            QubitOp::Control(indices, _, op) => {
+                let name = format!("C({:?})", *op);
+                (name, indices.clone())
+            }
+            QubitOp::Function(a_indices, b_indices, _) => {
+                let indices: Vec<_> = a_indices
+                    .iter()
+                    .cloned()
+                    .chain(b_indices.iter().cloned())
+                    .collect();
+                ("F".to_string(), indices)
+            }
+        };
+        let int_strings = indices
+            .iter()
+            .map(|x| x.clone().to_string())
+            .collect::<Vec<String>>();
+
+        write!(f, "{}[{}]", name, int_strings.join(", "))
+    }
 }
 
 /// Make a Matrix QubitOp

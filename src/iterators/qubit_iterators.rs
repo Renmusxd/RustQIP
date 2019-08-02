@@ -9,6 +9,7 @@ use crate::types::Precision;
 use crate::utils::*;
 
 /// Iterator which provides the indices of nonzero columns for a given row of a matrix
+#[derive(Debug)]
 pub struct MatrixOpIterator<'a, P: Precision> {
     n: u64,
     data: &'a [Complex<P>],
@@ -16,6 +17,8 @@ pub struct MatrixOpIterator<'a, P: Precision> {
 }
 
 impl<'a, P: Precision> MatrixOpIterator<'a, P> {
+    /// Build a new iterator using the row index, the number of qubits in the matrix, and the
+    /// complex values of the matrix.
     pub fn new(row: u64, n: u64, data: &'a [Complex<P>]) -> MatrixOpIterator<P> {
         let lower = get_flat_index(n, row, 0) as usize;
         let upper = get_flat_index(n, row, 1 << n) as usize;
@@ -48,13 +51,15 @@ impl<'a, P: Precision> std::iter::Iterator for MatrixOpIterator<'a, P> {
     }
 }
 
-/// Iterator which provides the indices of nonzero columns for a given row of a matrix
+/// Iterator which provides the indices of nonzero columns for a given row of a sparse matrix
+#[derive(Debug)]
 pub struct SparseMatrixOpIterator<'a, P: Precision> {
     data: &'a [(u64, Complex<P>)],
     last_index: Option<u64>,
 }
 
 impl<'a, P: Precision> SparseMatrixOpIterator<'a, P> {
+    /// Build a new iterator using the row index, and the sparse matrix data.
     pub fn new(row: u64, data: &'a [Vec<(u64, Complex<P>)>]) -> SparseMatrixOpIterator<P> {
         SparseMatrixOpIterator {
             data: &data[row as usize],
@@ -84,6 +89,7 @@ impl<'a, P: Precision> std::iter::Iterator for SparseMatrixOpIterator<'a, P> {
 }
 
 /// Iterator which provides the indices of nonzero columns for a given row of a COp
+#[derive(Debug)]
 pub struct ControlledOpIterator<P: Precision, It: std::iter::Iterator<Item = (u64, Complex<P>)>> {
     row: u64,
     index_threshold: u64,
@@ -92,6 +98,8 @@ pub struct ControlledOpIterator<P: Precision, It: std::iter::Iterator<Item = (u6
 }
 
 impl<P: Precision, It: std::iter::Iterator<Item = (u64, Complex<P>)>> ControlledOpIterator<P, It> {
+    /// Build a new iterator using the row index, the number of controlling indices, the number of
+    /// op indices, and the iterator for the op.
     pub fn new<F: FnOnce(u64) -> It>(
         row: u64,
         n_control_indices: u64,
@@ -141,6 +149,7 @@ impl<P: Precision, It: std::iter::Iterator<Item = (u64, Complex<P>)>> std::iter:
 }
 
 /// Iterator which provides the indices of nonzero columns for a given row of a SwapOp
+#[derive(Debug)]
 pub struct SwapOpIterator<P: Precision> {
     row: u64,
     half_n: u64,
@@ -149,6 +158,8 @@ pub struct SwapOpIterator<P: Precision> {
 }
 
 impl<P: Precision> SwapOpIterator<P> {
+    /// Build a new iterator using the row index, and the total number of qubits being swapped
+    /// (should be a multiple of 2).
     pub fn new(row: u64, n_qubits: u64) -> SwapOpIterator<P> {
         SwapOpIterator {
             row,
@@ -175,7 +186,8 @@ impl<P: Precision> std::iter::Iterator for SwapOpIterator<P> {
     }
 }
 
-/// Iterator which provides the indices of nonzero columns for a given function f.
+/// Iterator which provides the indices of nonzero columns for a given function.
+#[derive(Debug)]
 pub struct FunctionOpIterator<P: Precision> {
     output_n: u64,
     x: u64,
@@ -186,6 +198,8 @@ pub struct FunctionOpIterator<P: Precision> {
 }
 
 impl<P: Precision> FunctionOpIterator<P> {
+    /// Build a new iterator using the row index, the number of qubits in the input register, the
+    /// number in the output register, and a function which maps rows to a column and a phase.
     pub fn new<F: Fn(u64) -> (u64, f64)>(
         row: u64,
         input_n: u64,

@@ -1,3 +1,4 @@
+/// Common circuits for general usage.
 use crate::qubits::{Qubit, UnitaryBuilder};
 use crate::OpBuilder;
 

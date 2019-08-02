@@ -3,7 +3,8 @@ use self::num::One;
 use crate::types::Precision;
 use num::Complex;
 
-/// Iterator which provides the indices of nonzero columns for a given row of a matrix
+/// Iterator which provides the indices of nonzero columns for a given row for a collection of ops.
+#[derive(Debug)]
 pub struct MultiOpIterator<'a, P: Precision> {
     iter_ns: &'a [u64],
     iter_outputs: &'a [&'a [(u64, Complex<P>)]],
@@ -12,6 +13,8 @@ pub struct MultiOpIterator<'a, P: Precision> {
 }
 
 impl<'a, P: Precision> MultiOpIterator<'a, P> {
+    /// Build a new iterator using the number of qubits in each sub iterator, and the outputs of
+    /// said iterators on a given row.
     pub fn new(
         iter_ns: &'a [u64],
         iter_outputs: &'a [&'a [(u64, Complex<P>)]],

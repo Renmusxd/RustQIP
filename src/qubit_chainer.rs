@@ -27,12 +27,14 @@ pub fn chain_vec<B: UnitaryBuilder>(b: &mut B, qs: Vec<Qubit>) -> VecQubitChain<
 }
 
 /// Chaining struct for a single qubit (which may have multiple indices)
+#[derive(Debug)]
 pub struct SingleQubitChain<'a, B: UnitaryBuilder> {
     builder: &'a mut B,
     q: Qubit,
 }
 
 /// Chaining struct for a pair of qubits (each may have multiple indices)
+#[derive(Debug)]
 pub struct DoubleQubitChain<'a, B: UnitaryBuilder> {
     builder: &'a mut B,
     qa: Qubit,
@@ -40,6 +42,7 @@ pub struct DoubleQubitChain<'a, B: UnitaryBuilder> {
 }
 
 /// Chaining struct for a vector of qubits (each may have multiple indices)
+#[derive(Debug)]
 pub struct VecQubitChain<'a, B: UnitaryBuilder> {
     builder: &'a mut B,
     qs: Vec<Qubit>,

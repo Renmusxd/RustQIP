@@ -48,7 +48,7 @@ fn apply_grover_iteration<P: Precision>(
     s: LocalQuantumState<P>,
 ) -> Result<LocalQuantumState<P>, &'static str> {
     let mut b = OpBuilder::new();
-    let q = b.qubit(s.n - 1)?;
+    let q = b.qubit(s.n() - 1)?;
     let anc = b.qubit(1)?;
 
     let (q, anc) = apply_uw(&mut b, q, anc, x)?;

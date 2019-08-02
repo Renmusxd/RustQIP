@@ -5,6 +5,7 @@ use num::complex::Complex;
 use self::num::{One, Zero};
 use crate::qubits::{Qubit, UnitaryBuilder};
 
+/// Apply the QFFT circuit to a given qubit using the builder.
 pub fn qfft<B: UnitaryBuilder>(builder: &mut B, q: Qubit) -> Qubit {
     let mut qs = builder.split_all(q);
     qs.reverse();
@@ -39,7 +40,7 @@ fn rec_qfft<B: UnitaryBuilder>(
     }
 }
 
-pub fn make_rm_mat(m: u64) -> Vec<Complex<f64>> {
+fn make_rm_mat(m: u64) -> Vec<Complex<f64>> {
     let phi = 2.0 * std::f64::consts::PI / f64::from(1 << m);
     vec![
         Complex::one(),

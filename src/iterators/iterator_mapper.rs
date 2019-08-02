@@ -22,6 +22,7 @@ pub fn sum_for_op_cols<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(
     fold_for_op_cols(nindices, row, op, init, |acc, entry| acc + f(entry))
 }
 
+/// Like `sum_for_op_cols` but takes multiple ops at once.
 pub fn sum_for_ops_cols<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(
     row: u64,
     ops: &[PrecisionQubitOp<P>],
@@ -51,6 +52,7 @@ pub fn sum_for_ops_cols<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(
     it.map(f).sum()
 }
 
+/// Fold across rows hitting nonzero columns.
 pub fn fold_for_op_cols<P: Precision, T, F: Fn(T, (u64, Complex<P>)) -> T>(
     nindices: u64,
     row: u64,
