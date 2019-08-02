@@ -385,8 +385,13 @@ impl<P: Precision> LocalQuantumState<P> {
         })
     }
 
+    /// Return a reference to the internal state.
+    pub fn state_ref(&self) -> &Vec<Complex<P>> {
+        &self.state
+    }
+
     /// Return a mutable reference to the internal state.
-    pub fn state_ref(&mut self) -> &mut Vec<Complex<P>> {
+    pub fn mut_state_ref(&mut self) -> &mut Vec<Complex<P>> {
         &mut self.state
     }
 
