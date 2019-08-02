@@ -29,11 +29,11 @@ let b_handle = qb.handle();
 // Define circuit
 // First apply an H to q1
 let q = b.hadamard(q);
-// Then run this subcircuit conditioned on q1, applied to q2 and q3
+// Then run this subcircuit conditioned on q, applied to qa and qb
 let (q, _) = condition(&mut b, q, (qa, qb), |c, (qa, qb)| {
     c.swap(qa, qb)
 })?;
-// Finally apply H to q1 again.
+// Finally apply H to q again.
 let q = b.hadamard(q);
 
 // Add a measurement to the first qubit, save a reference so we can get the result later.
