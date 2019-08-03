@@ -1,15 +1,10 @@
-extern crate num;
-
-use std::marker::PhantomData;
-
-use num::complex::Complex;
-
 use crate::measurement_ops::MeasuredCondition;
-use crate::pipeline;
-use crate::pipeline::{get_required_state_size_from_frontier, InitialState, QuantumState};
-use crate::qubits::Qubit;
+use crate::pipeline::{
+    get_required_state_size_from_frontier, run_with_statebuilder, InitialState, QuantumState,
+};
 use crate::state_ops::{get_index, num_indices, QubitOp};
-use crate::types::Precision;
+use crate::{Complex, Precision, Qubit};
+use std::marker::PhantomData;
 
 struct PrintPipeline<P: Precision> {
     n: u64,
@@ -169,7 +164,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
 
 /// Print out an ASCII representation of the circuit.
 pub fn run_debug(q: &Qubit) -> Result<(), &'static str> {
-    pipeline::run_with_statebuilder(q, |qs| {
+    run_with_statebuilder(q, |qs| {
         let n = get_required_state_size_from_frontier(&qs);
         Ok(PrintPipeline::<f32>::new(n))
     })

@@ -1,22 +1,19 @@
-extern crate num;
 extern crate rayon;
 
 use std::cmp::max;
 use std::collections::HashMap;
 use std::collections::{BinaryHeap, VecDeque};
 
-use num::complex::Complex;
 use rayon::prelude::*;
 
-use self::num::{One, Zero};
 use crate::measurement_ops::{
     measure, measure_prob, measure_probs, prob_magnitude, soft_measure, MeasuredCondition,
 };
-use crate::qubits::*;
+use crate::qubits::Parent;
 use crate::state_ops::*;
-use crate::types::Precision;
-use crate::utils;
 use crate::utils::flip_bits;
+use crate::*;
+use num::{One, Zero};
 use std::fmt;
 use std::rc::Rc;
 

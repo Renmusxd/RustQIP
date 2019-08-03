@@ -3,7 +3,7 @@ extern crate num;
 use num::complex::Complex;
 
 use self::num::{One, Zero};
-use crate::qubits::{Qubit, UnitaryBuilder};
+use crate::{Qubit, UnitaryBuilder};
 
 /// Apply the QFFT circuit to a given qubit using the builder.
 pub fn qfft<B: UnitaryBuilder>(builder: &mut B, q: Qubit) -> Qubit {

@@ -1,9 +1,7 @@
-extern crate num;
 extern crate rayon;
 
-use std::iter::Sum;
-
 use num::Float;
+use std::iter::Sum;
 
 /// The float precision of the circuit.
 pub trait Precision: Default + Float + Sum + Send + Sync {}

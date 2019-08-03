@@ -1,18 +1,15 @@
 /// Contains functions, structs, and enums for storing and manipulating the quantum state.
-extern crate num;
 extern crate rayon;
-
-use num::complex::Complex;
 use rayon::prelude::*;
 
-use PrecisionQubitOp::*;
-
-use self::num::One;
 use crate::iterators::*;
-use crate::types::Precision;
 use crate::utils::*;
+use crate::{Complex, Precision};
+use num::One;
 use std::cmp::{max, min};
 use std::fmt;
+
+use PrecisionQubitOp::*;
 
 /// Types of unitary ops which can be applied to a state.
 pub enum QubitOp {

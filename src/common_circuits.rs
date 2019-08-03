@@ -1,6 +1,5 @@
 /// Common circuits for general usage.
-use crate::qubits::{Qubit, UnitaryBuilder};
-use crate::OpBuilder;
+use crate::{OpBuilder, Qubit, UnitaryBuilder};
 
 /// Condition a circuit defined by `f` using `cq`.
 pub fn condition<F, QS>(

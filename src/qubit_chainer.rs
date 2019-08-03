@@ -10,6 +10,7 @@
 /// ```
 use crate::{Qubit, UnitaryBuilder};
 use num::Complex;
+use std::ops::Not;
 
 /// Produce a chaining struct for a given qubit `q`, operations will be applied using `b`.
 pub fn chain<B: UnitaryBuilder>(b: &mut B, q: Qubit) -> SingleQubitChain<B> {
@@ -100,11 +101,7 @@ impl<'a, B: UnitaryBuilder> SingleQubitChain<'a, B> {
         let q = self.builder.sparse_mat(name, self.q, mat, natural_order)?;
         Ok(Self::new(self.builder, q))
     }
-    /// Apply the NOT operation to the contained qubit.
-    pub fn not(self) -> Self {
-        let q = self.builder.not(self.q);
-        Self::new(self.builder, q)
-    }
+
     /// Apply the X operation to the contained qubit.
     pub fn x(self) -> Self {
         let q = self.builder.x(self.q);
@@ -142,6 +139,15 @@ impl<'a, B: UnitaryBuilder> SingleQubitChain<'a, B> {
     pub fn apply_split(self, f: impl FnOnce(&mut B, Qubit) -> Vec<Qubit>) -> VecQubitChain<'a, B> {
         let qs = f(self.builder, self.q);
         VecQubitChain::new(self.builder, qs)
+    }
+}
+
+impl<'a, B: UnitaryBuilder> Not for SingleQubitChain<'a, B> {
+    type Output = SingleQubitChain<'a, B>;
+
+    fn not(self) -> Self {
+        let q = self.builder.not(self.q);
+        Self::new(self.builder, q)
     }
 }
 

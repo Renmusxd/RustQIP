@@ -1,12 +1,8 @@
-extern crate num;
 extern crate rand;
 extern crate rayon;
-
-use std::cmp::{max, min};
-
-use crate::types::Precision;
-use num::complex::Complex;
+use crate::{Complex, Precision};
 use rayon::prelude::*;
+use std::cmp::{max, min};
 
 /// Get total magnitude of state.
 pub fn prob_magnitude<P: Precision>(input: &[Complex<P>], multithread: bool) -> P {

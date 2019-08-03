@@ -59,13 +59,17 @@
 //! ```
 //!
 
+pub use self::builders::{OpBuilder, UnitaryBuilder};
 pub use self::common_circuits::condition;
 pub use self::pipeline::{run_local, run_local_with_init, run_with_state, QuantumState};
 pub use self::pipeline_debug::run_debug;
 pub use self::qubit_chainer::{chain, chain_tuple, chain_vec};
-pub use self::qubits::{OpBuilder, Qubit, UnitaryBuilder};
+pub use self::qubits::Qubit;
+pub use self::types::Precision;
 pub use num::Complex;
 
+/// Opbuilder and such
+pub mod builders;
 /// Common circuits for general usage.
 pub mod common_circuits;
 /// Code for building pipelines.
