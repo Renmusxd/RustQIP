@@ -74,16 +74,7 @@ fn test_teleport() -> Result<(), &'static str> {
         let random_angle = std::f64::consts::PI * i as f64 / 180.0;
 
         let mut b = OpBuilder::new();
-        let q_alice = b.qubit(1)?;
-        let q_bob = b.qubit(1)?;
-
-        //        // EPR pair
-        let q_alice = b.hadamard(q_alice);
-        let mut c = b.with_condition(q_alice);
-        let epr_bob = c.not(q_bob);
-        let epr_alice = c.release_qubit();
-
-        //        let (epr_alice, epr_bob) = epr_pair(&mut b, 1);
+        let (epr_alice, epr_bob) = epr_pair(&mut b, 1);
 
         // Give Alice her EPR qubit
         let handle = run_alice(&mut b, epr_alice, random_angle)?;

@@ -63,7 +63,7 @@ pub use self::common_circuits::condition;
 pub use self::pipeline::{run_local, run_local_with_init, run_with_state, QuantumState};
 pub use self::pipeline_debug::run_debug;
 pub use self::qubit_chainer::{chain, chain_tuple, chain_vec};
-pub use self::qubits::{NonUnitaryBuilder, OpBuilder, Qubit, UnitaryBuilder};
+pub use self::qubits::{OpBuilder, Qubit, UnitaryBuilder};
 pub use num::Complex;
 
 /// Common circuits for general usage.

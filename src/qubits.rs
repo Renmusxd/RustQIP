@@ -234,16 +234,6 @@ impl QubitHandle {
     }
 }
 
-/// A builder which supports non-unitary operations
-pub trait NonUnitaryBuilder {
-    /// Add a measure op to the pipeline for `q` and return a reference which can
-    /// later be used to access the measured value from the results of `pipeline::run`.
-    fn measure(&mut self, q: Qubit) -> (Qubit, MeasurementHandle);
-
-    /// Measure in the basis of `cos(phase)|0> + sin(phase)|1>`
-    fn measure_basis(&mut self, q: Qubit, phase: f64) -> (Qubit, MeasurementHandle);
-}
-
 /// A function which takes a builder, a qubit, and a set of measured values, and constructs a
 /// circuit, outputting the resulting qubit.
 type SingleQubitSideChannelFn =
@@ -580,6 +570,8 @@ pub fn apply_sparse_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
 pub struct OpBuilder {
     qubit_index: u64,
     op_id: u64,
+    temp_zero_qubits: Vec<Qubit>,
+    temp_one_qubits: Vec<Qubit>
 }
 
 impl OpBuilder {
@@ -595,9 +587,23 @@ impl OpBuilder {
         } else {
             let base_index = self.qubit_index;
             self.qubit_index += n;
-
             Qubit::new(self.get_op_id(), (base_index..self.qubit_index).collect())
         }
+    }
+
+    /// Builds a vector of new qubits
+    pub fn qubits(&mut self, ns: &[u64]) -> Result<Vec<Qubit>, &'static str> {
+        ns.iter().try_for_each(|n| {
+            if *n == 0 {
+                Err("Qubit n must be greater than 0.")
+            } else {
+                Ok(())
+            }
+        }).map(|_| {
+            ns.iter().map(|n| {
+                self.qubit(*n).unwrap()
+            }).collect()
+        })
     }
 
     /// If you just plan to call unwrap this is cleaner.
@@ -613,19 +619,51 @@ impl OpBuilder {
         Ok((q, h))
     }
 
-    fn get_op_id(&mut self) -> u64 {
-        let tmp = self.op_id;
-        self.op_id += 1;
-        tmp
+    /// Get a temporary qubit with value `|0n>` or `|1n>`.
+    /// This value is not checked and may be subject to the noise of your circuit, since it can
+    /// recycle qubits which were returned with `return_temp_qubit`. If not enough qubits have been
+    /// returned, then new qubits may be allocated (and initialized with the correct value).
+    pub fn get_temp_qubit(&mut self, n: u64, value: bool) -> Qubit {
+        let op_vec = if value {
+            &mut self.temp_one_qubits
+        } else {
+            &mut self.temp_zero_qubits
+        };
+        let mut acquired_qubits = op_vec.split_off(n as usize);
+        if acquired_qubits.len() < n as usize {
+            let remaining = n - acquired_qubits.len() as u64;
+            let q = self.qubit(remaining).unwrap();
+            let q = if value {
+                self.not(q)
+            } else {
+                q
+            };
+            acquired_qubits.push(q);
+        };
+        self.merge(acquired_qubits)
     }
-}
 
-impl NonUnitaryBuilder for OpBuilder {
-    fn measure(&mut self, q: Qubit) -> (Qubit, MeasurementHandle) {
+    /// Return a temporary qubit which is supposed to have a given value `|0n>` or `|1n>`
+    /// This value is not checked and may be subject to the noise of your circuit, in turn causing
+    /// noise to future calls to `get_temp_qubit`.
+    pub fn return_temp_qubit(&mut self, q: Qubit, value: bool) {
+        let qs = self.split_all(q);
+        let op_vec = if value {
+            &mut self.temp_one_qubits
+        } else {
+            &mut self.temp_zero_qubits
+        };
+        op_vec.extend(qs.into_iter());
+    }
+
+    /// Add a measure op to the pipeline for `q` and return a reference which can
+    /// later be used to access the measured value from the results of `pipeline::run`.
+    pub fn measure(&mut self, q: Qubit) -> (Qubit, MeasurementHandle) {
         self.measure_basis(q, 0.0)
     }
 
-    fn measure_basis(&mut self, q: Qubit, angle: f64) -> (Qubit, MeasurementHandle) {
+    /// Measure in the basis of `cos(phase)|0> + sin(phase)|1>`
+    pub fn measure_basis(&mut self, q: Qubit, angle: f64) -> (Qubit, MeasurementHandle) {
         let id = self.get_op_id();
         let modifier = StateModifier::new_measurement_basis(
             String::from("measure"),
@@ -636,6 +674,12 @@ impl NonUnitaryBuilder for OpBuilder {
         let modifier = Some(modifier);
         let q = Qubit::merge_with_modifier(id, vec![q], modifier);
         Qubit::make_measurement_handle(self.get_op_id(), q)
+    }
+
+    fn get_op_id(&mut self) -> u64 {
+        let tmp = self.op_id;
+        self.op_id += 1;
+        tmp
     }
 }
 
@@ -973,7 +1017,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
                   q: Qubit,
                   ms: &[u64]|
                   -> Result<Vec<Qubit>, &'static str> {
-                let (cq, q) = b.split(q, conditioned_indices.clone())?;
+                let (cq, q) = b.split_absolute(q, conditioned_indices.clone())?;
                 let mut b = b.with_condition(cq);
                 f(&mut b, q, ms)
             },
@@ -982,7 +1026,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         let index_groups: Vec<_> = qs.iter().map(|q| q.indices.clone()).collect();
         let q = self.merge(qs);
         let q = self.merge(vec![cq, q]);
-        let (cq, q) = self.split(q, cindices_clone).unwrap();
+        let (cq, q) = self.split_absolute(q, cindices_clone).unwrap();
         self.set_conditional_qubit(cq);
         let (qs, _) = self.split_absolute_many(q, index_groups).unwrap();
         qs
