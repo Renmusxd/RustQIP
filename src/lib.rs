@@ -66,6 +66,8 @@ pub use self::qubit_chainer::{chain, chain_tuple, chain_vec};
 pub use self::qubits::{OpBuilder, Qubit, UnitaryBuilder};
 pub use num::Complex;
 
+/// Common circuits for boolean logic
+pub mod boolean_circuits;
 /// Common circuits for general usage.
 pub mod common_circuits;
 /// Code for building pipelines.
