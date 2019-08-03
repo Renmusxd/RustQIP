@@ -3,6 +3,9 @@
 Quantum Computing library leveraging graph building to build efficient quantum circuit
 simulations.
 
+[![qip on crates.io](https://img.shields.io/crates/v/qip.svg)](https://crates.io/crates/qip)
+[![qip docs](https://img.shields.io/badge/docs-docs.rs-orange.svg)](https://docs.rs/qip)
+
 See all the examples in the [examples directory](https://github.com/Renmusxd/RustQIP/tree/master/examples) of the Github repository.
 
 # Example (CSWAP)
