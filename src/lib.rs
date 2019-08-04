@@ -84,6 +84,8 @@ pub mod qubit_chainer;
 pub mod qubits;
 /// Commonly used types.
 pub mod types;
+/// Break unitary matrices into circuits.
+pub mod unitary_decomposition;
 /// Commonly used short functions.
 pub mod utils;
 
