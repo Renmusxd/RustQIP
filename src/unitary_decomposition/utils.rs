@@ -13,6 +13,11 @@ fn gray_code(n: u64) -> Vec<u64> {
 }
 
 
+// Need a good algorithm for consolidating entries in sparse unitary matrices other than iterating
+// through all the gray codes, this is basically a Steiner tree on a graph where the graph is the
+// vertices of a n-dimensional hypercube, it just so happens a paper was written on this:
+// https://www.researchgate.net/publication/220617458_Near_Optimal_Bounds_for_Steiner_Trees_in_the_Hypercube
+
 
 #[cfg(test)]
 mod unitary_decomp_tests {
