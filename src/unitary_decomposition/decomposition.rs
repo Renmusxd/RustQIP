@@ -417,7 +417,7 @@ mod unitary_decomp_tests {
                 (1, (0.0, -std::f64::consts::FRAC_1_SQRT_2)),
             ],
             vec![
-                (0, (0.0, std::f64::consts::FRAC_1_SQRT_2)),
+                (0, (0.0, -std::f64::consts::FRAC_1_SQRT_2)),
                 (1, (std::f64::consts::FRAC_1_SQRT_2, 0.0)),
             ],
             vec![(2, (1.0, 0.0))],
