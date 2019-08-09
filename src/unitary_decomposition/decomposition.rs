@@ -41,6 +41,18 @@ pub struct BaseUnitary<P: Precision> {
     dat: [Complex<P>; 4],
 }
 
+fn print_sparse<P: Precision + Debug>(v: &[Vec<(u64, Complex<P>)>]) {
+    println!("========================");
+    v.iter().for_each(|v| {
+        v.iter().for_each(|(col, val)| {
+            let (r, p) = val.to_polar();
+            print!("({:?}, {:?}||{:?})\t", col, r, p)
+        });
+        println!();
+    });
+    println!("========================");
+}
+
 /// Use the ops and base unitary to reconstruct the decomposed unitary op.
 pub fn reconstruct_unitary<P: Precision + Clone>(
     n: u64,
@@ -59,24 +71,20 @@ pub fn reconstruct_unitary<P: Precision + Clone>(
         })
         .collect();
 
-    ops.iter().for_each(|op| {
-        match op {
-            DecompOp::Rotation {
-                from_bits,
-                to_bits,
-                theta,
-                ..
-            } => apply_controlled_rotation(*from_bits, *to_bits, *theta, &mut base_mat),
-            DecompOp::Phase { row, phi } => {
-                apply_phase_to_row(*phi, &mut base_mat[(*row) as usize])
-            }
-        }
+    ops.iter().for_each(|op| match op {
+        DecompOp::Rotation {
+            from_bits,
+            to_bits,
+            theta,
+            ..
+        } => apply_controlled_rotation(*from_bits, *to_bits, *theta, &mut base_mat),
+        DecompOp::Phase { row, phi } => apply_phase_to_row(*phi, &mut base_mat[(*row) as usize]),
     });
 
     base_mat
 }
 
-fn consolidate_column<P: Precision>(
+fn consolidate_column<P: Precision + Debug>(
     pathfinder: &BitPather,
     column: u64,
     sparse_mat: &mut [Vec<(u64, Complex<P>)>],
@@ -99,12 +107,20 @@ fn consolidate_column<P: Precision>(
     pathfinder.path(column, &nonzeros)?.into_iter().try_fold(
         vec![],
         |mut ops, (from_code, to_code)| {
+
+            println!("Starting: ");
+            print_sparse(&sparse_mat);
+
+            println!("Column: {:b}\tFrom: {:b}\tTo: {:b}", column, from_code, to_code);
+
             let from_row = &sparse_mat[from_code as usize];
             let to_row = &sparse_mat[to_code as usize];
 
-            let from_val = sparse_value_at_col(column, from_row).copied()
+            let from_val = sparse_value_at_col(column, from_row)
+                .copied()
                 .unwrap_or_default();
-            let to_val = sparse_value_at_col(column, to_row).copied()
+            let to_val = sparse_value_at_col(column, to_row)
+                .copied()
                 .unwrap_or_default();
 
             let (from_r, from_phi) = from_val.to_polar();
@@ -122,7 +138,10 @@ fn consolidate_column<P: Precision>(
                 ops.push(DecompOp::Phase {
                     row: from_code,
                     phi: from_phi,
-                })
+                });
+
+                println!("Applied phase (from_code: {:?}\tphi: {:?}): ", from_code, -from_phi);
+                print_sparse(&sparse_mat);
             }
 
             if theta != P::zero() {
@@ -142,6 +161,9 @@ fn consolidate_column<P: Precision>(
                     bit_index: mask_index,
                     theta,
                 });
+
+                println!("Applied rotation (from: {:?}\tto: {:?}\tphi: {:?}): ", from_code, to_code, theta);
+                print_sparse(&sparse_mat);
             }
 
             let phi = sparse_value_at_coords(to_code as usize, column, &sparse_mat)
@@ -149,7 +171,10 @@ fn consolidate_column<P: Precision>(
                 .unwrap_or_else(P::zero);
             if phi != P::zero() {
                 apply_phase_to_row(-phi, &mut sparse_mat[to_code as usize]);
-                ops.push(DecompOp::Phase { row: to_code, phi })
+                ops.push(DecompOp::Phase { row: to_code, phi });
+
+                println!("Applied phase (to_code: {:?}\tphi: {:?}): ", to_code, -phi);
+                print_sparse(&sparse_mat);
             }
 
             Ok(ops)
@@ -164,8 +189,7 @@ pub type DecompositionSuccess<P> = (Vec<DecompOp<P>>, BaseUnitary<P>);
 /// is not a controlled single qubit op.
 pub type DecompositionFailure<P> = (Vec<DecompOp<P>>, Vec<Vec<(u64, Complex<P>)>>);
 /// The result of a decomposition.
-pub type DecompositionResult<P> =
-    Result<DecompositionSuccess<P>, DecompositionFailure<P>>;
+pub type DecompositionResult<P> = Result<DecompositionSuccess<P>, DecompositionFailure<P>>;
 
 /// Decompose the unitary op (represented as a vector of sparse column/values).
 /// This uses the row-by-row rotation algorithm in gray-coding space to move weights from `|xj>` to
@@ -260,18 +284,22 @@ mod unitary_decomp_tests {
     const EPSILON: f64 = 0.00000000001;
 
     fn sparse_from_reals<P: Precision>(v: Vec<Vec<(u64, P)>>) -> Vec<Vec<(u64, Complex<P>)>> {
+        let v = v
+            .into_iter()
+            .map(|v| {
+                v.into_iter()
+                    .map(|(col, r)| (col, (r, P::zero())))
+                    .collect()
+            })
+            .collect();
+        sparse_from_tuples(v)
+    }
+
+    fn sparse_from_tuples<P: Precision>(v: Vec<Vec<(u64, (P, P))>>) -> Vec<Vec<(u64, Complex<P>)>> {
         v.into_iter()
             .map(|v| {
                 v.into_iter()
-                    .map(|(col, val)| {
-                        (
-                            col,
-                            Complex {
-                                re: val,
-                                im: P::zero(),
-                            },
-                        )
-                    })
+                    .map(|(col, (a, b))| (col, Complex { re: a, im: b }))
                     .collect()
             })
             .collect()
@@ -354,6 +382,54 @@ mod unitary_decomp_tests {
         let flat_v = flat_round(v.clone(), 10);
 
         let (ops, base) = decompose_unitary(2, v, EPSILON)?.map_err(|_| "Failed to decompose")?;
+        let rebuilt = reconstruct_unitary(2, &ops, &base);
+
+        let flat_r = flat_round(rebuilt.clone(), 10);
+        assert_eq!(flat_v, flat_r);
+        Ok(())
+    }
+
+    #[test]
+    fn test_rotated_eighth_decomp() -> Result<(), &'static str> {
+        let (s, c) = std::f64::consts::FRAC_PI_8.sin_cos();
+        let v = vec![
+            vec![(0, c), (2, -s)],
+            vec![(1, 1.0)],
+            vec![(0, s), (2, c)],
+            vec![(3, 1.0)],
+        ];
+        let v = sparse_from_reals(v);
+        let flat_v = flat_round(v.clone(), 10);
+
+        let (ops, base) = decompose_unitary(2, v, EPSILON)?.map_err(|_| "Failed to decompose")?;
+        let rebuilt = reconstruct_unitary(2, &ops, &base);
+
+        let flat_r = flat_round(rebuilt.clone(), 10);
+        assert_eq!(flat_v, flat_r);
+        Ok(())
+    }
+
+    #[test]
+    fn test_pauli_decomp() -> Result<(), &'static str> {
+        let v = vec![
+            vec![
+                (0, (std::f64::consts::FRAC_1_SQRT_2, 0.0)),
+                (1, (0.0, -std::f64::consts::FRAC_1_SQRT_2)),
+            ],
+            vec![
+                (0, (0.0, std::f64::consts::FRAC_1_SQRT_2)),
+                (1, (std::f64::consts::FRAC_1_SQRT_2, 0.0)),
+            ],
+            vec![(2, (1.0, 0.0))],
+            vec![(3, (1.0, 0.0))],
+        ];
+        let v = sparse_from_tuples(v);
+        let flat_v = flat_round(v.clone(), 10);
+
+        let (ops, base) = decompose_unitary(2, v, EPSILON)?.map_err(|(_, mat)| {
+            dbg!(mat);
+            "Failed to decompose"
+        })?;
         let rebuilt = reconstruct_unitary(2, &ops, &base);
 
         let flat_r = flat_round(rebuilt.clone(), 10);
