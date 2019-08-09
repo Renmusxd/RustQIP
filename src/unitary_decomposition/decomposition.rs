@@ -32,13 +32,13 @@ pub enum DecompOp<P: Precision> {
 #[derive(Debug)]
 pub struct BaseUnitary<P: Precision> {
     /// row index for top entries `a` and `b`
-    top_row: u64,
+    pub top_row: u64,
     /// row index for bot entries `c` and `d`.
-    bot_row: u64,
+    pub bot_row: u64,
     /// Index of bit difference between top and bot
-    bit_index: u64,
+    pub bit_index: u64,
     /// Data of base `[[a,b],[c,d]]`
-    dat: [Complex<P>; 4],
+    pub dat: [Complex<P>; 4],
 }
 
 fn print_sparse<P: Precision + Debug>(v: &[Vec<(u64, Complex<P>)>]) {
