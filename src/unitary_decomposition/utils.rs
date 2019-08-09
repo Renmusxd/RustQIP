@@ -61,7 +61,7 @@ pub fn transpose_sparse<T: Sync + Send>(sparse_mat: Vec<Vec<(u64, T)>>) -> Vec<V
 }
 
 pub fn sparse_value_at_col<C: Ord, T>(col: C, row: &[(C, T)]) -> Option<&T> {
-    if row.len() == 0 || row[0].0 > col {
+    if row.is_empty() || row[0].0 > col {
         None
     } else if row[0].0 == col {
         Some(&row[0].1)
@@ -96,15 +96,16 @@ pub fn apply_phase_to_column<P: Precision>(
     let phase = phi.exp();
     sparse_mat.par_iter_mut().for_each(|v| {
         // This is a common one so hard code a check.
-        let indx = if v.len() > 0 && v[0].0 == column {
+        let indx = if !v.is_empty() && v[0].0 == column {
             Ok(0)
         } else {
             v.binary_search_by_key(&column, |(c, _)| *c)
         };
-        indx.map(|indx| {
+
+        if let Ok(indx) = indx {
             let val = &mut v[indx].1;
             *val = *val * phase;
-        });
+        }
     })
 }
 
@@ -157,10 +158,6 @@ pub fn apply_controlled_rotation<
     theta: P,
     sparse_mat: &mut [Vec<(u64, T)>],
 ) {
-    // 1s except at index.
-    let index_setter = from_row ^ to_row;
-    let mask = !index_setter;
-
     // R = c|s0><s0| - s|s0><s1| + s|s1><s0| + c|s1><s1|
     // with c = cos(theta) and s = sin(theta)
     // So apply to the existing sparse mat by finding things which output |s0> and |s1>
