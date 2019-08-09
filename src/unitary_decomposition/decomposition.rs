@@ -255,6 +255,7 @@ pub fn decompose_unitary<P: Precision + Debug>(
 #[cfg(test)]
 mod unitary_decomp_tests {
     use super::*;
+    use num::Zero;
 
     const EPSILON: f64 = 0.00000000001;
 

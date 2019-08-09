@@ -6,6 +6,7 @@ use std::cmp::max;
 use std::ops::{Add, Mul};
 use std::sync::{Arc, Mutex};
 
+/// Create an array of indices all one bit off from one another.
 pub fn gray_code(n: u64) -> Vec<u64> {
     if n == 0 {
         vec![]
@@ -20,6 +21,7 @@ pub fn gray_code(n: u64) -> Vec<u64> {
     }
 }
 
+/// Transpose a sparse matrix.
 pub fn transpose_sparse<T: Sync + Send>(sparse_mat: Vec<Vec<(u64, T)>>) -> Vec<Vec<(u64, T)>> {
     let sparse_len = sparse_mat.len();
     let flat_mat: Vec<_> = sparse_mat
@@ -60,6 +62,7 @@ pub fn transpose_sparse<T: Sync + Send>(sparse_mat: Vec<Vec<(u64, T)>>) -> Vec<V
         .collect()
 }
 
+/// Get the value at a given column in a sorted sparse row.
 pub fn sparse_value_at_col<C: Ord, T>(col: C, row: &[(C, T)]) -> Option<&T> {
     if row.is_empty() || row[0].0 > col {
         None
@@ -76,6 +79,7 @@ pub fn sparse_value_at_col<C: Ord, T>(col: C, row: &[(C, T)]) -> Option<&T> {
     }
 }
 
+/// Get the value in a sparse matrix at given coords.
 pub fn sparse_value_at_coords<C: Ord, T>(
     row: usize,
     col: C,
@@ -84,6 +88,7 @@ pub fn sparse_value_at_coords<C: Ord, T>(
     sparse_value_at_col(col, &sparse_mat[row])
 }
 
+/// Apply a phase to the column of a sparse matrix.
 pub fn apply_phase_to_column<P: Precision>(
     column: u64,
     phi: P,
@@ -109,6 +114,7 @@ pub fn apply_phase_to_column<P: Precision>(
     })
 }
 
+/// Apply a phase to a row of a sparse matrix.
 pub fn apply_phase_to_row<P: Precision>(phi: P, sparse_row: &mut [(u64, Complex<P>)]) {
     let phi = Complex {
         re: P::zero(),
@@ -120,6 +126,7 @@ pub fn apply_phase_to_row<P: Precision>(phi: P, sparse_row: &mut [(u64, Complex<
     })
 }
 
+/// Apply a phase to all entries of a sparse matrix.
 pub fn apply_global_phase<P: Precision>(phi: P, sparse_mat: &mut [Vec<(u64, Complex<P>)>]) {
     let phi = Complex {
         re: P::zero(),
@@ -133,6 +140,9 @@ pub fn apply_global_phase<P: Precision>(phi: P, sparse_mat: &mut [Vec<(u64, Comp
     })
 }
 
+/// Apply a rotation matrix to the two given rows. Specifically to the single bit difference between
+/// them, controlled by the remaining bits. Then remove all entries in which the value doesn't meet
+/// the criteria.
 pub fn apply_controlled_rotation_and_clean<
     P: Precision,
     T: Clone + Add<Output = T> + Mul<P, Output = T> + Send + Sync,
@@ -149,6 +159,8 @@ pub fn apply_controlled_rotation_and_clean<
     sparse_mat[to_row as usize].retain(|(_, v)| criteria(v));
 }
 
+/// Apply a rotation matrix to the two given rows. Specifically to the single bit difference between
+/// them, controlled by the remaining bits.
 pub fn apply_controlled_rotation<
     P: Precision,
     T: Clone + Add<Output = T> + Mul<P, Output = T> + Send + Sync,
@@ -245,6 +257,7 @@ fn merge_vecs<K: Eq + Ord, V, F: Fn(V, V) -> V>(
     out.reverse();
 }
 
+/// Flatten the sparse matrix and add row information.
 pub fn flat_sparse<T>(v: Vec<Vec<(u64, T)>>) -> Vec<(u64, u64, T)> {
     v.into_iter()
         .enumerate()
@@ -260,8 +273,6 @@ pub fn flat_sparse<T>(v: Vec<Vec<(u64, T)>>) -> Vec<(u64, u64, T)> {
 #[cfg(test)]
 mod unitary_decomp_tests {
     use super::*;
-    use crate::Complex;
-    use num::{One, Zero};
 
     fn flat_round(v: Vec<Vec<(u64, f64)>>, prec: i32) -> Vec<(u64, u64, f64)> {
         let flat = flat_sparse(v);
@@ -314,7 +325,7 @@ mod unitary_decomp_tests {
         let mut va = vec![(0, 0), (2, 2), (4, 4)];
         let mut vb = vec![(1, 1), (3, 3), (5, 5)];
         let mut v = vec![];
-        merge_vecs(&mut va, &mut vb, &mut v, |x, y| panic!());
+        merge_vecs(&mut va, &mut vb, &mut v, |_, _| panic!());
 
         let expected: Vec<_> = (0..6).map(|i| (i, i)).collect();
         assert_eq!(v, expected);
@@ -408,7 +419,7 @@ mod unitary_decomp_tests {
     #[test]
     fn test_half_rotation_to_eye() {
         let mut eye = vec![vec![(0, 1.0), (1, 0.0)], vec![(0, 0.0), (1, 1.0)]];
-        let mut expected = vec![vec![(0, -1.0), (1, 0.0)], vec![(0, 0.0), (1, -1.0)]];
+        let expected = vec![vec![(0, -1.0), (1, 0.0)], vec![(0, 0.0), (1, -1.0)]];
         let theta = std::f64::consts::PI;
         apply_controlled_rotation(0, 1, theta, &mut eye);
 
@@ -421,7 +432,7 @@ mod unitary_decomp_tests {
     #[test]
     fn test_quarter_rotation_to_eye() {
         let mut eye = vec![vec![(0, 1.0), (1, 0.0)], vec![(0, 0.0), (1, 1.0)]];
-        let mut expected = vec![vec![(0, 0.0), (1, -1.0)], vec![(0, 1.0), (1, 0.0)]];
+        let expected = vec![vec![(0, 0.0), (1, -1.0)], vec![(0, 1.0), (1, 0.0)]];
         let theta = std::f64::consts::FRAC_PI_2;
         apply_controlled_rotation(0, 1, theta, &mut eye);
 
@@ -434,7 +445,7 @@ mod unitary_decomp_tests {
     #[test]
     fn test_four_quarter_rotation_to_indices() {
         let mut eye = vec![vec![(0, 1.0), (1, 0.0)], vec![(0, 0.0), (1, 1.0)]];
-        let mut expected = eye.clone();
+        let expected = eye.clone();
         let theta = std::f64::consts::FRAC_PI_2;
         apply_controlled_rotation(0, 1, theta, &mut eye);
         apply_controlled_rotation(0, 1, theta, &mut eye);
@@ -461,7 +472,7 @@ mod unitary_decomp_tests {
             vec![(2, 1.0)],
             vec![(3, 1.0)],
         ];
-        let mut expected = vec![
+        let expected = vec![
             vec![(0, 1.0)],
             vec![(1, 1.0)],
             vec![(2, 1.0)],
@@ -490,7 +501,7 @@ mod unitary_decomp_tests {
             ],
             vec![(3, 1.0)],
         ];
-        let mut expected = vec![
+        let expected = vec![
             vec![(0, 1.0)],
             vec![(1, 1.0)],
             vec![(2, 1.0)],

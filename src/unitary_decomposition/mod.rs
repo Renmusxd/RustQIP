@@ -2,5 +2,6 @@
 pub mod decomposition;
 
 /// Utilities for unitary decomposition
+pub mod utils;
+
 mod bit_pathing;
-mod utils;
