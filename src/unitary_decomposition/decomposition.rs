@@ -84,7 +84,7 @@ pub fn reconstruct_unitary<P: Precision + Clone>(
     base_mat
 }
 
-fn consolidate_column<P: Precision + Debug>(
+fn consolidate_column<P: Precision>(
     pathfinder: &BitPather,
     column: u64,
     sparse_mat: &mut [Vec<(u64, Complex<P>)>],
@@ -107,12 +107,6 @@ fn consolidate_column<P: Precision + Debug>(
     pathfinder.path(column, &nonzeros)?.into_iter().try_fold(
         vec![],
         |mut ops, (from_code, to_code)| {
-
-            println!("Starting: ");
-            print_sparse(&sparse_mat);
-
-            println!("Column: {:b}\tFrom: {:b}\tTo: {:b}", column, from_code, to_code);
-
             let from_row = &sparse_mat[from_code as usize];
             let to_row = &sparse_mat[to_code as usize];
 
@@ -139,9 +133,6 @@ fn consolidate_column<P: Precision + Debug>(
                     row: from_code,
                     phi: from_phi,
                 });
-
-                println!("Applied phase (from_code: {:?}\tphi: {:?}): ", from_code, -from_phi);
-                print_sparse(&sparse_mat);
             }
 
             if theta != P::zero() {
@@ -161,9 +152,6 @@ fn consolidate_column<P: Precision + Debug>(
                     bit_index: mask_index,
                     theta,
                 });
-
-                println!("Applied rotation (from: {:?}\tto: {:?}\tphi: {:?}): ", from_code, to_code, theta);
-                print_sparse(&sparse_mat);
             }
 
             let phi = sparse_value_at_coords(to_code as usize, column, &sparse_mat)
@@ -172,9 +160,6 @@ fn consolidate_column<P: Precision + Debug>(
             if phi != P::zero() {
                 apply_phase_to_row(-phi, &mut sparse_mat[to_code as usize]);
                 ops.push(DecompOp::Phase { row: to_code, phi });
-
-                println!("Applied phase (to_code: {:?}\tphi: {:?}): ", to_code, -phi);
-                print_sparse(&sparse_mat);
             }
 
             Ok(ops)
@@ -198,7 +183,7 @@ pub type DecompositionResult<P> = Result<DecompositionSuccess<P>, DecompositionF
 /// through all the gray codes, this is basically a Steiner tree on a graph where the graph is the
 /// vertices of a n-dimensional hypercube, it just so happens a paper was written on this:
 /// https://www.researchgate.net/publication/220617458_Near_Optimal_Bounds_for_Steiner_Trees_in_the_Hypercube
-pub fn decompose_unitary<P: Precision + Debug>(
+pub fn decompose_unitary<P: Precision>(
     n: u64,
     mut sparse_mat: Vec<Vec<(u64, Complex<P>)>>,
     drop_below_mag: P,

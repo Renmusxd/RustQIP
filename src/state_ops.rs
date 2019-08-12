@@ -9,8 +9,6 @@ use num::One;
 use std::cmp::{max, min};
 use std::fmt;
 
-use PrecisionQubitOp::*;
-
 /// Types of unitary ops which can be applied to a state.
 pub enum QubitOp {
     /// Indices, Matrix data
@@ -317,7 +315,7 @@ fn clone_as_precision_op<P: Precision>(op: &QubitOp) -> PrecisionQubitOp<P> {
                     im: P::from(c.im).unwrap(),
                 })
                 .collect();
-            Matrix(indices.clone(), data)
+            PrecisionQubitOp::Matrix(indices.clone(), data)
         }
         QubitOp::SparseMatrix(indices, data) => {
             let data: Vec<Vec<_>> = data
@@ -336,15 +334,21 @@ fn clone_as_precision_op<P: Precision>(op: &QubitOp) -> PrecisionQubitOp<P> {
                         .collect()
                 })
                 .collect();
-            SparseMatrix(indices.clone(), data)
+            PrecisionQubitOp::SparseMatrix(indices.clone(), data)
         }
-        QubitOp::Swap(a_indices, b_indices) => Swap(a_indices.clone(), b_indices.clone()),
-        QubitOp::Control(c_indices, o_indices, op) => Control(
-            c_indices.clone(),
-            o_indices.clone(),
-            Box::new(clone_as_precision_op(op)),
-        ),
-        QubitOp::Function(inputs, outputs, f) => Function(inputs.clone(), outputs.clone(), f),
+        QubitOp::Swap(a_indices, b_indices) => {
+            PrecisionQubitOp::Swap(a_indices.clone(), b_indices.clone())
+        }
+        QubitOp::Control(c_indices, o_indices, op) => {
+            PrecisionQubitOp::Control(
+                c_indices.clone(),
+                o_indices.clone(),
+                Box::new(clone_as_precision_op(op)),
+            )
+        }
+        QubitOp::Function(inputs, outputs, f) => {
+            PrecisionQubitOp::Function(inputs.clone(), outputs.clone(), f)
+        }
     }
 }
 
