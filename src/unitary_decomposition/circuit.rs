@@ -1,6 +1,6 @@
 use super::decomposition::decompose_unitary;
 use crate::{Complex, Precision, Qubit, UnitaryBuilder};
-use crate::unitary_decomposition::decomposition::DecompOp;
+use crate::unitary_decomposition::decomposition::{DecompOp, BaseUnitary};
 use num::{Zero, One};
 
 /// TODO
@@ -12,10 +12,18 @@ pub fn convert_sparse_to_circuit(
 ) -> Result<Qubit, &'static str> {
     let decomposition = decompose_unitary(q.n(), sparse_unitary, drop_below)?;
     let (ops, base) = decomposition.map_err(|_| "Decomposition failed.")?;
+    convert_decomp_ops_to_circuit(b, q, base, ops)
+}
 
+fn convert_decomp_ops_to_circuit(
+    b: &mut dyn UnitaryBuilder,
+    q: Qubit,
+    base: BaseUnitary<f64>,
+    ops: Vec<DecompOp<f64>>) -> Result<Qubit, &'static str> {
     let qs = b.split_all(q);
 
     // Clear the correct index if it happens to be set
+    println!("Base({:?})", base.dat);
     let base_mask = base.top_row;
     let qs = negate_difference(b, qs, !0, base_mask);
     let qs = apply_to_index_with_control(b, qs, base.bit_index, |cb, q| {
@@ -27,6 +35,7 @@ pub fn convert_sparse_to_circuit(
         .fold((qs, base_mask), |(qs, mask), op|{
             match op {
                 DecompOp::Phase {row, phi} => {
+                    println!("Phase({:?}, {:?})", row, phi);
                     let qs = negate_difference(b, qs, mask, row);
                     // We can apply to any qubit.
                     let qs = apply_to_index_with_control(b, qs, 0, |cb, q| {
@@ -42,9 +51,11 @@ pub fn convert_sparse_to_circuit(
                     (qs, row)
                 }
                 DecompOp::Rotation {from_bits, to_bits, bit_index, theta} => {
-                    let new_mask = from_bits; // TODO from_bits?
+                    println!("Rotation({:?}, {:?}, {:?}, {:?})", from_bits, to_bits, bit_index, theta);
+                    let new_mask = to_bits;
                     let qs = negate_difference(b, qs, mask, new_mask);
-                    let qs = apply_to_index_with_control(b, qs, bit_index, |cb, q| {
+                    let qubit_index = qs.len() as u64 - bit_index - 1;
+                    let qs = apply_to_index_with_control(b, qs, qubit_index, |cb, q| {
                         let (s, c) = theta.sin_cos();
                         let name = format!("Rotate({:?})", theta);
                         cb.real_mat(&name, q, &[c, -s, s, c]).unwrap()
@@ -83,6 +94,7 @@ fn negate_difference(
     let needs_negation = old_mask ^ new_mask;
     (0..qs.len() as u64)
         .map(|indx| ((needs_negation >> indx) & 1) == 1)
+        .rev()
         .zip(qs.into_iter())
         .map(|(negate, q)|  {
             if negate {
@@ -141,6 +153,23 @@ mod unitary_decomp_circuit_tests {
             .collect()
     }
 
+    fn assert_decomp(n: u64, v: Vec<Vec<(u64, Complex<f64>)>>) -> Result<(), &'static str>{
+        let flat_v = flat_round(v.clone(), 10);
+        let mut b = OpBuilder::new();
+        let q = b.qubit(n).unwrap();
+        let q = convert_sparse_to_circuit(&mut b, q, v, EPSILON)?;
+
+        // Output circuit in case it fails.
+        run_debug(&q);
+        let reconstructed = make_circuit_matrix::<f64>(n, &q, false);
+        let reconstructed = reconstructed.into_iter().map(|v| {
+            v.into_iter().enumerate().map(|(indx, c)| (indx as u64, c)).collect()
+        }).collect();
+        let flat_reconstructed = flat_round(reconstructed, 10);
+        assert_eq!(flat_reconstructed, flat_v);
+        Ok(())
+    }
+
     #[test]
     fn test_decompose_basic() -> Result<(), &'static str> {
         let v = vec![
@@ -150,27 +179,40 @@ mod unitary_decomp_circuit_tests {
             vec![(3, 1.0)],
         ];
         let v = sparse_from_reals(v);
-        let flat_v = flat_round(v.clone(), 10);
-
-        let n = 2;
-        let mut b = OpBuilder::new();
-        let q = b.qubit(n).unwrap();
-
-        let q = convert_sparse_to_circuit(&mut b, q, v, EPSILON)?;
-
-        run_debug(&q);
-
-        let reconstructed = make_circuit_matrix::<f64>(n, &q, false);
-        let reconstructed = reconstructed.into_iter().map(|v| {
-            v.into_iter().enumerate().map(|(indx, c)| (indx as u64, c)).collect()
-        }).collect();
-        let flat_reconstructed = flat_round(reconstructed, 10);
-
-        assert_eq!(flat_reconstructed, flat_v);
-
+        assert_decomp(2, v)?;
         Ok(())
     }
 
+    #[test]
+    fn test_decompose_rotation() -> Result<(), &'static str> {
+        let (s, c) = std::f64::consts::FRAC_PI_8.sin_cos();
+        let v = vec![
+            vec![(0, c), (2, -s)],
+            vec![(1, 1.0)],
+            vec![(0, s), (2, c)],
+            vec![(3, 1.0)],
+        ];
+        let v = sparse_from_reals(v);
+        assert_decomp(2, v)?;
+        Ok(())
+    }
 
-
+    #[test]
+    fn test_decompose_pauli() -> Result<(), &'static str> {
+        let v = vec![
+            vec![
+                (0, (std::f64::consts::FRAC_1_SQRT_2, 0.0)),
+                (1, (0.0, -std::f64::consts::FRAC_1_SQRT_2)),
+            ],
+            vec![
+                (0, (0.0, -std::f64::consts::FRAC_1_SQRT_2)),
+                (1, (std::f64::consts::FRAC_1_SQRT_2, 0.0)),
+            ],
+            vec![(2, (1.0, 0.0))],
+            vec![(3, (1.0, 0.0))],
+        ];
+        let v = sparse_from_tuples(v);
+        assert_decomp(2, v)?;
+        Ok(())
+    }
 }

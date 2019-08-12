@@ -142,6 +142,7 @@ fn consolidate_column<P: Precision>(
 
                 let mut mask = from_code ^ to_code;
                 let mut mask_index = 0;
+                mask >>= 1;
                 while mask > 0 {
                     mask >>= 1;
                     mask_index += 1;
