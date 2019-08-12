@@ -788,12 +788,7 @@ pub fn make_circuit_matrix<P: Precision>(
 ) -> Vec<Vec<Complex<P>>> {
     let indices: Vec<u64> = (0..n).collect();
     (0..1 << n)
-        .map(|i| {
-            let indx = if natural_order {
-                i
-            } else {
-                utils::flip_bits(n as usize, i as u64)
-            };
+        .map(|indx| {
             let (state, _) =
                 run_local_with_init(&q, &[(indices.clone(), InitialState::Index(indx))]).unwrap();
             (0..state.state.len())
