@@ -339,13 +339,11 @@ fn clone_as_precision_op<P: Precision>(op: &QubitOp) -> PrecisionQubitOp<P> {
         QubitOp::Swap(a_indices, b_indices) => {
             PrecisionQubitOp::Swap(a_indices.clone(), b_indices.clone())
         }
-        QubitOp::Control(c_indices, o_indices, op) => {
-            PrecisionQubitOp::Control(
-                c_indices.clone(),
-                o_indices.clone(),
-                Box::new(clone_as_precision_op(op)),
-            )
-        }
+        QubitOp::Control(c_indices, o_indices, op) => PrecisionQubitOp::Control(
+            c_indices.clone(),
+            o_indices.clone(),
+            Box::new(clone_as_precision_op(op)),
+        ),
         QubitOp::Function(inputs, outputs, f) => {
             PrecisionQubitOp::Function(inputs.clone(), outputs.clone(), f)
         }

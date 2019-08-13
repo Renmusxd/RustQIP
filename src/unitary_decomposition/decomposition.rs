@@ -2,7 +2,7 @@ use crate::unitary_decomposition::bit_pathing::BitPather;
 use crate::unitary_decomposition::utils::*;
 use crate::Complex;
 use crate::Precision;
-use num::One;
+use num::{One, Zero};
 use std::fmt::Debug;
 
 /// A controlled phase or rotation op.
@@ -41,6 +41,22 @@ pub struct BaseUnitary<P: Precision> {
     pub dat: [Complex<P>; 4],
 }
 
+impl<P: Precision> Default for BaseUnitary<P> {
+    fn default() -> Self {
+        BaseUnitary {
+            top_row: 0,
+            bot_row: 1,
+            bit_index: 0,
+            dat: [
+                Complex::one(),
+                Complex::zero(),
+                Complex::zero(),
+                Complex::one(),
+            ],
+        }
+    }
+}
+
 fn print_sparse<P: Precision + Debug>(v: &[Vec<(u64, Complex<P>)>]) {
     println!("========================");
     v.iter().for_each(|v| {
@@ -59,6 +75,7 @@ pub fn reconstruct_unitary<P: Precision + Clone>(
     ops: &[DecompOp<P>],
     base: &BaseUnitary<P>,
 ) -> Vec<Vec<(u64, Complex<P>)>> {
+    let keep_threshold = P::from(1e-10).unwrap();
     let mut base_mat: Vec<_> = (0..1 << n)
         .map(|indx| {
             if indx == base.top_row {
@@ -71,16 +88,19 @@ pub fn reconstruct_unitary<P: Precision + Clone>(
         })
         .collect();
 
-    ops.iter().for_each(|op| match op {
-        DecompOp::Rotation {
-            from_bits,
-            to_bits,
-            theta,
-            ..
-        } => apply_controlled_rotation(*from_bits, *to_bits, *theta, &mut base_mat),
-        DecompOp::Phase { row, phi } => apply_phase_to_row(*phi, &mut base_mat[(*row) as usize]),
+    ops.iter().for_each(|op| {
+        match op {
+            DecompOp::Rotation {
+                from_bits,
+                to_bits,
+                theta,
+                ..
+            } => apply_controlled_rotation_and_clean(*from_bits, *to_bits, *theta, &mut base_mat, |val| {
+                val.norm_sqr() >= keep_threshold
+            }),
+            DecompOp::Phase { row, phi } => apply_phase_to_row(*phi, &mut base_mat[(*row) as usize]),
+        };
     });
-
     base_mat
 }
 
@@ -417,6 +437,47 @@ mod unitary_decomp_tests {
             "Failed to decompose"
         })?;
         let rebuilt = reconstruct_unitary(2, &ops, &base);
+
+        let flat_r = flat_round(rebuilt.clone(), 10);
+        assert_eq!(flat_v, flat_r);
+        Ok(())
+    }
+
+    #[test]
+    fn test_larger_antidiagonal_decomp() -> Result<(), &'static str> {
+        let n = 3;
+        let v: Vec<_> = (0 .. 1 << n).map(|row| {
+            vec![((1 << n) - row - 1, Complex::one())]
+        }).collect();
+
+        let flat_v = flat_round(v.clone(), 10);
+
+        let (ops, base) = decompose_unitary(n, v, EPSILON)?.map_err(|(_, mat)| {
+            dbg!(mat);
+            "Failed to decompose"
+        })?;
+        let rebuilt = reconstruct_unitary(n, &ops, &base);
+
+        let flat_r = flat_round(rebuilt.clone(), 10);
+        assert_eq!(flat_v, flat_r);
+        Ok(())
+    }
+
+    #[test]
+    fn test_larger_antidiagonal_imag_decomp() -> Result<(), &'static str> {
+        let n = 3;
+        let v: Vec<_> = (0 .. 1 << n).map(|row| {
+            vec![((1 << n) - row - 1, (0.0, 1.0))]
+        }).collect();
+        let v = sparse_from_tuples(v);
+
+        let flat_v = flat_round(v.clone(), 10);
+
+        let (ops, base) = decompose_unitary(n, v, EPSILON)?.map_err(|(_, mat)| {
+            dbg!(mat);
+            "Failed to decompose"
+        })?;
+        let rebuilt = reconstruct_unitary(n, &ops, &base);
 
         let flat_r = flat_round(rebuilt.clone(), 10);
         assert_eq!(flat_v, flat_r);

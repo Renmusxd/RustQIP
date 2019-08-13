@@ -17,7 +17,7 @@ impl BitPather {
         let target_index = self
             .encoding
             .binary_search(&to)
-            .map_err(|_| "Counn't find `to` bits.")?;
+            .map_err(|_| "Could not find `to` bits.")?;
         Ok(self.encoding[target_index..]
             .iter()
             .zip(self.encoding[target_index + 1..].iter())

@@ -787,7 +787,7 @@ pub fn make_circuit_matrix<P: Precision>(
     natural_order: bool,
 ) -> Vec<Vec<Complex<P>>> {
     let indices: Vec<u64> = (0..n).collect();
-    (0..1 << n)
+    let lookup: Vec<Vec<Complex<P>>> = (0..1 << n)
         .map(|indx| {
             let (state, _) =
                 run_local_with_init(&q, &[(indices.clone(), InitialState::Index(indx))]).unwrap();
@@ -802,5 +802,8 @@ pub fn make_circuit_matrix<P: Precision>(
                 })
                 .collect()
         })
-        .collect()
+        .collect();
+    (0..1 << n).map(|row| {
+        (0 .. 1<<n).map(|col| lookup[col][row]).collect()
+    }).collect()
 }
