@@ -11,7 +11,7 @@ fn assert_almost_eq(a: f64, b: f64, prec: i32) {
 }
 
 #[test]
-fn test_measure_true() -> Result<(), InvalidValueError> {
+fn test_measure_true() -> Result<(), CircuitError> {
     let mut b = OpBuilder::new();
     let q = b.qubit(1)?;
     let q = b.hadamard(q);
@@ -26,7 +26,7 @@ fn test_measure_true() -> Result<(), InvalidValueError> {
 }
 
 #[test]
-fn test_measure_false() -> Result<(), InvalidValueError> {
+fn test_measure_false() -> Result<(), CircuitError> {
     let mut b = OpBuilder::new();
     let q = b.qubit(1)?;
     let q = b.hadamard(q);

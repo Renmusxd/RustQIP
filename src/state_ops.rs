@@ -2,7 +2,7 @@
 extern crate rayon;
 use rayon::prelude::*;
 
-use crate::errors::InvalidValueError;
+use crate::errors::CircuitError;
 use crate::iterators::*;
 use crate::utils::*;
 use crate::{Complex, Precision};
@@ -67,18 +67,18 @@ impl fmt::Debug for QubitOp {
 pub fn make_matrix_op(
     indices: Vec<u64>,
     dat: Vec<Complex<f64>>,
-) -> Result<QubitOp, InvalidValueError> {
+) -> Result<QubitOp, CircuitError> {
     let n = indices.len();
     let expected_mat_size = 1 << (2 * n);
     if indices.is_empty() {
-        InvalidValueError::make_str_err("Must supply at least one op index")
+        CircuitError::make_str_err("Must supply at least one op index")
     } else if dat.len() != expected_mat_size {
         let message = format!(
             "Matrix data has {:?} entries versus expected 2^2*{:?}",
             dat.len(),
             n
         );
-        InvalidValueError::make_err(message)
+        CircuitError::make_err(message)
     } else {
         Ok(QubitOp::Matrix(indices, dat))
     }
@@ -91,18 +91,18 @@ pub fn make_sparse_matrix_op(
     indices: Vec<u64>,
     dat: Vec<Vec<(u64, Complex<f64>)>>,
     natural_order: bool,
-) -> Result<QubitOp, InvalidValueError> {
+) -> Result<QubitOp, CircuitError> {
     let n = indices.len();
     let expected_mat_size = 1 << n;
     if indices.is_empty() {
-        InvalidValueError::make_str_err("Must supply at least one op index")
+        CircuitError::make_str_err("Must supply at least one op index")
     } else if dat.len() != expected_mat_size {
         let message = format!(
             "Sparse matrix has {:?} rows versus expected 2^{:?}",
             dat.len(),
             n
         );
-        InvalidValueError::make_err(message)
+        CircuitError::make_err(message)
     } else {
         // Each row needs at least one entry
         dat.iter().enumerate().try_for_each(|(row, v)| {
@@ -111,7 +111,7 @@ pub fn make_sparse_matrix_op(
                     "All rows of sparse matrix must have data ({:?} is empty)",
                     row
                 );
-                InvalidValueError::make_err(message)
+                CircuitError::make_err(message)
             } else {
                 Ok(())
             }
@@ -169,16 +169,16 @@ pub fn make_sparse_matrix_from_function<F: Fn(u64) -> Vec<(u64, Complex<f64>)>>(
 pub fn make_swap_op(
     a_indices: Vec<u64>,
     b_indices: Vec<u64>,
-) -> Result<QubitOp, InvalidValueError> {
+) -> Result<QubitOp, CircuitError> {
     if a_indices.is_empty() || b_indices.is_empty() {
-        InvalidValueError::make_str_err("Need at least 1 swap index for a and b")
+        CircuitError::make_str_err("Need at least 1 swap index for a and b")
     } else if a_indices.len() != b_indices.len() {
         let message = format!(
             "Swap must be performed on two sets of indices of equal length, found {:?} vs {:?}",
             a_indices.len(),
             b_indices.len()
         );
-        InvalidValueError::make_err(message)
+        CircuitError::make_err(message)
     } else {
         Ok(QubitOp::Swap(a_indices, b_indices))
     }
@@ -200,9 +200,9 @@ pub fn make_swap_op(
 ///     assert!(false);
 /// }
 /// ```
-pub fn make_control_op(mut c_indices: Vec<u64>, op: QubitOp) -> Result<QubitOp, InvalidValueError> {
+pub fn make_control_op(mut c_indices: Vec<u64>, op: QubitOp) -> Result<QubitOp, CircuitError> {
     if c_indices.is_empty() {
-        InvalidValueError::make_str_err("Must supply at least one control index")
+        CircuitError::make_str_err("Must supply at least one control index")
     } else {
         match op {
             QubitOp::Control(oc_indices, oo_indices, op) => {
@@ -222,9 +222,9 @@ pub fn make_function_op(
     input_indices: Vec<u64>,
     output_indices: Vec<u64>,
     f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
-) -> Result<QubitOp, InvalidValueError> {
+) -> Result<QubitOp, CircuitError> {
     if input_indices.is_empty() || output_indices.is_empty() {
-        InvalidValueError::make_str_err("Input and Output indices must not be empty")
+        CircuitError::make_str_err("Input and Output indices must not be empty")
     } else {
         Ok(QubitOp::Function(input_indices, output_indices, f))
     }

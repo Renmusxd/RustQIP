@@ -14,7 +14,7 @@
 //! ```
 //! use qip::*;
 //!
-//! # fn main() -> Result<(), InvalidValueError> {
+//! # fn main() -> Result<(), CircuitError> {
 //! // Make a new circuit builder.
 //! let mut b = OpBuilder::new();
 //!

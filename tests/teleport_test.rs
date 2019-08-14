@@ -1,6 +1,6 @@
 extern crate qip;
 use qip::common_circuits::epr_pair;
-use qip::errors::InvalidValueError;
+use qip::errors::CircuitError;
 use qip::pipeline::MeasurementHandle;
 use qip::*;
 use std::error::Error;
@@ -30,7 +30,7 @@ fn run_bob(
     b: &mut OpBuilder,
     epr_bob: Qubit,
     handle: MeasurementHandle,
-) -> Result<f64, InvalidValueError> {
+) -> Result<f64, CircuitError> {
     let q_bob = b.single_qubit_classical_sidechannel(
         epr_bob,
         &[handle],
@@ -68,7 +68,7 @@ fn assert_almost_eq(a: f64, b: f64, prec: i32) {
 }
 
 #[test]
-fn test_teleport() -> Result<(), InvalidValueError> {
+fn test_teleport() -> Result<(), CircuitError> {
     for i in 0..90 {
         // Can only measure angles between 0 and 90 degrees
         let random_angle = std::f64::consts::PI * i as f64 / 180.0;

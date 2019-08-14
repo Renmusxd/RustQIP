@@ -1,4 +1,4 @@
-use crate::errors::InvalidValueError;
+use crate::errors::CircuitError;
 use crate::unitary_decomposition::utils::gray_code;
 
 pub struct BitPather {
@@ -24,9 +24,9 @@ impl BitPather {
 
     /// Take the list of indices with nonzero values and return the path through them
     /// to the target, returns the bits needed to swap (in the form `1 << index`).
-    pub fn path(&self, to: u64, _through: &[u64]) -> Result<Vec<(u64, u64)>, InvalidValueError> {
+    pub fn path(&self, to: u64, _through: &[u64]) -> Result<Vec<(u64, u64)>, CircuitError> {
         if to as usize > self.reverse_lookup.len() {
-            InvalidValueError::make_err(format!(
+            CircuitError::make_err(format!(
                 "Value to={:?} is greater than encoding length {:?}",
                 to,
                 self.reverse_lookup.len()

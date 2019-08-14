@@ -1,4 +1,4 @@
-use crate::errors::InvalidValueError;
+use crate::errors::CircuitError;
 use crate::pipeline::*;
 use crate::types::Precision;
 use crate::Complex;
@@ -29,9 +29,9 @@ pub struct Qubit {
 }
 
 impl Qubit {
-    pub(crate) fn new(id: u64, indices: Vec<u64>) -> Result<Qubit, InvalidValueError> {
+    pub(crate) fn new(id: u64, indices: Vec<u64>) -> Result<Qubit, CircuitError> {
         if indices.is_empty() {
-            InvalidValueError::make_str_err("Qubit must have at least one index assigned.")
+            CircuitError::make_str_err("Qubit must have at least one index assigned.")
         } else {
             Ok(Qubit {
                 indices,
@@ -71,17 +71,17 @@ impl Qubit {
         idb: u64,
         q: Qubit,
         indices: Vec<u64>,
-    ) -> Result<(Qubit, Qubit), InvalidValueError> {
+    ) -> Result<(Qubit, Qubit), CircuitError> {
         for indx in &indices {
             if *indx > q.n() {
                 let message = format!("All indices for splitting must be below q.n = {:?}", q.n());
-                return InvalidValueError::make_err(message);
+                return CircuitError::make_err(message);
             }
         }
         if indices.len() == q.indices.len() {
-            InvalidValueError::make_str_err("Cannot split out all indices into own qubit.")
+            CircuitError::make_str_err("Cannot split out all indices into own qubit.")
         } else if indices.is_empty() {
-            InvalidValueError::make_str_err("Must provide indices to split.")
+            CircuitError::make_str_err("Must provide indices to split.")
         } else {
             let selected_indices: Vec<u64> =
                 indices.into_iter().map(|i| q.indices[i as usize]).collect();
@@ -95,11 +95,11 @@ impl Qubit {
         idb: u64,
         q: Qubit,
         selected_indices: Vec<u64>,
-    ) -> Result<(Qubit, Qubit), InvalidValueError> {
+    ) -> Result<(Qubit, Qubit), CircuitError> {
         if selected_indices.len() == q.indices.len() {
-            return InvalidValueError::make_str_err("Cannot split out all indices into own qubit.");
+            return CircuitError::make_str_err("Cannot split out all indices into own qubit.");
         } else if selected_indices.is_empty() {
-            return InvalidValueError::make_str_err("Must provide indices to split.");
+            return CircuitError::make_str_err("Must provide indices to split.");
         }
         for indx in &selected_indices {
             if !q.indices.contains(indx) {
@@ -107,7 +107,7 @@ impl Qubit {
                     "Index {:?} not found in qubit with indices {:?}",
                     indx, q.indices
                 );
-                return InvalidValueError::make_err(message);
+                return CircuitError::make_err(message);
             }
         }
 
@@ -215,7 +215,7 @@ impl QubitHandle {
     pub fn make_init_from_index<P: Precision>(
         &self,
         index: u64,
-    ) -> Result<QubitInitialState<P>, InvalidValueError> {
+    ) -> Result<QubitInitialState<P>, CircuitError> {
         let n = self.indices.len();
         if index < (1 << n) as u64 {
             Ok((self.indices.clone(), InitialState::Index(index)))
@@ -224,7 +224,7 @@ impl QubitHandle {
                 "Index {:?} is too large, must be less than 2^{:?}",
                 index, n
             );
-            InvalidValueError::make_err(message)
+            CircuitError::make_err(message)
         }
     }
 
@@ -232,7 +232,7 @@ impl QubitHandle {
     pub fn make_init_from_state<P: Precision>(
         &self,
         state: Vec<Complex<P>>,
-    ) -> Result<QubitInitialState<P>, InvalidValueError> {
+    ) -> Result<QubitInitialState<P>, CircuitError> {
         let n = self.indices.len();
         if state.len() == 1 << n {
             Ok((self.indices.clone(), InitialState::FullState(state)))
@@ -242,7 +242,7 @@ impl QubitHandle {
                 state.len(),
                 n
             );
-            InvalidValueError::make_err(message)
+            CircuitError::make_err(message)
         }
     }
 }

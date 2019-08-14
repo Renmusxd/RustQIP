@@ -1,4 +1,4 @@
-use crate::errors::InvalidValueError;
+use crate::errors::CircuitError;
 use crate::measurement_ops::MeasuredCondition;
 use crate::pipeline::{
     get_required_state_size_from_frontier, run_with_statebuilder, InitialState, QuantumState,
@@ -164,7 +164,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
 }
 
 /// Print out an ASCII representation of the circuit.
-pub fn run_debug(q: &Qubit) -> Result<(), InvalidValueError> {
+pub fn run_debug(q: &Qubit) -> Result<(), CircuitError> {
     run_with_statebuilder(q, |qs| {
         let n = get_required_state_size_from_frontier(&qs);
         Ok(PrintPipeline::<f32>::new(n))

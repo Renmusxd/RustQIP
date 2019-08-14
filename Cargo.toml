@@ -1,6 +1,6 @@
 [package]
 name = "qip"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Sumner Hearth <sumnernh@gmail.com>"]
 description = "A library for efficient quantum computing simulations."
 repository = "https://github.com/Renmusxd/RustQIP"
