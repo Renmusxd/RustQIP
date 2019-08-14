@@ -122,7 +122,7 @@ fn consolidate_column<P: Precision>(
             }
         });
 
-    pathfinder.path(column, &nonzeros)?.into_iter().try_fold(
+    let results = pathfinder.path(column, &nonzeros)?.into_iter().try_fold(
         vec![],
         |mut ops, (from_code, to_code)| {
             let from_row = &sparse_mat[from_code as usize];
@@ -183,7 +183,14 @@ fn consolidate_column<P: Precision>(
 
             Ok(ops)
         },
-    )
+    )?;
+
+    // Try to catch failures early, it's an expensive operation for each column.
+    if sparse_mat[column as usize].len() != 1 {
+        CircuitError::make_err(format!("Could not consolidate col/row = {:?}", column))
+    } else {
+        Ok(results)
+    }
 }
 
 /// A successful decomposition with the list of ops to recreate the matrix, and a base controlled

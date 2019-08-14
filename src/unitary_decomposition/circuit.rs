@@ -4,7 +4,9 @@ use crate::unitary_decomposition::decomposition::{BaseUnitary, DecompOp};
 use crate::{Complex, Qubit, UnitaryBuilder};
 use num::{One, Zero};
 
-/// TODO
+/// Takes a unitary builder and a sparse unitary matrix and attempts to convert the matrix into the
+/// equivalent circuit using basic gates. This is a bit numerically unstable and can be very
+/// expensive for arbitrary matrices.
 pub fn convert_sparse_to_circuit(
     b: &mut dyn UnitaryBuilder,
     q: Qubit,
