@@ -8,7 +8,7 @@ fn run_alice(
     b: &mut OpBuilder,
     epr_alice: Qubit,
     initial_angle: f64,
-) -> Result<MeasurementHandle, &'static str> {
+) -> Result<MeasurementHandle, InvalidValueError> {
     // Set up the qubits
     let q_random = b.qubit(1)?;
 
@@ -31,7 +31,7 @@ fn run_bob(
     b: &mut OpBuilder,
     epr_bob: Qubit,
     handle: MeasurementHandle,
-) -> Result<f64, &'static str> {
+) -> Result<f64, InvalidValueError> {
     let q_bob = b.single_qubit_classical_sidechannel(
         epr_bob,
         &[handle],
@@ -42,7 +42,7 @@ fn run_bob(
                 &[0b10] => Ok(b.x(q)),
                 &[0b01] => Ok(b.z(q)),
                 &[0b11] => Ok(b.y(q)),
-                _ => Err("Shouldn't be possible"),
+                _ => panic!("Shouldn't be possible"),
             }
         }),
     );
@@ -58,7 +58,7 @@ fn run_bob(
     Ok(ps[1].sqrt().atan2(ps[0].sqrt()))
 }
 
-fn main() -> Result<(), &'static str> {
+fn main() -> Result<(), InvalidValueError> {
     // Can only measure angles between 0 and 90 degrees
     let random_angle = rand::random::<f64>() * std::f64::consts::FRAC_PI_2;
 

@@ -1,3 +1,4 @@
+use crate::errors::InvalidValueError;
 use crate::unitary_decomposition::utils::gray_code;
 
 pub struct BitPather {
@@ -13,11 +14,11 @@ impl BitPather {
 
     /// Take the list of indices with nonzero values and return the path through them
     /// to the target, returns the bits needed to swap (in the form `1 << index`).
-    pub fn path(&self, to: u64, _through: &[u64]) -> Result<Vec<(u64, u64)>, &'static str> {
-        let target_index = self
-            .encoding
-            .binary_search(&to)
-            .map_err(|_| "Could not find `to` bits.")?;
+    pub fn path(&self, to: u64, _through: &[u64]) -> Result<Vec<(u64, u64)>, InvalidValueError> {
+        let target_index = self.encoding.binary_search(&to).map_err(|_| {
+            let message = format!("Couldn't find to={:b}", to);
+            InvalidValueError::new(message)
+        })?;
         Ok(self.encoding[target_index..]
             .iter()
             .zip(self.encoding[target_index + 1..].iter())

@@ -3,7 +3,7 @@ extern crate qip;
 
 use qip::*;
 
-fn main() -> Result<(), &'static str> {
+fn main() -> Result<(), InvalidValueError> {
     // Setup inputs
     let mut b = OpBuilder::new();
     let q1 = b.qubit(1)?;

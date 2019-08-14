@@ -1,6 +1,7 @@
 extern crate qip;
 
 use qip::common_circuits::epr_pair;
+use qip::errors::InvalidValueError;
 use qip::*;
 
 fn run_alice(b: &mut OpBuilder, epr_alice: Qubit, bit_a: bool, bit_b: bool) -> Qubit {
@@ -24,7 +25,7 @@ fn run_bob(b: &mut OpBuilder, q_alice: Qubit, epr_bob: Qubit) -> (bool, bool) {
     ((m & 2) == 2, (m & 1) == 1)
 }
 
-fn main() -> Result<(), &'static str> {
+fn main() -> Result<(), InvalidValueError> {
     let bit_a = true;
     let bit_b = false;
 

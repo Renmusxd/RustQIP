@@ -6,6 +6,7 @@ use std::collections::{BinaryHeap, VecDeque};
 
 use rayon::prelude::*;
 
+use crate::errors::InvalidValueError;
 use crate::measurement_ops::{
     measure, measure_prob, measure_probs, prob_magnitude, soft_measure, MeasuredCondition,
 };
@@ -19,7 +20,7 @@ use std::rc::Rc;
 
 /// A functions which maps measured values to a series of StateModifiers which will be applied to
 /// the state.
-pub type SideChannelModifierFn = dyn Fn(&[u64]) -> Result<Vec<StateModifier>, &'static str>;
+pub type SideChannelModifierFn = dyn Fn(&[u64]) -> Result<Vec<StateModifier>, InvalidValueError>;
 
 /// The set of ways to modify a QuantumState
 pub enum StateModifierType {
@@ -359,9 +360,14 @@ impl<P: Precision> LocalQuantumState<P> {
         state: Vec<Complex<P>>,
         natural_order: bool,
         multithread: bool,
-    ) -> Result<LocalQuantumState<P>, &'static str> {
+    ) -> Result<LocalQuantumState<P>, InvalidValueError> {
         if state.len() != 1 << n as usize {
-            return Err("State is not correct size");
+            let message = format!(
+                "Provided state is not the correct size, expected {:?} but found {:?}",
+                1 << n,
+                state.len()
+            );
+            return InvalidValueError::make_err(message);
         }
 
         let arena = vec![Complex::zero(); state.len()];
@@ -553,7 +559,7 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
 fn fold_modify_state<P: Precision, QS: QuantumState<P>>(
     acc: (QS, MeasuredResults<P>),
     modifier: &StateModifier,
-) -> Result<(QS, MeasuredResults<P>), &'static str> {
+) -> Result<(QS, MeasuredResults<P>), InvalidValueError> {
     let (mut s, mut mr) = acc;
     match &modifier.modifier {
         StateModifierType::UnitaryOp(op) => {
@@ -577,7 +583,7 @@ fn fold_modify_state<P: Precision, QS: QuantumState<P>>(
                 .collect();
             measured_values.iter().try_for_each(|x| match x {
                 Some(_) => Ok(()),
-                None => Err("Not all measurements found"),
+                None => InvalidValueError::make_str_err("Not all measurements found"),
             })?;
             let measured_values: Vec<_> = measured_values
                 .into_iter()
@@ -623,8 +629,8 @@ pub fn get_required_state_size<P: Precision>(
 /// Builds a default state of size `n`
 pub fn run<P: Precision, QS: QuantumState<P>>(
     q: &Qubit,
-) -> Result<(QS, MeasuredResults<P>), &'static str> {
-    run_with_statebuilder(q, |qs| -> Result<QS, &'static str> {
+) -> Result<(QS, MeasuredResults<P>), InvalidValueError> {
+    run_with_statebuilder(q, |qs| -> Result<QS, InvalidValueError> {
         let n = get_required_state_size_from_frontier(&qs);
         Ok(QS::new(n))
     })
@@ -634,8 +640,8 @@ pub fn run<P: Precision, QS: QuantumState<P>>(
 pub fn run_with_init<P: Precision, QS: QuantumState<P>>(
     q: &Qubit,
     states: &[QubitInitialState<P>],
-) -> Result<(QS, MeasuredResults<P>), &'static str> {
-    run_with_statebuilder(q, |qs| -> Result<QS, &'static str> {
+) -> Result<(QS, MeasuredResults<P>), InvalidValueError> {
+    run_with_statebuilder(q, |qs| -> Result<QS, InvalidValueError> {
         let n = get_required_state_size(&qs, states);
         Ok(QS::new_from_initial_states(n, states))
     })
@@ -645,11 +651,11 @@ pub fn run_with_init<P: Precision, QS: QuantumState<P>>(
 pub fn run_with_statebuilder<
     P: Precision,
     QS: QuantumState<P>,
-    F: FnOnce(Vec<&Qubit>) -> Result<QS, &'static str>,
+    F: FnOnce(Vec<&Qubit>) -> Result<QS, InvalidValueError>,
 >(
     q: &Qubit,
     state_builder: F,
-) -> Result<(QS, MeasuredResults<P>), &'static str> {
+) -> Result<(QS, MeasuredResults<P>), InvalidValueError> {
     let (frontier, ops) = get_opfns_and_frontier(q);
     let state = state_builder(frontier)?;
     run_with_state_and_ops(&ops, state)
@@ -659,13 +665,18 @@ pub fn run_with_statebuilder<
 pub fn run_with_state<P: Precision, QS: QuantumState<P>>(
     q: &Qubit,
     state: QS,
-) -> Result<(QS, MeasuredResults<P>), &'static str> {
+) -> Result<(QS, MeasuredResults<P>), InvalidValueError> {
     let (frontier, ops) = get_opfns_and_frontier(q);
 
     let req_n = get_required_state_size::<P>(&frontier, &[]);
 
     if req_n != state.n() {
-        Err("Provided state n is not the required value for this circuit.")
+        let message = format!(
+            "Circuit expected {:?} qubits but state contained {:?}",
+            req_n,
+            state.n()
+        );
+        InvalidValueError::make_err(message)
     } else {
         run_with_state_and_ops(&ops, state)
     }
@@ -674,7 +685,7 @@ pub fn run_with_state<P: Precision, QS: QuantumState<P>>(
 /// `run` the pipeline using `LocalQuantumState`.
 pub fn run_local<P: Precision>(
     q: &Qubit,
-) -> Result<(LocalQuantumState<P>, MeasuredResults<P>), &'static str> {
+) -> Result<(LocalQuantumState<P>, MeasuredResults<P>), InvalidValueError> {
     run(q)
 }
 
@@ -682,14 +693,14 @@ pub fn run_local<P: Precision>(
 pub fn run_local_with_init<P: Precision>(
     q: &Qubit,
     states: &[QubitInitialState<P>],
-) -> Result<(LocalQuantumState<P>, MeasuredResults<P>), &'static str> {
+) -> Result<(LocalQuantumState<P>, MeasuredResults<P>), InvalidValueError> {
     run_with_init(q, states)
 }
 
 fn run_with_state_and_ops<P: Precision, QS: QuantumState<P>>(
     ops: &[&StateModifier],
     state: QS,
-) -> Result<(QS, MeasuredResults<P>), &'static str> {
+) -> Result<(QS, MeasuredResults<P>), InvalidValueError> {
     ops.iter()
         .cloned()
         .try_fold((state, MeasuredResults::new()), fold_modify_state)
@@ -803,7 +814,7 @@ pub fn make_circuit_matrix<P: Precision>(
                 .collect()
         })
         .collect();
-    (0..1 << n).map(|row| {
-        (0 .. 1<<n).map(|col| lookup[col][row]).collect()
-    }).collect()
+    (0..1 << n)
+        .map(|row| (0..1 << n).map(|col| lookup[col][row]).collect())
+        .collect()
 }

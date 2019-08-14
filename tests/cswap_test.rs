@@ -14,7 +14,7 @@ fn assert_almost_eq(a: f64, b: f64, prec: i32) {
 
 fn setup_cswap_circuit(
     vec_n: u64,
-) -> Result<(Qubit, QubitHandle, QubitHandle, MeasurementHandle), &'static str> {
+) -> Result<(Qubit, QubitHandle, QubitHandle, MeasurementHandle), InvalidValueError> {
     // Setup inputs
     let mut b = OpBuilder::new();
     let q1 = b.qubit(1)?;
@@ -37,7 +37,7 @@ fn setup_cswap_circuit(
 }
 
 #[test]
-fn test_cswap_aligned() -> Result<(), &'static str> {
+fn test_cswap_aligned() -> Result<(), InvalidValueError> {
     // Setup inputs
     let (q1, h2, h3, m1) = setup_cswap_circuit(3)?;
 
@@ -55,7 +55,7 @@ fn test_cswap_aligned() -> Result<(), &'static str> {
 }
 
 #[test]
-fn test_cswap_orthogonal() -> Result<(), &'static str> {
+fn test_cswap_orthogonal() -> Result<(), InvalidValueError> {
     // Setup inputs
     let (q1, h2, h3, m1) = setup_cswap_circuit(3)?;
 
@@ -87,7 +87,7 @@ fn sin_wave(n: u64, w: f64, d: f64) -> Vec<Complex<f64>> {
 }
 
 #[test]
-fn test_cswap_waves() -> Result<(), &'static str> {
+fn test_cswap_waves() -> Result<(), InvalidValueError> {
     // Setup inputs
     let (q1, h2, h3, m1) = setup_cswap_circuit(3)?;
 

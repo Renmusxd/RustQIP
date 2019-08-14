@@ -1,3 +1,4 @@
+use crate::errors::InvalidValueError;
 use crate::unitary_decomposition::bit_pathing::BitPather;
 use crate::unitary_decomposition::utils::*;
 use crate::Complex;
@@ -95,10 +96,16 @@ pub fn reconstruct_unitary<P: Precision + Clone>(
                 to_bits,
                 theta,
                 ..
-            } => apply_controlled_rotation_and_clean(*from_bits, *to_bits, *theta, &mut base_mat, |val| {
-                val.norm_sqr() >= keep_threshold
-            }),
-            DecompOp::Phase { row, phi } => apply_phase_to_row(*phi, &mut base_mat[(*row) as usize]),
+            } => apply_controlled_rotation_and_clean(
+                *from_bits,
+                *to_bits,
+                *theta,
+                &mut base_mat,
+                |val| val.norm_sqr() >= keep_threshold,
+            ),
+            DecompOp::Phase { row, phi } => {
+                apply_phase_to_row(*phi, &mut base_mat[(*row) as usize])
+            }
         };
     });
     base_mat
@@ -109,7 +116,7 @@ fn consolidate_column<P: Precision>(
     column: u64,
     sparse_mat: &mut [Vec<(u64, Complex<P>)>],
     keep_threshold: P,
-) -> Result<Vec<DecompOp<P>>, &'static str> {
+) -> Result<Vec<DecompOp<P>>, InvalidValueError> {
     let nonzeros = sparse_mat
         .iter()
         .enumerate()
@@ -208,7 +215,7 @@ pub fn decompose_unitary<P: Precision>(
     n: u64,
     mut sparse_mat: Vec<Vec<(u64, Complex<P>)>>,
     drop_below_mag: P,
-) -> Result<DecompositionResult<P>, &'static str> {
+) -> Result<DecompositionResult<P>, InvalidValueError> {
     let keep_threshold = drop_below_mag.powi(2);
     // Get the order in which we should consolidate entries.
     let mut encoding = gray_code(n);
@@ -327,7 +334,7 @@ mod unitary_decomp_tests {
     }
 
     #[test]
-    fn test_basic_decomp() -> Result<(), &'static str> {
+    fn test_basic_decomp() -> Result<(), InvalidValueError> {
         let v = vec![
             vec![(1, 1.0)],
             vec![(0, 1.0)],
@@ -337,7 +344,8 @@ mod unitary_decomp_tests {
         let v = sparse_from_reals(v);
         let flat_v = flat_round(v.clone(), 10);
 
-        let (ops, base) = decompose_unitary(2, v, EPSILON)?.map_err(|_| "Failed to decompose")?;
+        let (ops, base) = decompose_unitary(2, v, EPSILON)?
+            .map_err(|_| InvalidValueError::new("Failed to decompose matrix".to_string()))?;
         let rebuilt = reconstruct_unitary(2, &ops, &base);
 
         let flat_r = flat_round(rebuilt.clone(), 10);
@@ -346,7 +354,7 @@ mod unitary_decomp_tests {
     }
 
     #[test]
-    fn test_rotated_decomp() -> Result<(), &'static str> {
+    fn test_rotated_decomp() -> Result<(), InvalidValueError> {
         let v = vec![
             vec![
                 (0, std::f64::consts::FRAC_1_SQRT_2),
@@ -362,7 +370,8 @@ mod unitary_decomp_tests {
         let v = sparse_from_reals(v);
         let flat_v = flat_round(v.clone(), 10);
 
-        let (ops, base) = decompose_unitary(2, v, EPSILON)?.map_err(|_| "Failed to decompose")?;
+        let (ops, base) = decompose_unitary(2, v, EPSILON)?
+            .map_err(|_| InvalidValueError::new("Failed to decompose".to_string()))?;
         let rebuilt = reconstruct_unitary(2, &ops, &base);
 
         let flat_r = flat_round(rebuilt.clone(), 10);
@@ -371,7 +380,7 @@ mod unitary_decomp_tests {
     }
 
     #[test]
-    fn test_rotated_other_decomp() -> Result<(), &'static str> {
+    fn test_rotated_other_decomp() -> Result<(), InvalidValueError> {
         let v = vec![
             vec![
                 (0, std::f64::consts::FRAC_1_SQRT_2),
@@ -387,7 +396,8 @@ mod unitary_decomp_tests {
         let v = sparse_from_reals(v);
         let flat_v = flat_round(v.clone(), 10);
 
-        let (ops, base) = decompose_unitary(2, v, EPSILON)?.map_err(|_| "Failed to decompose")?;
+        let (ops, base) = decompose_unitary(2, v, EPSILON)?
+            .map_err(|_| InvalidValueError::new("Failed to decompose".to_string()))?;
         let rebuilt = reconstruct_unitary(2, &ops, &base);
 
         let flat_r = flat_round(rebuilt.clone(), 10);
@@ -396,7 +406,7 @@ mod unitary_decomp_tests {
     }
 
     #[test]
-    fn test_rotated_eighth_decomp() -> Result<(), &'static str> {
+    fn test_rotated_eighth_decomp() -> Result<(), InvalidValueError> {
         let (s, c) = std::f64::consts::FRAC_PI_8.sin_cos();
         let v = vec![
             vec![(0, c), (2, -s)],
@@ -407,7 +417,8 @@ mod unitary_decomp_tests {
         let v = sparse_from_reals(v);
         let flat_v = flat_round(v.clone(), 10);
 
-        let (ops, base) = decompose_unitary(2, v, EPSILON)?.map_err(|_| "Failed to decompose")?;
+        let (ops, base) = decompose_unitary(2, v, EPSILON)?
+            .map_err(|_| InvalidValueError::new("Failed to decompose".to_string()))?;
         let rebuilt = reconstruct_unitary(2, &ops, &base);
 
         let flat_r = flat_round(rebuilt.clone(), 10);
@@ -416,7 +427,7 @@ mod unitary_decomp_tests {
     }
 
     #[test]
-    fn test_pauli_decomp() -> Result<(), &'static str> {
+    fn test_pauli_decomp() -> Result<(), InvalidValueError> {
         let v = vec![
             vec![
                 (0, (std::f64::consts::FRAC_1_SQRT_2, 0.0)),
@@ -432,10 +443,8 @@ mod unitary_decomp_tests {
         let v = sparse_from_tuples(v);
         let flat_v = flat_round(v.clone(), 10);
 
-        let (ops, base) = decompose_unitary(2, v, EPSILON)?.map_err(|(_, mat)| {
-            dbg!(mat);
-            "Failed to decompose"
-        })?;
+        let (ops, base) = decompose_unitary(2, v, EPSILON)?
+            .map_err(|_| InvalidValueError::new("Failed to decompose".to_string()))?;
         let rebuilt = reconstruct_unitary(2, &ops, &base);
 
         let flat_r = flat_round(rebuilt.clone(), 10);
@@ -444,18 +453,16 @@ mod unitary_decomp_tests {
     }
 
     #[test]
-    fn test_larger_antidiagonal_decomp() -> Result<(), &'static str> {
+    fn test_larger_antidiagonal_decomp() -> Result<(), InvalidValueError> {
         let n = 3;
-        let v: Vec<_> = (0 .. 1 << n).map(|row| {
-            vec![((1 << n) - row - 1, Complex::one())]
-        }).collect();
+        let v: Vec<_> = (0..1 << n)
+            .map(|row| vec![((1 << n) - row - 1, Complex::one())])
+            .collect();
 
         let flat_v = flat_round(v.clone(), 10);
 
-        let (ops, base) = decompose_unitary(n, v, EPSILON)?.map_err(|(_, mat)| {
-            dbg!(mat);
-            "Failed to decompose"
-        })?;
+        let (ops, base) = decompose_unitary(n, v, EPSILON)?
+            .map_err(|_| InvalidValueError::new("Failed to decompose".to_string()))?;
         let rebuilt = reconstruct_unitary(n, &ops, &base);
 
         let flat_r = flat_round(rebuilt.clone(), 10);
@@ -464,19 +471,17 @@ mod unitary_decomp_tests {
     }
 
     #[test]
-    fn test_larger_antidiagonal_imag_decomp() -> Result<(), &'static str> {
+    fn test_larger_antidiagonal_imag_decomp() -> Result<(), InvalidValueError> {
         let n = 3;
-        let v: Vec<_> = (0 .. 1 << n).map(|row| {
-            vec![((1 << n) - row - 1, (0.0, 1.0))]
-        }).collect();
+        let v: Vec<_> = (0..1 << n)
+            .map(|row| vec![((1 << n) - row - 1, (0.0, 1.0))])
+            .collect();
         let v = sparse_from_tuples(v);
 
         let flat_v = flat_round(v.clone(), 10);
 
-        let (ops, base) = decompose_unitary(n, v, EPSILON)?.map_err(|(_, mat)| {
-            dbg!(mat);
-            "Failed to decompose"
-        })?;
+        let (ops, base) = decompose_unitary(n, v, EPSILON)?
+            .map_err(|_| InvalidValueError::new("Failed to decompose".to_string()))?;
         let rebuilt = reconstruct_unitary(n, &ops, &base);
 
         let flat_r = flat_round(rebuilt.clone(), 10);

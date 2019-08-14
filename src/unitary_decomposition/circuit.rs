@@ -1,6 +1,7 @@
 use super::decomposition::decompose_unitary;
+use crate::errors::InvalidValueError;
 use crate::unitary_decomposition::decomposition::{BaseUnitary, DecompOp};
-use crate::{Complex, Precision, Qubit, UnitaryBuilder};
+use crate::{Complex, Qubit, UnitaryBuilder};
 use num::{One, Zero};
 
 /// TODO
@@ -9,9 +10,10 @@ pub fn convert_sparse_to_circuit(
     q: Qubit,
     sparse_unitary: Vec<Vec<(u64, Complex<f64>)>>,
     drop_below: f64,
-) -> Result<Qubit, &'static str> {
+) -> Result<Qubit, InvalidValueError> {
     let decomposition = decompose_unitary(q.n(), sparse_unitary, drop_below)?;
-    let (ops, base) = decomposition.map_err(|_| "Decomposition failed.")?;
+    let (ops, base) =
+        decomposition.map_err(|_| InvalidValueError::new("Decomposition failed.".to_string()))?;
     convert_decomp_ops_to_circuit(b, q, &base, &ops)
 }
 
@@ -20,7 +22,7 @@ fn convert_decomp_ops_to_circuit(
     q: Qubit,
     base: &BaseUnitary<f64>,
     ops: &[DecompOp<f64>],
-) -> Result<Qubit, &'static str> {
+) -> Result<Qubit, InvalidValueError> {
     let n = q.n();
     let qs = b.split_all(q);
 
@@ -34,7 +36,7 @@ fn convert_decomp_ops_to_circuit(
     });
     let mask = base_mask;
 
-    let (qs, mask) = ops.into_iter().fold((qs, mask), |(qs, mask), op| {
+    let (qs, mask) = ops.iter().fold((qs, mask), |(qs, mask), op| {
         match op {
             DecompOp::Phase { row, phi } => {
                 let (row, phi) = (*row, *phi);
@@ -62,9 +64,9 @@ fn convert_decomp_ops_to_circuit(
 
                 let qubit_index = qs.len() as u64 - bit_index - 1;
                 let qs = apply_to_index_with_control(b, qs, qubit_index, |cb, q| {
-                    let (s, c) = theta.sin_cos();
+                    let (sin, cos) = theta.sin_cos();
                     let name = format!("Rotate({:?})", theta);
-                    cb.real_mat(&name, q, &[c, -s, s, c]).unwrap()
+                    cb.real_mat(&name, q, &[cos, -sin, sin, cos]).unwrap()
                 });
                 (qs, new_mask)
             }
@@ -113,6 +115,7 @@ mod unitary_decomp_circuit_tests {
     use crate::unitary_decomposition::decomposition::reconstruct_unitary;
     use crate::unitary_decomposition::utils::flat_sparse;
     use crate::{run_debug, OpBuilder};
+    use std::error::Error;
 
     const EPSILON: f64 = 0.00000000001;
 
@@ -153,7 +156,7 @@ mod unitary_decomp_circuit_tests {
             .collect()
     }
 
-    fn assert_decomp(n: u64, v: Vec<Vec<(u64, Complex<f64>)>>) -> Result<(), &'static str> {
+    fn assert_decomp(n: u64, v: Vec<Vec<(u64, Complex<f64>)>>) -> Result<(), InvalidValueError> {
         let flat_v = flat_round(v.clone(), 10);
         let mut b = OpBuilder::new();
         let q = b.qubit(n).unwrap();
@@ -180,13 +183,17 @@ mod unitary_decomp_circuit_tests {
         n: u64,
         base: Option<BaseUnitary<f64>>,
         ops: Vec<DecompOp<f64>>,
-    ) -> Result<(), &'static str> {
-
+    ) -> Result<(), InvalidValueError> {
         let base = base.unwrap_or(BaseUnitary {
             top_row: (1 << n) - 1,
             bot_row: (1 << n) - 2,
             bit_index: 0,
-            dat: [Complex::one(), Complex::zero(), Complex::zero(), Complex::one()]
+            dat: [
+                Complex::one(),
+                Complex::zero(),
+                Complex::zero(),
+                Complex::one(),
+            ],
         });
 
         let reconstructed = reconstruct_unitary(n, &ops, &base);
@@ -195,7 +202,7 @@ mod unitary_decomp_circuit_tests {
         let q = b.qubit(n)?;
         let q = convert_decomp_ops_to_circuit(&mut b, q, &base, &ops)?;
 
-        run_debug(&q)?;
+        run_debug(&q).unwrap();
 
         let circuit_mat = make_circuit_matrix::<f64>(n, &q, false);
         let circuit_mat = circuit_mat
@@ -215,7 +222,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_identity_rotate_decomp_ops() -> Result<(), &'static str> {
+    fn test_identity_rotate_decomp_ops() -> Result<(), Box<dyn Error>> {
         let tests = vec![
             (0b00, 0b10, 1),
             (0b00, 0b01, 0),
@@ -226,9 +233,8 @@ mod unitary_decomp_circuit_tests {
             (0b11, 0b01, 1),
             (0b11, 0b10, 0),
         ];
-        tests
-            .into_iter()
-            .try_for_each(|(from_bits, to_bits, bit_index)| {
+        tests.into_iter().try_for_each(
+            |(from_bits, to_bits, bit_index)| -> Result<(), Box<dyn Error>> {
                 let ops = vec![DecompOp::Rotation {
                     from_bits,
                     to_bits,
@@ -237,12 +243,13 @@ mod unitary_decomp_circuit_tests {
                 }];
                 assert_decomp_ops_and_base(2, None, ops)?;
                 Ok(())
-            })?;
+            },
+        )?;
         Ok(())
     }
 
     #[test]
-    fn test_identity_phase_decomp_ops() -> Result<(), &'static str> {
+    fn test_identity_phase_decomp_ops() -> Result<(), InvalidValueError> {
         let tests = vec![0, 1, 2, 3];
         tests.into_iter().try_for_each(|row| {
             let ops = vec![DecompOp::Phase { row, phi: 0.0 }];
@@ -253,7 +260,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_half_rotate_decomp_ops() -> Result<(), &'static str> {
+    fn test_half_rotate_decomp_ops() -> Result<(), InvalidValueError> {
         let tests = vec![
             (0b00, 0b10, 1),
             (0b00, 0b01, 0),
@@ -280,7 +287,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_half_phase_decomp_ops() -> Result<(), &'static str> {
+    fn test_half_phase_decomp_ops() -> Result<(), InvalidValueError> {
         let tests = vec![0, 1, 2, 3];
         tests.into_iter().try_for_each(|row| {
             let ops = vec![DecompOp::Phase {
@@ -294,7 +301,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_quarter_rotate_decomp_ops() -> Result<(), &'static str> {
+    fn test_quarter_rotate_decomp_ops() -> Result<(), InvalidValueError> {
         let tests = vec![
             (0b00, 0b10, 1),
             (0b00, 0b01, 0),
@@ -321,7 +328,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_quarter_phase_decomp_ops() -> Result<(), &'static str> {
+    fn test_quarter_phase_decomp_ops() -> Result<(), InvalidValueError> {
         let tests = vec![0, 1, 2, 3];
         tests.into_iter().try_for_each(|row| {
             let ops = vec![DecompOp::Phase {
@@ -335,7 +342,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_two_quarter_rotate_decomp_ops() -> Result<(), &'static str> {
+    fn test_two_quarter_rotate_decomp_ops() -> Result<(), InvalidValueError> {
         let tests = vec![
             (0b00, 0b10, 1),
             (0b00, 0b01, 0),
@@ -370,7 +377,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_two_quarter_phase_decomp_ops() -> Result<(), &'static str> {
+    fn test_two_quarter_phase_decomp_ops() -> Result<(), InvalidValueError> {
         let tests = vec![0, 1, 2, 3];
         tests.into_iter().try_for_each(|row| {
             let ops = vec![
@@ -390,7 +397,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_undo_quarter_rotate_decomp_ops() -> Result<(), &'static str> {
+    fn test_undo_quarter_rotate_decomp_ops() -> Result<(), InvalidValueError> {
         let tests = vec![
             (0b00, 0b10, 1),
             (0b00, 0b01, 0),
@@ -425,7 +432,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_undo_quarter_phase_decomp_ops() -> Result<(), &'static str> {
+    fn test_undo_quarter_phase_decomp_ops() -> Result<(), InvalidValueError> {
         let tests = vec![0, 1, 2, 3];
         tests.into_iter().try_for_each(|row| {
             let ops = vec![
@@ -445,7 +452,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_undo_quarter_row_rotate_decomp_ops() -> Result<(), &'static str> {
+    fn test_undo_quarter_row_rotate_decomp_ops() -> Result<(), InvalidValueError> {
         let tests = vec![
             (0b00, 0b10, 1),
             (0b00, 0b01, 0),
@@ -480,7 +487,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_sequence_rotate_phase_decomp_ops() -> Result<(), &'static str> {
+    fn test_sequence_rotate_phase_decomp_ops() -> Result<(), InvalidValueError> {
         let tests = vec![
             (0b00, 0b10, 1),
             (0b00, 0b01, 0),
@@ -513,7 +520,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_sequence_rotate_phase_decomp_ops_2() -> Result<(), &'static str> {
+    fn test_sequence_rotate_phase_decomp_ops_2() -> Result<(), InvalidValueError> {
         let tests = vec![
             (0b00, 0b10, 1),
             (0b00, 0b01, 0),
@@ -546,7 +553,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_decompose_basic() -> Result<(), &'static str> {
+    fn test_decompose_basic() -> Result<(), InvalidValueError> {
         let v = vec![
             vec![(1, 1.0)],
             vec![(0, 1.0)],
@@ -559,7 +566,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_decompose_rotation() -> Result<(), &'static str> {
+    fn test_decompose_rotation() -> Result<(), InvalidValueError> {
         let (s, c) = std::f64::consts::FRAC_PI_8.sin_cos();
         let v = vec![
             vec![(0, c), (2, -s)],
@@ -573,7 +580,7 @@ mod unitary_decomp_circuit_tests {
     }
 
     #[test]
-    fn test_decompose_pauli() -> Result<(), &'static str> {
+    fn test_decompose_pauli() -> Result<(), InvalidValueError> {
         let v = vec![
             vec![
                 (0, (std::f64::consts::FRAC_1_SQRT_2, 0.0)),

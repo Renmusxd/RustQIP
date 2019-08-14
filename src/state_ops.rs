@@ -2,6 +2,7 @@
 extern crate rayon;
 use rayon::prelude::*;
 
+use crate::errors::InvalidValueError;
 use crate::iterators::*;
 use crate::utils::*;
 use crate::{Complex, Precision};
@@ -63,12 +64,21 @@ impl fmt::Debug for QubitOp {
 }
 
 /// Make a Matrix QubitOp
-pub fn make_matrix_op(indices: Vec<u64>, dat: Vec<Complex<f64>>) -> Result<QubitOp, &'static str> {
-    let expected_mat_size = 1 << (2 * indices.len());
+pub fn make_matrix_op(
+    indices: Vec<u64>,
+    dat: Vec<Complex<f64>>,
+) -> Result<QubitOp, InvalidValueError> {
+    let n = indices.len();
+    let expected_mat_size = 1 << (2 * n);
     if indices.is_empty() {
-        Err("Must supply at least one op index")
+        InvalidValueError::make_str_err("Must supply at least one op index")
     } else if dat.len() != expected_mat_size {
-        Err("Matrix data not correct size for 2^n by 2^n matrix")
+        let message = format!(
+            "Matrix data has {:?} entries versus expected 2^2*{:?}",
+            dat.len(),
+            n
+        );
+        InvalidValueError::make_err(message)
     } else {
         Ok(QubitOp::Matrix(indices, dat))
     }
@@ -81,18 +91,27 @@ pub fn make_sparse_matrix_op(
     indices: Vec<u64>,
     dat: Vec<Vec<(u64, Complex<f64>)>>,
     natural_order: bool,
-) -> Result<QubitOp, &'static str> {
+) -> Result<QubitOp, InvalidValueError> {
     let n = indices.len();
     let expected_mat_size = 1 << n;
     if indices.is_empty() {
-        Err("Must supply at least one op index")
+        InvalidValueError::make_str_err("Must supply at least one op index")
     } else if dat.len() != expected_mat_size {
-        Err("SparseMatrix data not correct size for 2^n rows")
+        let message = format!(
+            "Sparse matrix has {:?} rows versus expected 2^{:?}",
+            dat.len(),
+            n
+        );
+        InvalidValueError::make_err(message)
     } else {
         // Each row needs at least one entry
-        dat.iter().try_for_each(|v| {
+        dat.iter().enumerate().try_for_each(|(row, v)| {
             if v.is_empty() {
-                Err("All rows of SparseMatrix must have data")
+                let message = format!(
+                    "All rows of sparse matrix must have data ({:?} is empty)",
+                    row
+                );
+                InvalidValueError::make_err(message)
             } else {
                 Ok(())
             }
@@ -147,11 +166,19 @@ pub fn make_sparse_matrix_from_function<F: Fn(u64) -> Vec<(u64, Complex<f64>)>>(
 }
 
 /// Make a Swap QubitOp
-pub fn make_swap_op(a_indices: Vec<u64>, b_indices: Vec<u64>) -> Result<QubitOp, &'static str> {
+pub fn make_swap_op(
+    a_indices: Vec<u64>,
+    b_indices: Vec<u64>,
+) -> Result<QubitOp, InvalidValueError> {
     if a_indices.is_empty() || b_indices.is_empty() {
-        Err("Need at least 1 swap index for a and b")
+        InvalidValueError::make_str_err("Need at least 1 swap index for a and b")
     } else if a_indices.len() != b_indices.len() {
-        Err("Swap must be performed on two sets of indices of equal length")
+        let message = format!(
+            "Swap must be performed on two sets of indices of equal length, found {:?} vs {:?}",
+            a_indices.len(),
+            b_indices.len()
+        );
+        InvalidValueError::make_err(message)
     } else {
         Ok(QubitOp::Swap(a_indices, b_indices))
     }
@@ -173,9 +200,9 @@ pub fn make_swap_op(a_indices: Vec<u64>, b_indices: Vec<u64>) -> Result<QubitOp,
 ///     assert!(false);
 /// }
 /// ```
-pub fn make_control_op(mut c_indices: Vec<u64>, op: QubitOp) -> Result<QubitOp, &'static str> {
+pub fn make_control_op(mut c_indices: Vec<u64>, op: QubitOp) -> Result<QubitOp, InvalidValueError> {
     if c_indices.is_empty() {
-        Err("Must supply at least one control index")
+        InvalidValueError::make_str_err("Must supply at least one control index")
     } else {
         match op {
             QubitOp::Control(oc_indices, oo_indices, op) => {
@@ -195,9 +222,9 @@ pub fn make_function_op(
     input_indices: Vec<u64>,
     output_indices: Vec<u64>,
     f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
-) -> Result<QubitOp, &'static str> {
+) -> Result<QubitOp, InvalidValueError> {
     if input_indices.is_empty() || output_indices.is_empty() {
-        Err("Input and Output indices must not be empty")
+        InvalidValueError::make_str_err("Input and Output indices must not be empty")
     } else {
         Ok(QubitOp::Function(input_indices, output_indices, f))
     }

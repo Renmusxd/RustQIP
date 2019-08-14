@@ -6,7 +6,7 @@ use qip::pipeline::LocalQuantumState;
 use qip::types::Precision;
 use qip::*;
 
-fn prepare_state<P: Precision>(n: u64) -> Result<LocalQuantumState<P>, &'static str> {
+fn prepare_state<P: Precision>(n: u64) -> Result<LocalQuantumState<P>, InvalidValueError> {
     let mut b = OpBuilder::new();
     let q = b.qubit(n).unwrap();
     let q = b.hadamard(q);
@@ -24,7 +24,7 @@ fn apply_us(
     b: &mut dyn UnitaryBuilder,
     search: Qubit,
     ancillary: Qubit,
-) -> Result<(Qubit, Qubit), &'static str> {
+) -> Result<(Qubit, Qubit), InvalidValueError> {
     let search = b.hadamard(search);
     let (search, ancillary) = apply_function(b, search, ancillary, |x| {
         (0, if x == 0 { std::f64::consts::PI } else { 0.0 })
@@ -38,7 +38,7 @@ fn apply_uw(
     search: Qubit,
     ancillary: Qubit,
     x0: u64,
-) -> Result<(Qubit, Qubit), &'static str> {
+) -> Result<(Qubit, Qubit), InvalidValueError> {
     // Need to move the x0 value into the closure.
     apply_function(b, search, ancillary, move |x| ((x == x0) as u64, 0.0))
 }
@@ -46,7 +46,7 @@ fn apply_uw(
 fn apply_grover_iteration<P: Precision>(
     x: u64,
     s: LocalQuantumState<P>,
-) -> Result<LocalQuantumState<P>, &'static str> {
+) -> Result<LocalQuantumState<P>, InvalidValueError> {
     let mut b = OpBuilder::new();
     let q = b.qubit(s.n() - 1)?;
     let anc = b.qubit(1)?;
@@ -56,7 +56,7 @@ fn apply_grover_iteration<P: Precision>(
     run_with_state(&q, s).map(|(s, _)| s)
 }
 
-fn main() -> Result<(), &'static str> {
+fn main() -> Result<(), InvalidValueError> {
     let n = 10;
     let x = 42;
 

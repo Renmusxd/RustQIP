@@ -14,7 +14,7 @@
 //! ```
 //! use qip::*;
 //!
-//! # fn main() -> Result<(), &'static str> {
+//! # fn main() -> Result<(), InvalidValueError> {
 //! // Make a new circuit builder.
 //! let mut b = OpBuilder::new();
 //!
@@ -61,6 +61,7 @@
 
 pub use self::builders::{OpBuilder, UnitaryBuilder};
 pub use self::common_circuits::condition;
+pub use self::errors::*;
 pub use self::pipeline::{run_local, run_local_with_init, run_with_state, QuantumState};
 pub use self::pipeline_debug::run_debug;
 pub use self::qubit_chainer::{chain, chain_tuple, chain_vec};
@@ -72,6 +73,8 @@ pub use num::Complex;
 pub mod builders;
 /// Common circuits for general usage.
 pub mod common_circuits;
+/// Error values for the library.
+pub mod errors;
 /// Code for building pipelines.
 pub mod pipeline;
 /// Tools for displaying pipelines.

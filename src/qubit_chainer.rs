@@ -1,3 +1,4 @@
+use crate::errors::InvalidValueError;
 /// This module is meant to provide some cleaner apis for common circuit designs by allowing the
 /// chaining of builder operations.
 ///
@@ -66,7 +67,7 @@ impl<'a, B: UnitaryBuilder> SingleQubitChain<'a, B> {
     /// Split the qubit, select the given indices and transfer them to a new qubit, leave the
     /// remaining indices in another qubit. This uses the relative indices (0 refers to whatever the
     /// first index of the contained qubit is).
-    pub fn split(self, indices: Vec<u64>) -> Result<DoubleQubitChain<'a, B>, &'static str> {
+    pub fn split(self, indices: Vec<u64>) -> Result<DoubleQubitChain<'a, B>, InvalidValueError> {
         let (qa, qb) = self.builder.split(self.q, indices)?;
         Ok(DoubleQubitChain::new(self.builder, qa, qb))
     }
@@ -76,18 +77,18 @@ impl<'a, B: UnitaryBuilder> SingleQubitChain<'a, B> {
     pub fn split_absolute(
         self,
         selected_indices: Vec<u64>,
-    ) -> Result<DoubleQubitChain<'a, B>, &'static str> {
+    ) -> Result<DoubleQubitChain<'a, B>, InvalidValueError> {
         let (qa, qb) = self.builder.split_absolute(self.q, selected_indices)?;
         Ok(DoubleQubitChain::new(self.builder, qa, qb))
     }
     /// Split each contained index into its own qubit object, returns a chaining struct for the vec
     /// of resulting qubits.
-    pub fn split_all(self) -> Result<VecQubitChain<'a, B>, &'static str> {
+    pub fn split_all(self) -> Result<VecQubitChain<'a, B>, InvalidValueError> {
         let qs = self.builder.split_all(self.q);
         Ok(VecQubitChain::new(self.builder, qs))
     }
     /// Apply a matrix operation to the contained qubit.
-    pub fn apply_mat(self, name: &str, mat: Vec<Complex<f64>>) -> Result<Self, &'static str> {
+    pub fn apply_mat(self, name: &str, mat: Vec<Complex<f64>>) -> Result<Self, InvalidValueError> {
         let q = self.builder.mat(name, self.q, mat)?;
         Ok(Self::new(self.builder, q))
     }
@@ -97,7 +98,7 @@ impl<'a, B: UnitaryBuilder> SingleQubitChain<'a, B> {
         name: &str,
         mat: Vec<Vec<(u64, Complex<f64>)>>,
         natural_order: bool,
-    ) -> Result<Self, &'static str> {
+    ) -> Result<Self, InvalidValueError> {
         let q = self.builder.sparse_mat(name, self.q, mat, natural_order)?;
         Ok(Self::new(self.builder, q))
     }
@@ -177,7 +178,7 @@ impl<'a, B: UnitaryBuilder> DoubleQubitChain<'a, B> {
         VecQubitChain::new(self.builder, qs)
     }
     /// Apply a swap op to the contained qubits, will only succeed of the qubits are of equal size.
-    pub fn swap(self) -> Result<Self, &'static str> {
+    pub fn swap(self) -> Result<Self, InvalidValueError> {
         let (qa, qb) = self.builder.swap(self.qa, self.qb)?;
         Ok(Self::new(self.builder, qa, qb))
     }
@@ -191,7 +192,7 @@ impl<'a, B: UnitaryBuilder> DoubleQubitChain<'a, B> {
     pub fn apply_function_op(
         self,
         f: impl Fn(u64) -> (u64, f64) + Send + Sync + 'static,
-    ) -> Result<Self, &'static str> {
+    ) -> Result<Self, InvalidValueError> {
         let (qa, qb) = self.builder.apply_function(self.qa, self.qb, Box::new(f))?;
         Ok(Self::new(self.builder, qa, qb))
     }
@@ -199,7 +200,7 @@ impl<'a, B: UnitaryBuilder> DoubleQubitChain<'a, B> {
     pub fn apply_boxed_function_op(
         self,
         f: Box<Fn(u64) -> (u64, f64) + Send + Sync>,
-    ) -> Result<Self, &'static str> {
+    ) -> Result<Self, InvalidValueError> {
         let (qa, qb) = self.builder.apply_function(self.qa, self.qb, f)?;
         Ok(Self::new(self.builder, qa, qb))
     }
@@ -249,7 +250,7 @@ impl<'a, B: UnitaryBuilder> VecQubitChain<'a, B> {
     pub fn partition_by_relative(
         self,
         f: impl Fn(u64) -> bool,
-    ) -> Result<DoubleQubitChain<'a, B>, &'static str> {
+    ) -> Result<DoubleQubitChain<'a, B>, InvalidValueError> {
         let (a, b): (Vec<_>, Vec<_>) = self
             .qs
             .into_iter()
@@ -257,9 +258,13 @@ impl<'a, B: UnitaryBuilder> VecQubitChain<'a, B> {
             .partition(|(i, _)| f(*i as u64));
 
         if a.is_empty() {
-            Err("Partition must provide at least one qubit to first entry.")
+            InvalidValueError::make_str_err(
+                "Partition must provide at least one qubit to first entry.",
+            )
         } else if b.is_empty() {
-            Err("Partition must provide at least one qubit to second entry.")
+            InvalidValueError::make_str_err(
+                "Partition must provide at least one qubit to second entry.",
+            )
         } else {
             let f = |vs: Vec<(usize, Qubit)>| -> Vec<Qubit> {
                 vs.into_iter().map(|(_, q)| q).collect()

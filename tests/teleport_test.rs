@@ -1,36 +1,36 @@
 extern crate qip;
 use qip::common_circuits::epr_pair;
+use qip::errors::InvalidValueError;
 use qip::pipeline::MeasurementHandle;
 use qip::*;
+use std::error::Error;
 
-fn run_alice(
-    b: &mut OpBuilder,
-    epr_alice: Qubit,
-    initial_angle: f64,
-) -> Result<MeasurementHandle, &'static str> {
+fn run_alice(b: &mut OpBuilder, epr_alice: Qubit, initial_angle: f64) -> MeasurementHandle {
     // Set up the qubits
-    let q_random = b.qubit(1)?;
+    let q_random = b.qubit(1).unwrap();
 
     // Create Alice's state
     let (sangle, cangle) = initial_angle.sin_cos();
-    let q_random = b.real_mat("Rotate", q_random, &[cangle, -sangle, sangle, cangle])?;
+    let q_random = b
+        .real_mat("Rotate", q_random, &[cangle, -sangle, sangle, cangle])
+        .unwrap();
 
     // Alice prepares her state: a|0> + b|1>
-    let (q_random, q_alice) = condition(b, q_random, epr_alice, |b, q| Ok(b.not(q)))?;
+    let (q_random, q_alice) = condition(b, q_random, epr_alice, |b, q| Ok(b.not(q))).unwrap();
     let q_random = b.hadamard(q_random);
 
     // Now she measures her two particles
     let q = b.merge(vec![q_random, q_alice]);
     let (q, handle) = b.measure(q);
 
-    Ok(handle)
+    handle
 }
 
 fn run_bob(
     b: &mut OpBuilder,
     epr_bob: Qubit,
     handle: MeasurementHandle,
-) -> Result<f64, &'static str> {
+) -> Result<f64, InvalidValueError> {
     let q_bob = b.single_qubit_classical_sidechannel(
         epr_bob,
         &[handle],
@@ -41,7 +41,7 @@ fn run_bob(
                 &[0b10] => Ok(b.x(q)),
                 &[0b01] => Ok(b.z(q)),
                 &[0b11] => Ok(b.y(q)),
-                _ => Err("Shouldn't be possible"),
+                _ => panic!("Shouldn't be possible"),
             }
         }),
     );
@@ -68,7 +68,7 @@ fn assert_almost_eq(a: f64, b: f64, prec: i32) {
 }
 
 #[test]
-fn test_teleport() -> Result<(), &'static str> {
+fn test_teleport() -> Result<(), InvalidValueError> {
     for i in 0..90 {
         // Can only measure angles between 0 and 90 degrees
         let random_angle = std::f64::consts::PI * i as f64 / 180.0;
@@ -77,7 +77,7 @@ fn test_teleport() -> Result<(), &'static str> {
         let (epr_alice, epr_bob) = epr_pair(&mut b, 1);
 
         // Give Alice her EPR qubit
-        let handle = run_alice(&mut b, epr_alice, random_angle)?;
+        let handle = run_alice(&mut b, epr_alice, random_angle);
 
         // Give Bob his and the classical measurements Alice made
         let teleported_angle = run_bob(&mut b, epr_bob, handle)?;

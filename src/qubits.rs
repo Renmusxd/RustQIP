@@ -1,3 +1,4 @@
+use crate::errors::InvalidValueError;
 use crate::pipeline::*;
 use crate::types::Precision;
 use crate::Complex;
@@ -28,9 +29,9 @@ pub struct Qubit {
 }
 
 impl Qubit {
-    pub(crate) fn new(id: u64, indices: Vec<u64>) -> Result<Qubit, &'static str> {
+    pub(crate) fn new(id: u64, indices: Vec<u64>) -> Result<Qubit, InvalidValueError> {
         if indices.is_empty() {
-            Err("Qubit must have nonzero number of indices.")
+            InvalidValueError::make_str_err("Qubit must have at least one index assigned.")
         } else {
             Ok(Qubit {
                 indices,
@@ -70,16 +71,17 @@ impl Qubit {
         idb: u64,
         q: Qubit,
         indices: Vec<u64>,
-    ) -> Result<(Qubit, Qubit), &'static str> {
+    ) -> Result<(Qubit, Qubit), InvalidValueError> {
         for indx in &indices {
-            if *indx > (q.indices.len() as u64) {
-                return Err("All indices for splitting must be below q.n");
+            if *indx > q.n() {
+                let message = format!("All indices for splitting must be below q.n = {:?}", q.n());
+                return InvalidValueError::make_err(message);
             }
         }
         if indices.len() == q.indices.len() {
-            Err("Indices must leave at least one index.")
+            InvalidValueError::make_str_err("Cannot split out all indices into own qubit.")
         } else if indices.is_empty() {
-            Err("Indices must contain at least one index.")
+            InvalidValueError::make_str_err("Must provide indices to split.")
         } else {
             let selected_indices: Vec<u64> =
                 indices.into_iter().map(|i| q.indices[i as usize]).collect();
@@ -93,15 +95,19 @@ impl Qubit {
         idb: u64,
         q: Qubit,
         selected_indices: Vec<u64>,
-    ) -> Result<(Qubit, Qubit), &'static str> {
+    ) -> Result<(Qubit, Qubit), InvalidValueError> {
         if selected_indices.len() == q.indices.len() {
-            return Err("Cannot split out all indices into own qubit.");
+            return InvalidValueError::make_str_err("Cannot split out all indices into own qubit.");
         } else if selected_indices.is_empty() {
-            return Err("Must provide indices to split.");
+            return InvalidValueError::make_str_err("Must provide indices to split.");
         }
         for indx in &selected_indices {
             if !q.indices.contains(indx) {
-                return Err("All indices must exist in qubit to be split.");
+                let message = format!(
+                    "Index {:?} not found in qubit with indices {:?}",
+                    indx, q.indices
+                );
+                return InvalidValueError::make_err(message);
             }
         }
 
@@ -209,11 +215,16 @@ impl QubitHandle {
     pub fn make_init_from_index<P: Precision>(
         &self,
         index: u64,
-    ) -> Result<QubitInitialState<P>, &'static str> {
-        if index < 1 << self.indices.len() as u64 {
+    ) -> Result<QubitInitialState<P>, InvalidValueError> {
+        let n = self.indices.len();
+        if index < (1 << n) as u64 {
             Ok((self.indices.clone(), InitialState::Index(index)))
         } else {
-            Err("Index too large for QubitHandle")
+            let message = format!(
+                "Index {:?} is too large, must be less than 2^{:?}",
+                index, n
+            );
+            InvalidValueError::make_err(message)
         }
     }
 
@@ -221,11 +232,17 @@ impl QubitHandle {
     pub fn make_init_from_state<P: Precision>(
         &self,
         state: Vec<Complex<P>>,
-    ) -> Result<QubitInitialState<P>, &'static str> {
-        if state.len() == 1 << self.indices.len() {
+    ) -> Result<QubitInitialState<P>, InvalidValueError> {
+        let n = self.indices.len();
+        if state.len() == 1 << n {
             Ok((self.indices.clone(), InitialState::FullState(state)))
         } else {
-            Err("State not correct size for QubitHandle (must be 2^n)")
+            let message = format!(
+                "State not correct size for QubitHandle (is {}, must be 2^{})",
+                state.len(),
+                n
+            );
+            InvalidValueError::make_err(message)
         }
     }
 }

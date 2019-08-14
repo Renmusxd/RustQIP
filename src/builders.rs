@@ -1,3 +1,4 @@
+use crate::errors::InvalidValueError;
 use crate::pipeline::*;
 use crate::qubits::*;
 use crate::state_ops::*;
@@ -8,17 +9,17 @@ use std::fmt;
 /// A function which takes a builder, a qubit, and a set of measured values, and constructs a
 /// circuit, outputting the resulting qubit.
 type SingleQubitSideChannelFn =
-    dyn Fn(&mut dyn UnitaryBuilder, Qubit, &[u64]) -> Result<Qubit, &'static str>;
+    dyn Fn(&mut dyn UnitaryBuilder, Qubit, &[u64]) -> Result<Qubit, InvalidValueError>;
 
 /// A function which takes a builder, a vec of qubits, and a set of measured values, and constructs a
 /// circuit, outputting the resulting qubits.
 type SideChannelFn =
-    dyn Fn(&mut dyn UnitaryBuilder, Vec<Qubit>, &[u64]) -> Result<Vec<Qubit>, &'static str>;
+    dyn Fn(&mut dyn UnitaryBuilder, Vec<Qubit>, &[u64]) -> Result<Vec<Qubit>, InvalidValueError>;
 
 /// A function which takes a builder, a qubit with possibly extra indices, and a set of measured
 /// values, and constructs a circuit, outputting the resulting qubit.
 type SideChannelHelperFn =
-    dyn Fn(&mut dyn UnitaryBuilder, Qubit, &[u64]) -> Result<Vec<Qubit>, &'static str>;
+    dyn Fn(&mut dyn UnitaryBuilder, Qubit, &[u64]) -> Result<Vec<Qubit>, InvalidValueError>;
 
 /// A function to build rows of a sparse matrix. Takes a row and outputs columns and entries.
 type SparseBuilderFn = dyn Fn(u64) -> Vec<(u64, Complex<f64>)>;
@@ -33,12 +34,17 @@ pub trait UnitaryBuilder {
     /// Build a generic matrix op, apply to `q`, if `q` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
     /// size for the number of indices in `q` (mat.len() == 2^(2n)).
-    fn mat(&mut self, name: &str, q: Qubit, mat: Vec<Complex<f64>>) -> Result<Qubit, &'static str>;
+    fn mat(
+        &mut self,
+        name: &str,
+        q: Qubit,
+        mat: Vec<Complex<f64>>,
+    ) -> Result<Qubit, InvalidValueError>;
 
     /// Build a matrix op from real numbers, apply to `q`, if `q` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
     /// size for the number of indices in `q` (mat.len() == 2^(2n)).
-    fn real_mat(&mut self, name: &str, q: Qubit, mat: &[f64]) -> Result<Qubit, &'static str> {
+    fn real_mat(&mut self, name: &str, q: Qubit, mat: &[f64]) -> Result<Qubit, InvalidValueError> {
         self.mat(name, q, from_reals(mat))
     }
 
@@ -51,7 +57,7 @@ pub trait UnitaryBuilder {
         q: Qubit,
         mat: Vec<Vec<(u64, Complex<f64>)>>,
         natural_order: bool,
-    ) -> Result<Qubit, &'static str>;
+    ) -> Result<Qubit, InvalidValueError>;
 
     /// Build a sparse matrix op from `f`, apply to `q`, if `q` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
@@ -62,7 +68,7 @@ pub trait UnitaryBuilder {
         q: Qubit,
         f: Box<SparseBuilderFn>,
         natural_order: bool,
-    ) -> Result<Qubit, &'static str> {
+    ) -> Result<Qubit, InvalidValueError> {
         let n = q.indices.len();
         let mat = make_sparse_matrix_from_function(n, f, natural_order);
         self.sparse_mat(name, q, mat, false)
@@ -77,7 +83,7 @@ pub trait UnitaryBuilder {
         q: Qubit,
         mat: &[Vec<(u64, f64)>],
         natural_order: bool,
-    ) -> Result<Qubit, &'static str> {
+    ) -> Result<Qubit, InvalidValueError> {
         let mat = mat
             .iter()
             .map(|v| {
@@ -134,7 +140,7 @@ pub trait UnitaryBuilder {
     }
 
     /// Apply SWAP to `qa` and `qb`
-    fn swap(&mut self, qa: Qubit, qb: Qubit) -> Result<(Qubit, Qubit), &'static str> {
+    fn swap(&mut self, qa: Qubit, qb: Qubit) -> Result<(Qubit, Qubit), InvalidValueError> {
         let op = self.make_swap_op(&qa, &qb)?;
         let qa_indices = qa.indices.clone();
 
@@ -151,7 +157,7 @@ pub trait UnitaryBuilder {
         q_in: Qubit,
         q_out: Qubit,
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
-    ) -> Result<(Qubit, Qubit), &'static str>;
+    ) -> Result<(Qubit, Qubit), InvalidValueError>;
 
     /// Merge the qubits in `qs` into a single qubit.
     fn merge(&mut self, qs: Vec<Qubit>) -> Qubit {
@@ -159,16 +165,21 @@ pub trait UnitaryBuilder {
     }
 
     /// Split the qubit `q` into two qubits, one with relative `indices` and one with the remaining.
-    fn split(&mut self, q: Qubit, indices: Vec<u64>) -> Result<(Qubit, Qubit), &'static str> {
+    fn split(&mut self, q: Qubit, indices: Vec<u64>) -> Result<(Qubit, Qubit), InvalidValueError> {
         for indx in &indices {
-            if *indx > (q.indices.len() as u64) {
-                return Err("All indices for splitting must be below q.n");
+            if *indx > q.n() {
+                let message = format!(
+                    "All indices for splitting must be below q.n={:?}, found indx={:?}",
+                    q.n(),
+                    *indx
+                );
+                return InvalidValueError::make_err(message);
             }
         }
         if indices.is_empty() {
-            Err("Indices must contain at least one index.")
+            InvalidValueError::make_str_err("Indices must contain at least one index.")
         } else if indices.len() == q.indices.len() {
-            Err("Indices must leave at least one index.")
+            InvalidValueError::make_str_err("Indices must leave at least one index.")
         } else {
             let selected_indices: Vec<u64> =
                 indices.into_iter().map(|i| q.indices[i as usize]).collect();
@@ -181,14 +192,14 @@ pub trait UnitaryBuilder {
         &mut self,
         q: Qubit,
         selected_indices: Vec<u64>,
-    ) -> Result<(Qubit, Qubit), &'static str>;
+    ) -> Result<(Qubit, Qubit), InvalidValueError>;
 
     /// Split the qubit into many qubits, each with the given set of indices.
     fn split_absolute_many(
         &mut self,
         q: Qubit,
         index_groups: Vec<Vec<u64>>,
-    ) -> Result<(Vec<Qubit>, Option<Qubit>), &'static str> {
+    ) -> Result<(Vec<Qubit>, Option<Qubit>), InvalidValueError> {
         index_groups
             .into_iter()
             .try_fold((vec![], Some(q)), |(mut qs, q), indices| {
@@ -224,7 +235,11 @@ pub trait UnitaryBuilder {
     }
 
     /// Build a generic matrix op.
-    fn make_mat_op(&self, q: &Qubit, data: Vec<Complex<f64>>) -> Result<QubitOp, &'static str> {
+    fn make_mat_op(
+        &self,
+        q: &Qubit,
+        data: Vec<Complex<f64>>,
+    ) -> Result<QubitOp, InvalidValueError> {
         make_matrix_op(q.indices.clone(), data)
     }
 
@@ -234,12 +249,12 @@ pub trait UnitaryBuilder {
         q: &Qubit,
         data: Vec<Vec<(u64, Complex<f64>)>>,
         natural_order: bool,
-    ) -> Result<QubitOp, &'static str> {
+    ) -> Result<QubitOp, InvalidValueError> {
         make_sparse_matrix_op(q.indices.clone(), data, natural_order)
     }
 
     /// Build a swap op. qa and qb must have the same number of indices.
-    fn make_swap_op(&self, qa: &Qubit, qb: &Qubit) -> Result<QubitOp, &'static str> {
+    fn make_swap_op(&self, qa: &Qubit, qb: &Qubit) -> Result<QubitOp, InvalidValueError> {
         make_swap_op(qa.indices.clone(), qb.indices.clone())
     }
 
@@ -249,7 +264,7 @@ pub trait UnitaryBuilder {
         q_in: &Qubit,
         q_out: &Qubit,
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
-    ) -> Result<QubitOp, &'static str> {
+    ) -> Result<QubitOp, InvalidValueError> {
         make_function_op(q_in.indices.clone(), q_out.indices.clone(), f)
     }
 
@@ -275,7 +290,7 @@ pub trait UnitaryBuilder {
                 move |b: &mut dyn UnitaryBuilder,
                       mut qs: Vec<Qubit>,
                       measurements: &[u64]|
-                      -> Result<Vec<Qubit>, &'static str> {
+                      -> Result<Vec<Qubit>, InvalidValueError> {
                     Ok(vec![f(b, qs.pop().unwrap(), measurements)?])
                 },
             ),
@@ -296,7 +311,7 @@ pub trait UnitaryBuilder {
             move |b: &mut dyn UnitaryBuilder,
                   q: Qubit,
                   ms: &[u64]|
-                  -> Result<Vec<Qubit>, &'static str> {
+                  -> Result<Vec<Qubit>, InvalidValueError> {
                 let (qs, _) = b.split_absolute_many(q, index_groups.clone())?;
                 f(b, qs, ms)
             },
@@ -324,7 +339,7 @@ pub fn apply_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
     q_in: Qubit,
     q_out: Qubit,
     f: F,
-) -> Result<(Qubit, Qubit), &'static str> {
+) -> Result<(Qubit, Qubit), InvalidValueError> {
     b.apply_function(q_in, q_out, Box::new(f))
 }
 
@@ -335,7 +350,7 @@ pub fn apply_sparse_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
     q_in: Qubit,
     q_out: Qubit,
     f: F,
-) -> Result<(Qubit, Qubit), &'static str> {
+) -> Result<(Qubit, Qubit), InvalidValueError> {
     b.apply_function(q_in, q_out, Box::new(f))
 }
 
@@ -355,9 +370,9 @@ impl OpBuilder {
     }
 
     /// Build a new qubit with `n` indices
-    pub fn qubit(&mut self, n: u64) -> Result<Qubit, &'static str> {
+    pub fn qubit(&mut self, n: u64) -> Result<Qubit, InvalidValueError> {
         if n == 0 {
-            Err("Qubit n must be greater than 0.")
+            InvalidValueError::make_str_err("Qubit n must be greater than 0.")
         } else {
             let base_index = self.qubit_index;
             self.qubit_index += n;
@@ -366,11 +381,11 @@ impl OpBuilder {
     }
 
     /// Builds a vector of new qubits
-    pub fn qubits(&mut self, ns: &[u64]) -> Result<Vec<Qubit>, &'static str> {
+    pub fn qubits(&mut self, ns: &[u64]) -> Result<Vec<Qubit>, InvalidValueError> {
         ns.iter()
             .try_for_each(|n| {
                 if *n == 0 {
-                    Err("Qubit n must be greater than 0.")
+                    InvalidValueError::make_str_err("Qubit n must be greater than 0.")
                 } else {
                     Ok(())
                 }
@@ -385,7 +400,7 @@ impl OpBuilder {
 
     /// Build a new qubit with `n` indices, return it plus a handle which can be
     /// used for feeding in an initial state.
-    pub fn qubit_and_handle(&mut self, n: u64) -> Result<(Qubit, QubitHandle), &'static str> {
+    pub fn qubit_and_handle(&mut self, n: u64) -> Result<(Qubit, QubitHandle), InvalidValueError> {
         let q = self.qubit(n)?;
         let h = q.handle();
         Ok((q, h))
@@ -472,7 +487,12 @@ impl UnitaryBuilder for OpBuilder {
         }
     }
 
-    fn mat(&mut self, name: &str, q: Qubit, mat: Vec<Complex<f64>>) -> Result<Qubit, &'static str> {
+    fn mat(
+        &mut self,
+        name: &str,
+        q: Qubit,
+        mat: Vec<Complex<f64>>,
+    ) -> Result<Qubit, InvalidValueError> {
         // Special case for broadcasting ops
         if q.indices.len() > 1 && mat.len() == (2 * 2) {
             let qs = self.split_all(q);
@@ -494,7 +514,7 @@ impl UnitaryBuilder for OpBuilder {
         q: Qubit,
         mat: Vec<Vec<(u64, Complex<f64>)>>,
         natural_order: bool,
-    ) -> Result<Qubit, &'static str> {
+    ) -> Result<Qubit, InvalidValueError> {
         // Special case for broadcasting ops
         if q.indices.len() > 1 && mat.len() == (2 * 2) {
             let qs = self.split_all(q);
@@ -518,7 +538,7 @@ impl UnitaryBuilder for OpBuilder {
         q_in: Qubit,
         q_out: Qubit,
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
-    ) -> Result<(Qubit, Qubit), &'static str> {
+    ) -> Result<(Qubit, Qubit), InvalidValueError> {
         let op = self.make_function_op(&q_in, &q_out, f)?;
         let in_indices = q_in.indices.clone();
         let name = String::from("f");
@@ -530,7 +550,7 @@ impl UnitaryBuilder for OpBuilder {
         &mut self,
         q: Qubit,
         selected_indices: Vec<u64>,
-    ) -> Result<(Qubit, Qubit), &'static str> {
+    ) -> Result<(Qubit, Qubit), InvalidValueError> {
         Qubit::split_absolute(self.get_op_id(), self.get_op_id(), q, selected_indices)
     }
 
@@ -565,7 +585,7 @@ impl UnitaryBuilder for OpBuilder {
         let req_qubits = self.qubit_index + 1;
 
         let f = Box::new(
-            move |measurements: &[u64]| -> Result<Vec<StateModifier>, &'static str> {
+            move |measurements: &[u64]| -> Result<Vec<StateModifier>, InvalidValueError> {
                 let mut b = Self::new();
                 let q = b.qubit(req_qubits)?;
                 let qs = f(&mut b, q, measurements)?;
@@ -626,7 +646,12 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         }
     }
 
-    fn mat(&mut self, name: &str, q: Qubit, mat: Vec<Complex<f64>>) -> Result<Qubit, &'static str> {
+    fn mat(
+        &mut self,
+        name: &str,
+        q: Qubit,
+        mat: Vec<Complex<f64>>,
+    ) -> Result<Qubit, InvalidValueError> {
         // Special case for applying mat to each qubit in collection.
         if q.indices.len() > 1 && mat.len() == (2 * 2) {
             let qs = self.split_all(q);
@@ -654,7 +679,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         q: Qubit,
         mat: Vec<Vec<(u64, Complex<f64>)>>,
         natural_order: bool,
-    ) -> Result<Qubit, &'static str> {
+    ) -> Result<Qubit, InvalidValueError> {
         // Special case for applying mat to each qubit in collection.
         if q.indices.len() > 1 && mat.len() == (2 * 2) {
             let qs = self.split_all(q);
@@ -679,7 +704,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         }
     }
 
-    fn swap(&mut self, qa: Qubit, qb: Qubit) -> Result<(Qubit, Qubit), &'static str> {
+    fn swap(&mut self, qa: Qubit, qb: Qubit) -> Result<(Qubit, Qubit), InvalidValueError> {
         let op = self.make_swap_op(&qa, &qb)?;
         let cq = self.get_conditional_qubit();
         let cq_indices = cq.indices.clone();
@@ -698,7 +723,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         q_in: Qubit,
         q_out: Qubit,
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
-    ) -> Result<(Qubit, Qubit), &'static str> {
+    ) -> Result<(Qubit, Qubit), InvalidValueError> {
         let op = self.make_function_op(&q_in, &q_out, f)?;
         let cq = self.get_conditional_qubit();
 
@@ -717,11 +742,15 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         &mut self,
         q: Qubit,
         selected_indices: Vec<u64>,
-    ) -> Result<(Qubit, Qubit), &'static str> {
+    ) -> Result<(Qubit, Qubit), InvalidValueError> {
         self.parent_builder.split_absolute(q, selected_indices)
     }
 
-    fn make_mat_op(&self, q: &Qubit, data: Vec<Complex<f64>>) -> Result<QubitOp, &'static str> {
+    fn make_mat_op(
+        &self,
+        q: &Qubit,
+        data: Vec<Complex<f64>>,
+    ) -> Result<QubitOp, InvalidValueError> {
         match &self.conditioned_qubit {
             Some(cq) => make_control_op(
                 cq.indices.clone(),
@@ -736,7 +765,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         q: &Qubit,
         data: Vec<Vec<(u64, Complex<f64>)>>,
         natural_order: bool,
-    ) -> Result<QubitOp, &'static str> {
+    ) -> Result<QubitOp, InvalidValueError> {
         match &self.conditioned_qubit {
             Some(cq) => make_control_op(
                 cq.indices.clone(),
@@ -747,7 +776,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         }
     }
 
-    fn make_swap_op(&self, qa: &Qubit, qb: &Qubit) -> Result<QubitOp, &'static str> {
+    fn make_swap_op(&self, qa: &Qubit, qb: &Qubit) -> Result<QubitOp, InvalidValueError> {
         match &self.conditioned_qubit {
             Some(cq) => {
                 let op = self.parent_builder.make_swap_op(qa, qb)?;
@@ -762,7 +791,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         q_in: &Qubit,
         q_out: &Qubit,
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
-    ) -> Result<QubitOp, &'static str> {
+    ) -> Result<QubitOp, InvalidValueError> {
         match &self.conditioned_qubit {
             Some(cq) => {
                 let op = self.parent_builder.make_function_op(q_in, q_out, f)?;
@@ -797,7 +826,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
             move |b: &mut dyn UnitaryBuilder,
                   q: Qubit,
                   ms: &[u64]|
-                  -> Result<Vec<Qubit>, &'static str> {
+                  -> Result<Vec<Qubit>, InvalidValueError> {
                 let (cq, q) = b.split_absolute(q, conditioned_indices.clone())?;
                 let mut b = b.with_condition(cq);
                 f(&mut b, q, ms)

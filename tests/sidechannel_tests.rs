@@ -12,7 +12,7 @@ fn assert_almost_eq(a: f64, b: f64, prec: i32) {
 
 fn setup_cswap_sidechannel_circuit(
     vec_n: u64,
-) -> Result<(Qubit, QubitHandle, QubitHandle, MeasurementHandle), &'static str> {
+) -> Result<(Qubit, QubitHandle, QubitHandle, MeasurementHandle), InvalidValueError> {
     // Setup inputs
     let mut b = OpBuilder::new();
     let q1 = b.qubit(1)?;
@@ -52,7 +52,7 @@ fn setup_cswap_sidechannel_circuit(
 }
 
 #[test]
-fn test_cswap_sidechannel() -> Result<(), &'static str> {
+fn test_cswap_sidechannel() -> Result<(), InvalidValueError> {
     let vec_n = 3;
 
     let (q1, h2, h3, m1) = setup_cswap_sidechannel_circuit(vec_n)?;
@@ -70,7 +70,7 @@ fn test_cswap_sidechannel() -> Result<(), &'static str> {
 }
 
 #[test]
-fn test_cswap_sidechannel_unaligned() -> Result<(), &'static str> {
+fn test_cswap_sidechannel_unaligned() -> Result<(), InvalidValueError> {
     let vec_n = 3;
 
     let (q1, h2, h3, m1) = setup_cswap_sidechannel_circuit(vec_n)?;

@@ -1,3 +1,4 @@
+use crate::errors::InvalidValueError;
 /// Common circuits for general usage.
 use crate::{OpBuilder, Qubit, UnitaryBuilder};
 
@@ -7,9 +8,9 @@ pub fn condition<F, QS>(
     cq: Qubit,
     qs: QS,
     f: F,
-) -> Result<(Qubit, QS), &'static str>
+) -> Result<(Qubit, QS), InvalidValueError>
 where
-    F: Fn(&mut dyn UnitaryBuilder, QS) -> Result<QS, &'static str>,
+    F: Fn(&mut dyn UnitaryBuilder, QS) -> Result<QS, InvalidValueError>,
 {
     let mut c = b.with_condition(cq);
     let qs = f(&mut c, qs)?;
