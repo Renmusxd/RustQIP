@@ -4,7 +4,6 @@ use crate::unitary_decomposition::utils::*;
 use crate::Complex;
 use crate::Precision;
 use num::{One, Zero};
-use std::fmt::Debug;
 
 /// A controlled phase or rotation op.
 #[derive(Debug)]
@@ -58,18 +57,6 @@ impl<P: Precision> Default for BaseUnitary<P> {
     }
 }
 
-fn print_sparse<P: Precision + Debug>(v: &[Vec<(u64, Complex<P>)>]) {
-    println!("========================");
-    v.iter().for_each(|v| {
-        v.iter().for_each(|(col, val)| {
-            let (r, p) = val.to_polar();
-            print!("({:?}, {:?}||{:?})\t", col, r, p)
-        });
-        println!();
-    });
-    println!("========================");
-}
-
 /// Use the ops and base unitary to reconstruct the decomposed unitary op.
 pub fn reconstruct_unitary<P: Precision + Clone>(
     n: u64,
@@ -88,6 +75,10 @@ pub fn reconstruct_unitary<P: Precision + Clone>(
             }
         })
         .collect();
+    base_mat[base.top_row as usize].sort_by_key(|(col, _)| *col);
+    base_mat[base.top_row as usize].retain(|(_, val)| val.norm_sqr() >= keep_threshold);
+    base_mat[base.bot_row as usize].sort_by_key(|(col, _)| *col);
+    base_mat[base.bot_row as usize].retain(|(_, val)| val.norm_sqr() >= keep_threshold);
 
     ops.iter().for_each(|op| {
         match op {
@@ -268,6 +259,7 @@ pub fn decompose_unitary<P: Precision>(
         Ok(()) => {
             let mut mask_index = 0;
             let mut mask = last ^ second_last;
+            mask >>= 1;
             while mask > 0 {
                 mask >>= 1;
                 mask_index += 1;

@@ -31,7 +31,9 @@ fn convert_decomp_ops_to_circuit(
     // Clear the correct index if it happens to be set
     let base_mask = base.top_row;
     let qs = negate_difference(b, qs, standard_mask, base_mask);
-    let qs = apply_to_index_with_control(b, qs, base.bit_index, |cb, q| {
+
+    let qubit_index = qs.len() as u64 - base.bit_index - 1;
+    let qs = apply_to_index_with_control(b, qs, qubit_index, |cb, q| {
         cb.mat("Base", q, base.dat.to_vec()).unwrap()
     });
     let mask = base_mask;
@@ -113,7 +115,7 @@ mod unitary_decomp_circuit_tests {
     use super::*;
     use crate::pipeline::make_circuit_matrix;
     use crate::unitary_decomposition::decomposition::reconstruct_unitary;
-    use crate::unitary_decomposition::utils::flat_sparse;
+    use crate::unitary_decomposition::utils::{flat_sparse, print_sparse};
     use crate::{run_debug, OpBuilder, Precision};
     use std::error::Error;
 
@@ -196,29 +198,42 @@ mod unitary_decomp_circuit_tests {
             ],
         });
 
-        let reconstructed = reconstruct_unitary(n, &ops, &base);
+        println!("Base: {:?}", base);
+        println!("Ops: {:?}", ops);
 
-        let mut b = OpBuilder::new();
-        let q = b.qubit(n)?;
-        let q = convert_decomp_ops_to_circuit(&mut b, q, &base, &ops)?;
+        (0..ops.len()).try_for_each(|indx| {
+            let ops = &ops[..indx];
 
-        run_debug(&q).unwrap();
+            let reconstructed = reconstruct_unitary(n, ops, &base);
 
-        let circuit_mat = make_circuit_matrix::<f64>(n, &q, false);
-        let circuit_mat = circuit_mat
-            .into_iter()
-            .map(|v| {
-                v.into_iter()
-                    .enumerate()
-                    .map(|(col, c)| (col as u64, c))
-                    .collect()
-            })
-            .collect();
+            let mut b = OpBuilder::new();
+            let q = b.qubit(n)?;
+            let q = convert_decomp_ops_to_circuit(&mut b, q, &base, ops)?;
 
-        let flat_reconstructed = flat_round(reconstructed, 10);
-        let flat_circuit_mat = flat_round(circuit_mat, 10);
-        assert_eq!(flat_reconstructed, flat_circuit_mat);
-        Ok(())
+            run_debug(&q).unwrap();
+
+            let circuit_mat = make_circuit_matrix::<f64>(n, &q, false);
+            let circuit_mat: Vec<_> = circuit_mat
+                .into_iter()
+                .map(|v| {
+                    v.into_iter()
+                        .enumerate()
+                        .map(|(col, c)| (col as u64, c))
+                        .filter(|(_, c)| *c != Complex::zero())
+                        .collect()
+                })
+                .collect();
+
+            println!("Expected:");
+            print_sparse(&reconstructed);
+            println!("Found:");
+            print_sparse(&circuit_mat);
+
+            let flat_reconstructed = flat_round(reconstructed, 10);
+            let flat_circuit_mat = flat_round(circuit_mat, 10);
+            assert_eq!(flat_reconstructed, flat_circuit_mat);
+            Ok(())
+        })
     }
 
     #[test]
@@ -595,6 +610,58 @@ mod unitary_decomp_circuit_tests {
         ];
         let v = sparse_from_tuples(v);
         assert_decomp(2, v)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_larger_antidiagonal_decomp() -> Result<(), InvalidValueError> {
+        let n = 3;
+        let v: Vec<_> = (0..1 << n)
+            .map(|row| vec![((1 << n) - row - 1, Complex::one())])
+            .collect();
+        assert_decomp(n, v)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_larger_antidiagonal_imag_decomp() -> Result<(), InvalidValueError> {
+        let n = 3;
+        let v: Vec<_> = (0..1 << n)
+            .map(|row| vec![((1 << n) - row - 1, (0.0, 1.0))])
+            .collect();
+        let v = sparse_from_tuples(v);
+        assert_decomp(n, v)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_larger_antidiagonal_decomp_iterative() -> Result<(), InvalidValueError> {
+        let n = 3;
+        let v: Vec<_> = (0..1 << n)
+            .map(|row| vec![((1 << n) - row - 1, Complex::one())])
+            .collect();
+
+        let (ops, base) = decompose_unitary(n, v, 1e-10)?
+            .map_err(|_| InvalidValueError::new("Decomposition Failed".to_string()))?;
+
+        assert_decomp_ops_and_base(n, Some(base), ops)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_larger_antidiagonal_imag_decomp_iterative() -> Result<(), InvalidValueError> {
+        let n = 3;
+        let v: Vec<_> = (0..1 << n)
+            .map(|row| vec![((1 << n) - row - 1, (0.0, 1.0))])
+            .collect();
+        let v = sparse_from_tuples(v);
+
+        let (ops, base) = decompose_unitary(n, v, 1e-10)?
+            .map_err(|_| InvalidValueError::new("Decomposition Failed".to_string()))?;
+
+        assert_decomp_ops_and_base(n, Some(base), ops)?;
+
         Ok(())
     }
 }
