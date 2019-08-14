@@ -114,7 +114,7 @@ mod unitary_decomp_circuit_tests {
     use crate::pipeline::make_circuit_matrix;
     use crate::unitary_decomposition::decomposition::reconstruct_unitary;
     use crate::unitary_decomposition::utils::flat_sparse;
-    use crate::{run_debug, OpBuilder};
+    use crate::{run_debug, OpBuilder, Precision};
     use std::error::Error;
 
     const EPSILON: f64 = 0.00000000001;
