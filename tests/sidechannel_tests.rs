@@ -16,30 +16,30 @@ fn setup_cswap_sidechannel_circuit(
     // Setup inputs
     let mut b = OpBuilder::new();
     let q1 = b.register(1)?;
-    let q2 = b.register(vec_n)?;
-    let q3 = b.register(vec_n)?;
+    let ra = b.register(vec_n)?;
+    let rb = b.register(vec_n)?;
 
     // We will want to feed in some inputs later.
-    let h2 = q2.handle();
-    let h3 = q3.handle();
+    let ha = ra.handle();
+    let hb = rb.handle();
 
     // Define circuit
     let q1 = b.hadamard(q1);
 
     // Make a qubit whose sole use is for sidechannels
-    let q4 = b.register(1)?;
-    let q4 = b.hadamard(q4);
-    let (q4, h4) = b.measure(q4);
+    let q2 = b.register(1)?;
+    let q2 = b.hadamard(q2);
+    let (q2, h2) = b.measure(q2);
 
     let mut c = b.with_condition(q1);
     let qs = c.classical_sidechannel(
-        vec![q2, q3],
-        &[h4],
+        vec![ra, rb],
+        &[h2],
         Box::new(|b, mut qs, _ms| {
-            let q3 = qs.pop().unwrap();
-            let q2 = qs.pop().unwrap();
-            let (q2, q3) = b.swap(q2, q3)?;
-            Ok(vec![q2, q3])
+            let rb = qs.pop().unwrap();
+            let ra = qs.pop().unwrap();
+            let (ra, rb) = b.swap(ra, rb)?;
+            Ok(vec![ra, rb])
         }),
     );
     let q1 = c.release_register();
@@ -48,19 +48,19 @@ fn setup_cswap_sidechannel_circuit(
 
     let (q1, m1) = b.measure(q1);
 
-    Ok((q1, h2, h3, m1))
+    Ok((q1, ha, hb, m1))
 }
 
 #[test]
 fn test_cswap_sidechannel() -> Result<(), CircuitError> {
     let vec_n = 3;
 
-    let (q1, h2, h3, m1) = setup_cswap_sidechannel_circuit(vec_n)?;
+    let (q, ha, hb, m1) = setup_cswap_sidechannel_circuit(vec_n)?;
 
     // Run circuit
     let (_, measured) = run_local_with_init::<f64>(
-        &q1,
-        &[h2.make_init_from_index(0)?, h3.make_init_from_index(0)?],
+        &q,
+        &[ha.make_init_from_index(0)?, hb.make_init_from_index(0)?],
     )?;
 
     let (m, p) = measured.get_measurement(&m1).unwrap();
@@ -73,12 +73,12 @@ fn test_cswap_sidechannel() -> Result<(), CircuitError> {
 fn test_cswap_sidechannel_unaligned() -> Result<(), CircuitError> {
     let vec_n = 3;
 
-    let (q1, h2, h3, m1) = setup_cswap_sidechannel_circuit(vec_n)?;
+    let (q, ha, hb, m1) = setup_cswap_sidechannel_circuit(vec_n)?;
 
     // Run circuit
     let (_, measured) = run_local_with_init::<f64>(
-        &q1,
-        &[h2.make_init_from_index(0)?, h3.make_init_from_index(1)?],
+        &q,
+        &[ha.make_init_from_index(0)?, hb.make_init_from_index(1)?],
     )?;
 
     let (m, p) = measured.get_measurement(&m1).unwrap();

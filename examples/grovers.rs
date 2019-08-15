@@ -8,16 +8,16 @@ use qip::*;
 
 fn prepare_state<P: Precision>(n: u64) -> Result<LocalQuantumState<P>, CircuitError> {
     let mut b = OpBuilder::new();
-    let q = b.register(n).unwrap();
-    let q = b.hadamard(q);
+    let r = b.register(n).unwrap();
+    let r = b.hadamard(r);
 
     let anc = b.register(1).unwrap();
     let anc = b.not(anc);
     let anc = b.hadamard(anc);
 
-    let q = b.merge(vec![q, anc]);
+    let r = b.merge(vec![r, anc]);
 
-    run_local(&q).map(|(s, _)| s)
+    run_local(&r).map(|(s, _)| s)
 }
 
 fn apply_us(
@@ -48,12 +48,12 @@ fn apply_grover_iteration<P: Precision>(
     s: LocalQuantumState<P>,
 ) -> Result<LocalQuantumState<P>, CircuitError> {
     let mut b = OpBuilder::new();
-    let q = b.register(s.n() - 1)?;
+    let r = b.register(s.n() - 1)?;
     let anc = b.register(1)?;
 
-    let (q, anc) = apply_uw(&mut b, q, anc, x)?;
-    let (q, _) = apply_us(&mut b, q, anc)?;
-    run_with_state(&q, s).map(|(s, _)| s)
+    let (r, anc) = apply_uw(&mut b, r, anc, x)?;
+    let (r, _) = apply_us(&mut b, r, anc)?;
+    run_with_state(&r, s).map(|(s, _)| s)
 }
 
 fn main() -> Result<(), CircuitError> {

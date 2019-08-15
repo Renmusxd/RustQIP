@@ -17,34 +17,34 @@ fn setup_cswap_circuit(
 ) -> Result<(Register, RegisterHandle, RegisterHandle, MeasurementHandle), CircuitError> {
     // Setup inputs
     let mut b = OpBuilder::new();
-    let q1 = b.register(1)?;
-    let q2 = b.register(vec_n)?;
-    let q3 = b.register(vec_n)?;
+    let q = b.register(1)?;
+    let ra = b.register(vec_n)?;
+    let rb = b.register(vec_n)?;
 
     // We will want to feed in some inputs later.
-    let h2 = q2.handle();
-    let h3 = q3.handle();
+    let ha = ra.handle();
+    let hb = rb.handle();
 
     // Define circuit
-    let q1 = b.hadamard(q1);
+    let q = b.hadamard(q);
 
-    let (q1, _) = condition(&mut b, q1, (q2, q3), |c, (q2, q3)| c.swap(q2, q3)).unwrap();
-    let q1 = b.hadamard(q1);
+    let (q, _) = condition(&mut b, q, (ra, rb), |c, (ra, rb)| c.swap(ra, rb)).unwrap();
+    let q = b.hadamard(q);
 
-    let (q1, m1) = b.measure(q1);
+    let (q, m1) = b.measure(q);
 
-    Ok((q1, h2, h3, m1))
+    Ok((q, ha, hb, m1))
 }
 
 #[test]
 fn test_cswap_aligned() -> Result<(), CircuitError> {
     // Setup inputs
-    let (q1, h2, h3, m1) = setup_cswap_circuit(3)?;
+    let (q, ha, hb, m1) = setup_cswap_circuit(3)?;
 
     // Run circuit
     let (_, measured) = run_local_with_init::<f64>(
-        &q1,
-        &[h2.make_init_from_index(0)?, h3.make_init_from_index(0)?],
+        &q,
+        &[ha.make_init_from_index(0)?, hb.make_init_from_index(0)?],
     )?;
 
     let (m, p) = measured.get_measurement(&m1).unwrap();
@@ -57,12 +57,12 @@ fn test_cswap_aligned() -> Result<(), CircuitError> {
 #[test]
 fn test_cswap_orthogonal() -> Result<(), CircuitError> {
     // Setup inputs
-    let (q1, h2, h3, m1) = setup_cswap_circuit(3)?;
+    let (q, ha, hb, m1) = setup_cswap_circuit(3)?;
 
     // Run circuit
     let (_, measured) = run_local_with_init::<f64>(
-        &q1,
-        &[h2.make_init_from_index(0)?, h3.make_init_from_index(1)?],
+        &q,
+        &[ha.make_init_from_index(0)?, hb.make_init_from_index(1)?],
     )?;
 
     let (m, p) = measured.get_measurement(&m1).unwrap();
@@ -89,15 +89,15 @@ fn sin_wave(n: u64, w: f64, d: f64) -> Vec<Complex<f64>> {
 #[test]
 fn test_cswap_waves() -> Result<(), CircuitError> {
     // Setup inputs
-    let (q1, h2, h3, m1) = setup_cswap_circuit(3)?;
+    let (q, ha, hb, m1) = setup_cswap_circuit(3)?;
 
     let s1 = sin_wave(3, 1.0, 0.0);
     let s2 = sin_wave(3, 2.0, 0.0);
 
     // Run circuit
     let (_, measured) = run_local_with_init::<f64>(
-        &q1,
-        &[h2.make_init_from_state(s1)?, h3.make_init_from_state(s2)?],
+        &q,
+        &[ha.make_init_from_state(s1)?, hb.make_init_from_state(s2)?],
     )?;
 
     let (m, p) = measured.get_measurement(&m1).unwrap();

@@ -13,13 +13,13 @@ fn run_alice(b: &mut OpBuilder, epr_alice: Register, bit_a: bool, bit_b: bool) -
     }
 }
 
-fn run_bob(b: &mut OpBuilder, q_alice: Register, epr_bob: Register) -> (bool, bool) {
-    let (q_alice, q_bob) = condition(b, q_alice, epr_bob, |c, q| Ok(c.not(q))).unwrap();
-    let q_alice = b.hadamard(q_alice);
-    let q = b.merge(vec![q_bob, q_alice]);
-    let (q, m) = b.measure(q);
+fn run_bob(b: &mut OpBuilder, r_alice: Register, epr_bob: Register) -> (bool, bool) {
+    let (r_alice, r_bob) = condition(b, r_alice, epr_bob, |c, r| Ok(c.not(r))).unwrap();
+    let r_alice = b.hadamard(r_alice);
+    let r = b.merge(vec![r_bob, r_alice]);
+    let (r, m) = b.measure(r);
 
-    let (_, measurements) = run_local::<f64>(&q).unwrap();
+    let (_, measurements) = run_local::<f64>(&r).unwrap();
     let (m, _) = measurements.get_measurement(&m).unwrap();
 
     ((m & 2) == 2, (m & 1) == 1)
@@ -35,8 +35,8 @@ fn main() -> Result<(), CircuitError> {
     for (bit_a, bit_b) in bits_a.into_iter().zip(bits_b.into_iter()) {
         let mut b = OpBuilder::new();
         let (epr_alice, epr_bob) = epr_pair(&mut b, 1);
-        let q_alice = run_alice(&mut b, epr_alice, bit_a, bit_b);
-        let (bob_a, bob_b) = run_bob(&mut b, q_alice, epr_bob);
+        let r_alice = run_alice(&mut b, epr_alice, bit_a, bit_b);
+        let (bob_a, bob_b) = run_bob(&mut b, r_alice, epr_bob);
 
         println!(
             "Alice: ({:?},{:?})  \tBob: ({:?},{:?})",

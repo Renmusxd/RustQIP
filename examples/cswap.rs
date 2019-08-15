@@ -6,29 +6,29 @@ use qip::*;
 fn main() -> Result<(), CircuitError> {
     // Setup inputs
     let mut b = OpBuilder::new();
-    let q1 = b.register(1)?;
-    let q2 = b.register(3)?;
-    let q3 = b.register(3)?;
+    let q = b.register(1)?;
+    let ra = b.register(3)?;
+    let rb = b.register(3)?;
 
     // We will want to feed in some inputs later.
-    let h2 = q2.handle();
-    let h3 = q3.handle();
+    let ha = ra.handle();
+    let hb = rb.handle();
 
     // Define circuit
-    let q1 = b.hadamard(q1);
+    let q = b.hadamard(q);
 
-    let (q1, _) = condition(&mut b, q1, (q2, q3), |c, (q2, q3)| c.swap(q2, q3))?;
-    let q1 = b.hadamard(q1);
+    let (q, _) = condition(&mut b, q, (ra, rb), |c, (ra, rb)| c.swap(ra, rb))?;
+    let q = b.hadamard(q);
 
-    let (q1, m1) = b.measure(q1);
+    let (q, m1) = b.measure(q);
 
     // Print circuit diagram
-    qip::run_debug(&q1)?;
+    qip::run_debug(&q)?;
 
     // Run circuit
     let (_, measured) = run_local_with_init::<f64>(
-        &q1,
-        &[h2.make_init_from_index(0)?, h3.make_init_from_index(1)?],
+        &q,
+        &[ha.make_init_from_index(0)?, hb.make_init_from_index(1)?],
     )?;
 
     println!("{:?}", measured.get_measurement(&m1));
