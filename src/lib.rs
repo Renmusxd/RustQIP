@@ -20,20 +20,20 @@
 //!
 //! // Make three registers of sizes 1, 3, 3 (7 qubits total).
 //! let q = b.register(1)?;
-//! let qa = b.register(3)?;
-//! let qb = b.register(3)?;
+//! let ra = b.register(3)?;
+//! let rb = b.register(3)?;
 //!
 //! // We will want to feed in some inputs later, hang on to the handles
 //! // so we don't need to actually remember any indices.
-//! let a_handle = qa.handle();
-//! let b_handle = qb.handle();
+//! let a_handle = ra.handle();
+//! let b_handle = rb.handle();
 //!
 //! // Define circuit
-//! // First apply an H to q
+//! // First apply an H to r
 //! let q = b.hadamard(q);
-//! // Then run this subcircuit conditioned on q, applied to qa and qb
-//! let (q, _) = condition(&mut b, q, (qa, qb), |c, (qa, qb)| {
-//!     c.swap(qa, qb)
+//! // Then run this subcircuit conditioned on r, applied to ra and rb
+//! let (q, _) = condition(&mut b, q, (ra, rb), |c, (ra, rb)| {
+//!     c.swap(ra, rb)
 //! })?;
 //! // Finally apply H to q again.
 //! let q = b.hadamard(q);
@@ -81,7 +81,7 @@ pub mod pipeline;
 pub mod pipeline_debug;
 /// Quantum fourier transform support.
 pub mod qfft;
-/// Ease of use for chains of single qubit ops.
+/// Ease of use for chains of single register ops.
 pub mod qubit_chainer;
 /// Basic classes for defining circuits/pipelines.
 pub mod qubits;

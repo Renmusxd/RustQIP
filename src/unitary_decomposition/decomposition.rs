@@ -142,9 +142,8 @@ fn consolidate_column<P: Precision>(
             vec![]
         }
     } else {
-        path.into_iter().try_fold(
-            vec![],
-            |mut ops, (from_code, to_code)| {
+        path.into_iter()
+            .try_fold(vec![], |mut ops, (from_code, to_code)| {
                 let from_row = &sparse_mat[from_code as usize];
                 let to_row = &sparse_mat[to_code as usize];
 
@@ -225,8 +224,7 @@ fn consolidate_column<P: Precision>(
                 }
 
                 Ok(ops)
-            },
-        )?
+            })?
     };
 
     // Try to catch failures early, it's an expensive operation for each column.

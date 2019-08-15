@@ -9,45 +9,45 @@ use num::{One, Zero};
 /// expensive for arbitrary matrices.
 pub fn convert_sparse_to_circuit(
     b: &mut dyn UnitaryBuilder,
-    q: Register,
+    r: Register,
     sparse_unitary: Vec<Vec<(u64, Complex<f64>)>>,
     drop_below: f64,
 ) -> Result<Register, CircuitError> {
-    let decomposition = decompose_unitary(q.n(), sparse_unitary, drop_below)?;
+    let decomposition = decompose_unitary(r.n(), sparse_unitary, drop_below)?;
     let (ops, base) =
         decomposition.map_err(|_| CircuitError::new("Decomposition failed.".to_string()))?;
-    convert_decomp_ops_to_circuit(b, q, &base, &ops)
+    convert_decomp_ops_to_circuit(b, r, &base, &ops)
 }
 
 fn convert_decomp_ops_to_circuit(
     b: &mut dyn UnitaryBuilder,
-    q: Register,
+    r: Register,
     base: &BaseUnitary<f64>,
     ops: &[DecompOp<f64>],
 ) -> Result<Register, CircuitError> {
-    let n = q.n();
-    let qs = b.split_all(q);
+    let n = r.n();
+    let rs = b.split_all(r);
 
     let standard_mask = (1 << n) - 1;
 
     // Clear the correct index if it happens to be set
     let base_mask = base.top_row;
-    let qs = negate_difference(b, qs, standard_mask, base_mask);
+    let rs = negate_difference(b, rs, standard_mask, base_mask);
 
-    let qubit_index = qs.len() as u64 - base.bit_index - 1;
-    let qs = apply_to_index_with_control(b, qs, qubit_index, |cb, q| {
-        cb.mat("Base", q, base.dat.to_vec()).unwrap()
+    let qubit_index = rs.len() as u64 - base.bit_index - 1;
+    let rs = apply_to_index_with_control(b, rs, qubit_index, |cb, r| {
+        cb.mat("Base", r, base.dat.to_vec()).unwrap()
     });
     let mask = base_mask;
 
-    let (qs, mask) = ops.iter().fold((qs, mask), |(qs, mask), op| {
+    let (rs, mask) = ops.iter().fold((rs, mask), |(rs, mask), op| {
         match op {
             DecompOp::Phase { row, phi } => {
                 let (row, phi) = (*row, *phi);
-                let qs = negate_difference(b, qs, mask, row);
+                let rs = negate_difference(b, rs, mask, row);
 
                 // We can apply to any qubit.
-                let qs = apply_to_index_with_control(b, qs, 0, |cb, q| {
+                let rs = apply_to_index_with_control(b, rs, 0, |cb, q| {
                     let phase = Complex { re: 0.0, im: phi }.exp();
                     let phase_mat = vec![Complex::one(), Complex::zero(), Complex::zero(), phase];
 
@@ -55,7 +55,7 @@ fn convert_decomp_ops_to_circuit(
                     cb.mat(&name, q, phase_mat).unwrap()
                 });
 
-                (qs, row)
+                (rs, row)
             }
             DecompOp::Rotation {
                 from_bits,
@@ -64,62 +64,64 @@ fn convert_decomp_ops_to_circuit(
                 theta,
             } => {
                 let new_mask = *to_bits;
-                let qs = negate_difference(b, qs, mask, new_mask);
+                let rs = negate_difference(b, rs, mask, new_mask);
 
-                let qubit_index = qs.len() as u64 - bit_index - 1;
-                let qs = apply_to_index_with_control(b, qs, qubit_index, |cb, q| {
+                let qubit_index = rs.len() as u64 - bit_index - 1;
+                let rs = apply_to_index_with_control(b, rs, qubit_index, |cb, q| {
                     let (sin, cos) = theta.sin_cos();
                     let name = format!("Rotate({:?})", theta);
                     cb.real_mat(&name, q, &[cos, -sin, sin, cos]).unwrap()
                 });
-                (qs, new_mask)
+                (rs, new_mask)
             }
-            DecompOp::Negate { row_a, row_b, bit_index } => {
+            DecompOp::Negate {
+                row_a,
+                row_b,
+                bit_index,
+            } => {
                 let new_mask = *row_b;
-                let qs = negate_difference(b, qs, mask, new_mask);
+                let rs = negate_difference(b, rs, mask, new_mask);
 
-                let qubit_index = qs.len() as u64 - bit_index - 1;
-                let qs = apply_to_index_with_control(b, qs, qubit_index, |cb, q| {
-                    cb.not(q)
-                });
+                let qubit_index = rs.len() as u64 - bit_index - 1;
+                let rs = apply_to_index_with_control(b, rs, qubit_index, |cb, q| cb.not(q));
 
-                (qs, new_mask)
+                (rs, new_mask)
             }
         }
     });
-    let qs = negate_difference(b, qs, mask, !0);
-    let q = b.merge(qs);
-    Ok(q)
+    let rs = negate_difference(b, rs, mask, !0);
+    let r = b.merge(rs);
+    Ok(r)
 }
 
 fn apply_to_index_with_control<F: Fn(&mut dyn UnitaryBuilder, Register) -> Register>(
     b: &mut dyn UnitaryBuilder,
-    mut qs: Vec<Register>,
+    mut rs: Vec<Register>,
     indx: u64,
     f: F,
 ) -> Vec<Register> {
-    let q = qs.remove(indx as usize);
-    let cq = b.merge(qs);
-    let mut cb = b.with_condition(cq);
-    let q = f(&mut cb, q);
-    let cq = cb.release_register();
-    let mut qs = b.split_all(cq);
-    qs.insert(indx as usize, q);
-    qs
+    let r = rs.remove(indx as usize);
+    let cr = b.merge(rs);
+    let mut cb = b.with_condition(cr);
+    let r = f(&mut cb, r);
+    let cr = cb.release_register();
+    let mut rs = b.split_all(cr);
+    rs.insert(indx as usize, r);
+    rs
 }
 
 fn negate_difference(
     b: &mut dyn UnitaryBuilder,
-    qs: Vec<Register>,
+    rs: Vec<Register>,
     old_mask: u64,
     new_mask: u64,
 ) -> Vec<Register> {
     let needs_negation = old_mask ^ new_mask;
-    (0..qs.len() as u64)
+    (0..rs.len() as u64)
         .map(|indx| ((needs_negation >> indx) & 1) == 1)
         .rev()
-        .zip(qs.into_iter())
-        .map(|(negate, q)| if negate { b.not(q) } else { q })
+        .zip(rs.into_iter())
+        .map(|(negate, r)| if negate { b.not(r) } else { r })
         .collect()
 }
 
@@ -174,12 +176,12 @@ mod unitary_decomp_circuit_tests {
     fn assert_decomp(n: u64, v: Vec<Vec<(u64, Complex<f64>)>>) -> Result<(), CircuitError> {
         let flat_v = flat_round(v.clone(), 10);
         let mut b = OpBuilder::new();
-        let q = b.register(n).unwrap();
-        let q = convert_sparse_to_circuit(&mut b, q, v, EPSILON)?;
+        let r = b.register(n)?;
+        let r = convert_sparse_to_circuit(&mut b, r, v, EPSILON)?;
 
         // Output circuit in case it fails.
-        run_debug(&q)?;
-        let reconstructed = make_circuit_matrix::<f64>(n, &q, false);
+        run_debug(&r)?;
+        let reconstructed = make_circuit_matrix::<f64>(n, &r, false);
         let reconstructed = reconstructed
             .into_iter()
             .map(|v| {
@@ -220,12 +222,12 @@ mod unitary_decomp_circuit_tests {
             let reconstructed = reconstruct_unitary(n, ops, &base);
 
             let mut b = OpBuilder::new();
-            let q = b.register(n)?;
-            let q = convert_decomp_ops_to_circuit(&mut b, q, &base, ops)?;
+            let r = b.register(n)?;
+            let r = convert_decomp_ops_to_circuit(&mut b, r, &base, ops)?;
 
-            run_debug(&q).unwrap();
+            run_debug(&r).unwrap();
 
-            let circuit_mat = make_circuit_matrix::<f64>(n, &q, false);
+            let circuit_mat = make_circuit_matrix::<f64>(n, &r, false);
             let circuit_mat: Vec<_> = circuit_mat
                 .into_iter()
                 .map(|v| {

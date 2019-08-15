@@ -164,9 +164,9 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
 }
 
 /// Print out an ASCII representation of the circuit.
-pub fn run_debug(q: &Register) -> Result<(), CircuitError> {
-    run_with_statebuilder(q, |qs| {
-        let n = get_required_state_size_from_frontier(&qs);
+pub fn run_debug(r: &Register) -> Result<(), CircuitError> {
+    run_with_statebuilder(r, |rs| {
+        let n = get_required_state_size_from_frontier(&rs);
         Ok(PrintPipeline::<f32>::new(n))
     })
     .map(|_| ())

@@ -15,7 +15,7 @@ pub enum Parent {
     Shared(Rc<Register>),
 }
 
-/// A qubit object, possible representing multiple physical qubit indices.
+/// A Register object, possible representing multiple physical qubit indices.
 pub struct Register {
     /// The set of indices (qubits) represented by this Register.
     pub indices: Vec<u64>,
@@ -55,7 +55,11 @@ impl Register {
         registers: Vec<Register>,
         modifier: Option<StateModifier>,
     ) -> Register {
-        let all_indices = registers.iter().map(|q| q.indices.clone()).flatten().collect();
+        let all_indices = registers
+            .iter()
+            .map(|r| r.indices.clone())
+            .flatten()
+            .collect();
 
         Register {
             indices: all_indices,
@@ -65,59 +69,59 @@ impl Register {
         }
     }
 
-    /// Split the relative indices out of `q` into its own qubit, remaining live in second qubit.
+    /// Split the relative indices out of `r` into its own qubit, remaining live in second qubit.
     pub fn split(
         ida: u64,
         idb: u64,
-        q: Register,
+        r: Register,
         indices: Vec<u64>,
     ) -> Result<(Register, Register), CircuitError> {
         for indx in &indices {
-            if *indx > q.n() {
-                let message = format!("All indices for splitting must be below q.n = {:?}", q.n());
+            if *indx > r.n() {
+                let message = format!("All indices for splitting must be below r.n = {:?}", r.n());
                 return CircuitError::make_err(message);
             }
         }
-        if indices.len() == q.indices.len() {
-            CircuitError::make_str_err("Cannot split out all indices into own qubit.")
+        if indices.len() == r.indices.len() {
+            CircuitError::make_str_err("Cannot split out all indices into own Registers.")
         } else if indices.is_empty() {
             CircuitError::make_str_err("Must provide indices to split.")
         } else {
             let selected_indices: Vec<u64> =
-                indices.into_iter().map(|i| q.indices[i as usize]).collect();
-            Self::split_absolute(ida, idb, q, selected_indices)
+                indices.into_iter().map(|i| r.indices[i as usize]).collect();
+            Self::split_absolute(ida, idb, r, selected_indices)
         }
     }
 
-    /// Split a qubit in two, with one having the indices in `selected_indices`
+    /// Split a Register in two, with one having the indices in `selected_indices`
     pub fn split_absolute(
         ida: u64,
         idb: u64,
-        q: Register,
+        r: Register,
         selected_indices: Vec<u64>,
     ) -> Result<(Register, Register), CircuitError> {
-        if selected_indices.len() == q.indices.len() {
-            return CircuitError::make_str_err("Cannot split out all indices into own qubit.");
+        if selected_indices.len() == r.indices.len() {
+            return CircuitError::make_str_err("Cannot split out all indices into own Registers.");
         } else if selected_indices.is_empty() {
             return CircuitError::make_str_err("Must provide indices to split.");
         }
         for indx in &selected_indices {
-            if !q.indices.contains(indx) {
+            if !r.indices.contains(indx) {
                 let message = format!(
-                    "Index {:?} not found in qubit with indices {:?}",
-                    indx, q.indices
+                    "Index {:?} not found in Register with indices {:?}",
+                    indx, r.indices
                 );
                 return CircuitError::make_err(message);
             }
         }
 
-        let remaining = q
+        let remaining = r
             .indices
             .clone()
             .into_iter()
             .filter(|x| !selected_indices.contains(x))
             .collect();
-        let shared_parent = Rc::new(q);
+        let shared_parent = Rc::new(r);
 
         Ok((
             Register {
@@ -135,10 +139,10 @@ impl Register {
         ))
     }
 
-    /// Make a measurement handle and a qubit which depends on that measurement.
-    pub fn make_measurement_handle(id: u64, q: Register) -> (Register, MeasurementHandle) {
-        let indices = q.indices.clone();
-        let shared_parent = Rc::new(q);
+    /// Make a measurement handle and a Register which depends on that measurement.
+    pub fn make_measurement_handle(id: u64, r: Register) -> (Register, MeasurementHandle) {
+        let indices = r.indices.clone();
+        let shared_parent = Rc::new(r);
         let handle = MeasurementHandle::new(&shared_parent);
         (
             Register {
@@ -151,17 +155,17 @@ impl Register {
         )
     }
 
-    /// Add additional qubit dependencies to a given qubit.
-    pub fn add_deps(q: Register, deps: Vec<Rc<Register>>) -> Register {
+    /// Add additional Register dependencies to a given Register.
+    pub fn add_deps(r: Register, deps: Vec<Rc<Register>>) -> Register {
         Register {
-            indices: q.indices,
-            parent: q.parent,
+            indices: r.indices,
+            parent:  r.parent,
             deps: Some(deps),
-            id: q.id,
+            id: r.id,
         }
     }
 
-    /// Get number of qubits in this Qubit object
+    /// Get number of qubits in this Register object
     pub fn n(&self) -> u64 {
         self.indices.len() as u64
     }
@@ -197,14 +201,14 @@ impl fmt::Debug for Register {
 
         write!(
             f,
-            "Qubit[{}][{}]",
+            "Register[{}][{}]",
             self.id.to_string(),
             int_strings.join(", ")
         )
     }
 }
 
-/// A qubit handle for using when setting initial states for the circuit.
+/// A Register handle for using when setting initial states for the circuit.
 #[derive(Debug)]
 pub struct RegisterHandle {
     indices: Vec<u64>,
@@ -238,7 +242,7 @@ impl RegisterHandle {
             Ok((self.indices.clone(), InitialState::FullState(state)))
         } else {
             let message = format!(
-                "State not correct size for QubitHandle (is {}, must be 2^{})",
+                "State not correct size for RegisterHandle (is {}, must be 2^{})",
                 state.len(),
                 n
             );

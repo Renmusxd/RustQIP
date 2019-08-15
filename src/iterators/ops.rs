@@ -3,8 +3,8 @@ use crate::types::Precision;
 use num::Complex;
 use std::fmt;
 
-/// A private version of QubitOp with variable precision, this is used so we can change the f64
-/// default qubit op to a variable one at the beginning of execution and not at each operation.
+/// A private version of UnitaryOp with variable precision, this is used so we can change the f64
+/// default UnitaryOp to a variable one at the beginning of execution and not at each operation.
 pub enum PrecisionUnitaryOp<'a, P: Precision> {
     /// Indices, Matrix data
     Matrix(Vec<u64>, Vec<Complex<P>>),

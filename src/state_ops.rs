@@ -63,8 +63,11 @@ impl fmt::Debug for UnitaryOp {
     }
 }
 
-/// Make a Matrix QubitOp
-pub fn make_matrix_op(indices: Vec<u64>, dat: Vec<Complex<f64>>) -> Result<UnitaryOp, CircuitError> {
+/// Make a Matrix UnitaryOp
+pub fn make_matrix_op(
+    indices: Vec<u64>,
+    dat: Vec<Complex<f64>>,
+) -> Result<UnitaryOp, CircuitError> {
     let n = indices.len();
     let expected_mat_size = 1 << (2 * n);
     if indices.is_empty() {
@@ -81,7 +84,7 @@ pub fn make_matrix_op(indices: Vec<u64>, dat: Vec<Complex<f64>>) -> Result<Unita
     }
 }
 
-/// Make a SparseMatrix QubitOp from a vector of rows (with `(column, value)`).
+/// Make a SparseMatrix UnitaryOp from a vector of rows (with `(column, value)`).
 /// natural_order indicates that the lowest indexed qubit is the least significant bit in `column`
 /// and `row` where `row` is the index of `dat`.
 pub fn make_sparse_matrix_op(
@@ -162,7 +165,7 @@ pub fn make_sparse_matrix_from_function<F: Fn(u64) -> Vec<(u64, Complex<f64>)>>(
         .collect()
 }
 
-/// Make a Swap QubitOp
+/// Make a Swap UnitaryOp
 pub fn make_swap_op(a_indices: Vec<u64>, b_indices: Vec<u64>) -> Result<UnitaryOp, CircuitError> {
     if a_indices.is_empty() || b_indices.is_empty() {
         CircuitError::make_str_err("Need at least 1 swap index for a and b")
@@ -178,7 +181,7 @@ pub fn make_swap_op(a_indices: Vec<u64>, b_indices: Vec<u64>) -> Result<UnitaryO
     }
 }
 
-/// Make a Control QubitOp
+/// Make a Control UnitaryOp
 ///
 /// # Example
 /// ```
@@ -211,7 +214,7 @@ pub fn make_control_op(mut c_indices: Vec<u64>, op: UnitaryOp) -> Result<Unitary
     }
 }
 
-/// Make a Function QubitOp
+/// Make a Function UnitaryOp
 pub fn make_function_op(
     input_indices: Vec<u64>,
     output_indices: Vec<u64>,
@@ -325,7 +328,7 @@ pub fn get_index(op: &UnitaryOp, i: usize) -> u64 {
     }
 }
 
-/// Convert &QubitOp to equivalent PrecisionQubitOp<P>
+/// Convert &UnitaryOp to equivalent PrecisionUnitaryOp<P>
 fn clone_as_precision_op<P: Precision>(op: &UnitaryOp) -> PrecisionUnitaryOp<P> {
     match op {
         UnitaryOp::Matrix(indices, data) => {

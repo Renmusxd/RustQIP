@@ -600,7 +600,7 @@ fn fold_modify_state<P: Precision, QS: QuantumState<P>>(
 pub fn get_required_state_size_from_frontier(frontier: &[&Register]) -> u64 {
     frontier
         .iter()
-        .map(|q| &q.indices)
+        .map(|r| &r.indices)
         .cloned()
         .flatten()
         .max()
@@ -628,21 +628,21 @@ pub fn get_required_state_size<P: Precision>(
 
 /// Builds a default state of size `n`
 pub fn run<P: Precision, QS: QuantumState<P>>(
-    q: &Register,
+    r: &Register,
 ) -> Result<(QS, MeasuredResults<P>), CircuitError> {
-    run_with_statebuilder(q, |qs| -> Result<QS, CircuitError> {
-        let n = get_required_state_size_from_frontier(&qs);
+    run_with_statebuilder(r, |rs| -> Result<QS, CircuitError> {
+        let n = get_required_state_size_from_frontier(&rs);
         Ok(QS::new(n))
     })
 }
 
 /// Run the circuit, starting by building the quantum state QS with a set of initial states.
 pub fn run_with_init<P: Precision, QS: QuantumState<P>>(
-    q: &Register,
+    r: &Register,
     states: &[RegisterInitialState<P>],
 ) -> Result<(QS, MeasuredResults<P>), CircuitError> {
-    run_with_statebuilder(q, |qs| -> Result<QS, CircuitError> {
-        let n = get_required_state_size(&qs, states);
+    run_with_statebuilder(r, |rs| -> Result<QS, CircuitError> {
+        let n = get_required_state_size(&rs, states);
         Ok(QS::new_from_initial_states(n, states))
     })
 }
@@ -653,20 +653,20 @@ pub fn run_with_statebuilder<
     QS: QuantumState<P>,
     F: FnOnce(Vec<&Register>) -> Result<QS, CircuitError>,
 >(
-    q: &Register,
+    r: &Register,
     state_builder: F,
 ) -> Result<(QS, MeasuredResults<P>), CircuitError> {
-    let (frontier, ops) = get_opfns_and_frontier(q);
+    let (frontier, ops) = get_opfns_and_frontier(r);
     let state = state_builder(frontier)?;
     run_with_state_and_ops(&ops, state)
 }
 
 /// Run the circuit with a given starting state.
 pub fn run_with_state<P: Precision, QS: QuantumState<P>>(
-    q: &Register,
+    r: &Register,
     state: QS,
 ) -> Result<(QS, MeasuredResults<P>), CircuitError> {
-    let (frontier, ops) = get_opfns_and_frontier(q);
+    let (frontier, ops) = get_opfns_and_frontier(r);
 
     let req_n = get_required_state_size::<P>(&frontier, &[]);
 
@@ -684,17 +684,17 @@ pub fn run_with_state<P: Precision, QS: QuantumState<P>>(
 
 /// `run` the pipeline using `LocalQuantumState`.
 pub fn run_local<P: Precision>(
-    q: &Register,
+    r: &Register,
 ) -> Result<(LocalQuantumState<P>, MeasuredResults<P>), CircuitError> {
-    run(q)
+    run(r)
 }
 
 /// `run_with_init` the pipeline using `LocalQuantumState`
 pub fn run_local_with_init<P: Precision>(
-    q: &Register,
+    r: &Register,
     states: &[RegisterInitialState<P>],
 ) -> Result<(LocalQuantumState<P>, MeasuredResults<P>), CircuitError> {
-    run_with_init(q, states)
+    run_with_init(r, states)
 }
 
 fn run_with_state_and_ops<P: Precision, QS: QuantumState<P>>(
@@ -708,14 +708,14 @@ fn run_with_state_and_ops<P: Precision, QS: QuantumState<P>>(
 
 /// Get the frontier of a circuit as well as references to all the StateModifiers needed in the
 /// correct order.
-pub fn get_opfns_and_frontier(q: &Register) -> (Vec<&Register>, Vec<&StateModifier>) {
+pub fn get_opfns_and_frontier(r: &Register) -> (Vec<&Register>, Vec<&StateModifier>) {
     let mut heap = BinaryHeap::new();
-    heap.push(q);
+    heap.push(r);
     let mut frontier_registers: Vec<&Register> = vec![];
     let mut fn_queue = VecDeque::new();
     while !heap.is_empty() {
-        if let Some(q) = heap.pop() {
-            match &q.parent {
+        if let Some(r) = heap.pop() {
+            match & r.parent {
                 Some(parent) => match &parent {
                     Parent::Owned(parents, modifier) => {
                         if let Some(modifier) = modifier {
@@ -730,13 +730,13 @@ pub fn get_opfns_and_frontier(q: &Register) -> (Vec<&Register>, Vec<&StateModifi
                         }
                     }
                 },
-                None => frontier_registers.push(q),
+                None => frontier_registers.push(r),
             }
-            if let Some(deps) = &q.deps {
-                deps.iter().for_each(|q| {
-                    let q = q.as_ref();
-                    if !in_heap(q, &heap) {
-                        heap.push(q);
+            if let Some(deps) = &r.deps {
+                deps.iter().for_each(|r| {
+                    let r = r.as_ref();
+                    if !in_heap(r, &heap) {
+                        heap.push(r);
                     }
                 })
             }
@@ -746,13 +746,13 @@ pub fn get_opfns_and_frontier(q: &Register) -> (Vec<&Register>, Vec<&StateModifi
 }
 
 /// Deconstruct the circuit and own all the StateModifiers needed to run it.
-pub fn get_owned_opfns(q: Register) -> Vec<StateModifier> {
+pub fn get_owned_opfns(r: Register) -> Vec<StateModifier> {
     let mut heap = BinaryHeap::new();
-    heap.push(q);
+    heap.push(r);
     let mut fn_queue = VecDeque::new();
     while !heap.is_empty() {
-        if let Some(q) = heap.pop() {
-            if let Some(parent) = q.parent {
+        if let Some(r) = heap.pop() {
+            if let Some(parent) = r.parent {
                 match parent {
                     Parent::Owned(parents, modifier) => {
                         if let Some(modifier) = modifier {
@@ -760,17 +760,17 @@ pub fn get_owned_opfns(q: Register) -> Vec<StateModifier> {
                         }
                         heap.extend(parents);
                     }
-                    Parent::Shared(q) => {
-                        if let Ok(q) = Rc::try_unwrap(q) {
-                            heap.push(q)
+                    Parent::Shared(r) => {
+                        if let Ok(r) = Rc::try_unwrap(r) {
+                            heap.push(r)
                         }
                     }
                 }
             }
-            if let Some(deps) = q.deps {
-                deps.into_iter().for_each(|q| {
-                    if let Ok(q) = Rc::try_unwrap(q) {
-                        heap.push(q)
+            if let Some(deps) = r.deps {
+                deps.into_iter().for_each(|r| {
+                    if let Ok(r) = Rc::try_unwrap(r) {
+                        heap.push(r)
                     }
                 })
             }
@@ -779,29 +779,29 @@ pub fn get_owned_opfns(q: Register) -> Vec<StateModifier> {
     fn_queue.into_iter().collect()
 }
 
-fn in_heap<T: Eq>(q: T, heap: &BinaryHeap<T>) -> bool {
-    for hq in heap {
-        if hq == &q {
+fn in_heap<T: Eq>(r: T, heap: &BinaryHeap<T>) -> bool {
+    for hr in heap {
+        if hr == &r {
             return true;
         }
     }
     false
 }
 
-/// Create a circuit for the circuit given by `q`. If `natural_order`, then the
+/// Create a circuit for the circuit given by `r`. If `natural_order`, then the
 /// qubit with index 0 represents the lowest bit in the index of the state (has the smallest
 /// increment when flipped), otherwise it's the largest index (which is the internal state used by
 /// the simulator).
 pub fn make_circuit_matrix<P: Precision>(
     n: u64,
-    q: &Register,
+    r: &Register,
     natural_order: bool,
 ) -> Vec<Vec<Complex<P>>> {
     let indices: Vec<u64> = (0..n).collect();
     let lookup: Vec<Vec<Complex<P>>> = (0..1 << n)
         .map(|indx| {
             let (state, _) =
-                run_local_with_init(&q, &[(indices.clone(), InitialState::Index(indx))]).unwrap();
+                run_local_with_init(&r, &[(indices.clone(), InitialState::Index(indx))]).unwrap();
             (0..state.state.len())
                 .map(|i| {
                     let indx = if natural_order {

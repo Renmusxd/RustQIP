@@ -28,54 +28,59 @@ type SparseBuilderFn = dyn Fn(u64) -> Vec<(u64, Complex<f64>)>;
 pub trait UnitaryBuilder {
     // Things like X, Y, Z, NOT, H, SWAP, ... go here
 
-    /// Build a builder which uses `q` as a condition.
-    fn with_condition(&mut self, q: Register) -> ConditionalContextBuilder;
+    /// Build a builder which uses `r` as a condition.
+    fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder;
 
-    /// Build a generic matrix op, apply to `q`, if `q` is multiple indices and
+    /// Build a generic matrix op, apply to `r`, if `r` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
-    /// size for the number of indices in `q` (mat.len() == 2^(2n)).
-    fn mat(&mut self, name: &str, q: Register, mat: Vec<Complex<f64>>) -> Result<Register, CircuitError>;
+    /// size for the number of indices in `r` (mat.len() == 2^(2n)).
+    fn mat(
+        &mut self,
+        name: &str,
+        r: Register,
+        mat: Vec<Complex<f64>>,
+    ) -> Result<Register, CircuitError>;
 
-    /// Build a matrix op from real numbers, apply to `q`, if `q` is multiple indices and
+    /// Build a matrix op from real numbers, apply to `r`, if `r` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
-    /// size for the number of indices in `q` (mat.len() == 2^(2n)).
-    fn real_mat(&mut self, name: &str, q: Register, mat: &[f64]) -> Result<Register, CircuitError> {
-        self.mat(name, q, from_reals(mat))
+    /// size for the number of indices in `r` (mat.len() == 2^(2n)).
+    fn real_mat(&mut self, name: &str, r: Register, mat: &[f64]) -> Result<Register, CircuitError> {
+        self.mat(name, r, from_reals(mat))
     }
 
-    /// Build a sparse matrix op, apply to `q`, if `q` is multiple indices and
+    /// Build a sparse matrix op, apply to `r`, if `r` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
-    /// size for the number of indices in `q` (mat.len() == 2^n).
+    /// size for the number of indices in `r` (mat.len() == 2^n).
     fn sparse_mat(
         &mut self,
         name: &str,
-        q: Register,
+        r: Register,
         mat: Vec<Vec<(u64, Complex<f64>)>>,
         natural_order: bool,
     ) -> Result<Register, CircuitError>;
 
-    /// Build a sparse matrix op from `f`, apply to `q`, if `q` is multiple indices and
+    /// Build a sparse matrix op from `f`, apply to `r`, if `r` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
-    /// size for the number of indices in `q` (mat.len() == 2^n).
+    /// size for the number of indices in `r` (mat.len() == 2^n).
     fn sparse_mat_from_fn(
         &mut self,
         name: &str,
-        q: Register,
+        r: Register,
         f: Box<SparseBuilderFn>,
         natural_order: bool,
     ) -> Result<Register, CircuitError> {
-        let n = q.indices.len();
+        let n = r.indices.len();
         let mat = make_sparse_matrix_from_function(n, f, natural_order);
-        self.sparse_mat(name, q, mat, false)
+        self.sparse_mat(name, r, mat, false)
     }
 
-    /// Build a sparse matrix op from real numbers, apply to `q`, if `q` is multiple indices and
+    /// Build a sparse matrix op from real numbers, apply to `r`, if `r` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
-    /// size for the number of indices in `q` (mat.len() == 2^n).
+    /// size for the number of indices in `r` (mat.len() == 2^n).
     fn real_sparse_mat(
         &mut self,
         name: &str,
-        q: Register,
+        r: Register,
         mat: &[Vec<(u64, f64)>],
         natural_order: bool,
     ) -> Result<Register, CircuitError> {
@@ -88,84 +93,88 @@ pub trait UnitaryBuilder {
                     .collect()
             })
             .collect();
-        self.sparse_mat(name, q, mat, natural_order)
+        self.sparse_mat(name, r, mat, natural_order)
     }
 
-    /// Apply NOT to `q`, if `q` is multiple indices, apply to each
-    fn not(&mut self, q: Register) -> Register {
-        self.real_mat("not", q, &[0.0, 1.0, 1.0, 0.0]).unwrap()
+    /// Apply NOT to `r`, if `r` is multiple indices, apply to each
+    fn not(&mut self, r: Register) -> Register {
+        self.real_mat("not", r, &[0.0, 1.0, 1.0, 0.0]).unwrap()
     }
 
-    /// Apply X to `q`, if `q` is multiple indices, apply to each
-    fn x(&mut self, q: Register) -> Register {
-        self.real_mat("X", q, &[0.0, 1.0, 1.0, 0.0]).unwrap()
+    /// Apply X to `r`, if `r` is multiple indices, apply to each
+    fn x(&mut self, r: Register) -> Register {
+        self.real_mat("X", r, &[0.0, 1.0, 1.0, 0.0]).unwrap()
     }
 
-    /// Apply Y to `q`, if `q` is multiple indices, apply to each
-    fn y(&mut self, q: Register) -> Register {
+    /// Apply Y to `r`, if `r` is multiple indices, apply to each
+    fn y(&mut self, r: Register) -> Register {
         self.mat(
             "Y",
-            q,
+            r,
             from_tuples(&[(0.0, 0.0), (0.0, -1.0), (0.0, 1.0), (0.0, 0.0)]),
         )
         .unwrap()
     }
 
-    /// Apply Z to `q`, if `q` is multiple indices, apply to each
-    fn z(&mut self, q: Register) -> Register {
-        self.real_mat("Z", q, &[1.0, 0.0, 0.0, -1.0]).unwrap()
+    /// Apply Z to `r`, if `r` is multiple indices, apply to each
+    fn z(&mut self, r: Register) -> Register {
+        self.real_mat("Z", r, &[1.0, 0.0, 0.0, -1.0]).unwrap()
     }
 
-    /// Apply H to `q`, if `q` is multiple indices, apply to each
-    fn hadamard(&mut self, q: Register) -> Register {
+    /// Apply H to `r`, if `r` is multiple indices, apply to each
+    fn hadamard(&mut self, r: Register) -> Register {
         let inv_sqrt = 1.0f64 / 2.0f64.sqrt();
-        self.real_mat("H", q, &[inv_sqrt, inv_sqrt, inv_sqrt, -inv_sqrt])
+        self.real_mat("H", r, &[inv_sqrt, inv_sqrt, inv_sqrt, -inv_sqrt])
             .unwrap()
     }
 
     /// Transforms `|psi>` to `e^{i*theta}|psi>`
-    fn phase(&mut self, q: Register, theta: f64) -> Register {
+    fn phase(&mut self, r: Register, theta: f64) -> Register {
         let phase = Complex { re: 0.0, im: theta }.exp();
         self.mat(
             "Phase",
-            q,
+            r,
             vec![phase, Complex::zero(), Complex::zero(), phase],
         )
         .unwrap()
     }
 
-    /// Apply SWAP to `qa` and `qb`
-    fn swap(&mut self, qa: Register, qb: Register) -> Result<(Register, Register), CircuitError> {
-        let op = self.make_swap_op(&qa, &qb)?;
-        let qa_indices = qa.indices.clone();
+    /// Apply SWAP to `ra` and `rb`
+    fn swap(&mut self, ra: Register, rb: Register) -> Result<(Register, Register), CircuitError> {
+        let op = self.make_swap_op(&ra, &rb)?;
+        let ra_indices = ra.indices.clone();
 
         let name = String::from("swap");
-        let q = self.merge_with_op(vec![qa, qb], Some((name, op)));
-        self.split_absolute(q, qa_indices)
+        let r = self.merge_with_op(vec![ra, rb], Some((name, op)));
+        self.split_absolute(r, ra_indices)
     }
 
-    /// Make an operation from the boxed function `f`. This maps c|`q_in`>|`q_out`> to
-    /// c*e^i`theta`|`q_in`>|`q_out` ^ `indx`> where `indx` and `theta` are the outputs from the
+    /// Make an operation from the boxed function `f`. This maps c|`r_in`>|`r_out`> to
+    /// c*e^i`theta`|`r_in`>|`r_out` ^ `indx`> where `indx` and `theta` are the outputs from the
     /// function `f(x) = (indx, theta)`
     fn apply_function(
         &mut self,
-        q_in: Register,
-        q_out: Register,
+        r_in: Register,
+        r_out: Register,
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<(Register, Register), CircuitError>;
 
-    /// Merge the Registers in `qs` into a single Register.
-    fn merge(&mut self, qs: Vec<Register>) -> Register {
-        self.merge_with_op(qs, None)
+    /// Merge the Registers in `rs` into a single Register.
+    fn merge(&mut self, rs: Vec<Register>) -> Register {
+        self.merge_with_op(rs, None)
     }
 
-    /// Split the Register `q` into two Registers, one with relative `indices` and one with the remaining.
-    fn split(&mut self, q: Register, indices: Vec<u64>) -> Result<(Register, Register), CircuitError> {
+    /// Split the Register `r` into two Registers, one with relative `indices` and one with the remaining.
+    fn split(
+        &mut self,
+        r: Register,
+        indices: Vec<u64>,
+    ) -> Result<(Register, Register), CircuitError> {
         for indx in &indices {
-            if *indx > q.n() {
+            if *indx > r.n() {
                 let message = format!(
-                    "All indices for splitting must be below q.n={:?}, found indx={:?}",
-                    q.n(),
+                    "All indices for splitting must be below r.n={:?}, found indx={:?}",
+                    r.n(),
                     *indx
                 );
                 return CircuitError::make_err(message);
@@ -173,116 +182,123 @@ pub trait UnitaryBuilder {
         }
         if indices.is_empty() {
             CircuitError::make_str_err("Indices must contain at least one index.")
-        } else if indices.len() == q.indices.len() {
+        } else if indices.len() == r.indices.len() {
             CircuitError::make_str_err("Indices must leave at least one index.")
         } else {
             let selected_indices: Vec<u64> =
-                indices.into_iter().map(|i| q.indices[i as usize]).collect();
-            self.split_absolute(q, selected_indices)
+                indices.into_iter().map(|i| r.indices[i as usize]).collect();
+            self.split_absolute(r, selected_indices)
         }
     }
 
-    /// Split the Register `q` into two Registers, one with `selected_indices` and one with the remaining.
+    /// Split the Register `r` into two Registers, one with `selected_indices` and one with the remaining.
     fn split_absolute(
         &mut self,
-        q: Register,
+        r: Register,
         selected_indices: Vec<u64>,
     ) -> Result<(Register, Register), CircuitError>;
 
     /// Split the Register into many Registers, each with the given set of indices.
     fn split_absolute_many(
         &mut self,
-        q: Register,
+        r: Register,
         index_groups: Vec<Vec<u64>>,
     ) -> Result<(Vec<Register>, Option<Register>), CircuitError> {
         index_groups
             .into_iter()
-            .try_fold((vec![], Some(q)), |(mut qs, q), indices| {
-                if let Some(q) = q {
-                    if q.indices == indices {
-                        qs.push(q);
-                        Ok((qs, None))
+            .try_fold((vec![], Some(r)), |(mut rs, r), indices| {
+                if let Some(r) = r {
+                    if r.indices == indices {
+                        rs.push(r);
+                        Ok((rs, None))
                     } else {
-                        let (hq, tq) = self.split_absolute(q, indices)?;
-                        qs.push(hq);
-                        Ok((qs, Some(tq)))
+                        let (hr, tr) = self.split_absolute(r, indices)?;
+                        rs.push(hr);
+                        Ok((rs, Some(tr)))
                     }
                 } else {
-                    Ok((qs, None))
+                    Ok((rs, None))
                 }
             })
     }
 
-    /// Split `q` into a single Register for each index.
-    fn split_all(&mut self, q: Register) -> Vec<Register> {
-        if q.indices.len() == 1 {
-            vec![q]
+    /// Split `r` into a single Register for each index.
+    fn split_all(&mut self, r: Register) -> Vec<Register> {
+        if r.indices.len() == 1 {
+            vec![r]
         } else {
-            let mut indices: Vec<Vec<u64>> = q.indices.iter().cloned().map(|i| vec![i]).collect();
+            let mut indices: Vec<Vec<u64>> = r.indices.iter().cloned().map(|i| vec![i]).collect();
             indices.pop();
-            // Cannot fail since all indices are from q.
-            let (mut qs, q) = self.split_absolute_many(q, indices).unwrap();
-            if let Some(q) = q {
-                qs.push(q);
+            // Cannot fail since all indices are from r.
+            let (mut rs, r) = self.split_absolute_many(r, indices).unwrap();
+            if let Some(r) = r {
+                rs.push(r);
             };
-            qs
+            rs
         }
     }
 
     /// Build a generic matrix op.
-    fn make_mat_op(&self, q: &Register, data: Vec<Complex<f64>>) -> Result<UnitaryOp, CircuitError> {
-        make_matrix_op(q.indices.clone(), data)
+    fn make_mat_op(
+        &self,
+        r: &Register,
+        data: Vec<Complex<f64>>,
+    ) -> Result<UnitaryOp, CircuitError> {
+        make_matrix_op(r.indices.clone(), data)
     }
 
     /// Build a sparse matrix op
     fn make_sparse_mat_op(
         &self,
-        q: &Register,
+        r: &Register,
         data: Vec<Vec<(u64, Complex<f64>)>>,
         natural_order: bool,
     ) -> Result<UnitaryOp, CircuitError> {
-        make_sparse_matrix_op(q.indices.clone(), data, natural_order)
+        make_sparse_matrix_op(r.indices.clone(), data, natural_order)
     }
 
-    /// Build a swap op. qa and qb must have the same number of indices.
-    fn make_swap_op(&self, qa: &Register, qb: &Register) -> Result<UnitaryOp, CircuitError> {
-        make_swap_op(qa.indices.clone(), qb.indices.clone())
+    /// Build a swap op. ra and rb must have the same number of indices.
+    fn make_swap_op(&self, ra: &Register, rb: &Register) -> Result<UnitaryOp, CircuitError> {
+        make_swap_op(ra.indices.clone(), rb.indices.clone())
     }
 
     /// Make a function op. f must be boxed so that this function doesn't need to be parameterized.
     fn make_function_op(
         &self,
-        q_in: &Register,
-        q_out: &Register,
+        r_in: &Register,
+        r_out: &Register,
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<UnitaryOp, CircuitError> {
-        make_function_op(q_in.indices.clone(), q_out.indices.clone(), f)
+        make_function_op(r_in.indices.clone(), r_out.indices.clone(), f)
     }
 
     /// Merge Registers using a generic state processing function.
-    fn merge_with_op(&mut self, qs: Vec<Register>, named_operator: Option<(String, UnitaryOp)>)
-                     -> Register;
+    fn merge_with_op(
+        &mut self,
+        rs: Vec<Register>,
+        named_operator: Option<(String, UnitaryOp)>,
+    ) -> Register;
 
     /// Measure all Register states and probabilities, does not edit state (thus Unitary). Returns
     /// Register and handle.
-    fn stochastic_measure(&mut self, q: Register) -> (Register, u64);
+    fn stochastic_measure(&mut self, r: Register) -> (Register, u64);
 
     /// Create a circuit portion which depends on the classical results of measuring some Registers.
     fn single_register_classical_sidechannel(
         &mut self,
-        q: Register,
+        r: Register,
         handles: &[MeasurementHandle],
         f: Box<SingleRegisterSideChannelFn>,
     ) -> Register {
         self.classical_sidechannel(
-            vec![q],
+            vec![r],
             handles,
             Box::new(
                 move |b: &mut dyn UnitaryBuilder,
-                      mut qs: Vec<Register>,
+                      mut rs: Vec<Register>,
                       measurements: &[u64]|
                       -> Result<Vec<Register>, CircuitError> {
-                    Ok(vec![f(b, qs.pop().unwrap(), measurements)?])
+                    Ok(vec![f(b, rs.pop().unwrap(), measurements)?])
                 },
             ),
         )
@@ -293,21 +309,21 @@ pub trait UnitaryBuilder {
     /// Create a circuit portion which depends on the classical results of measuring some Registers.
     fn classical_sidechannel(
         &mut self,
-        qs: Vec<Register>,
+        rs: Vec<Register>,
         handles: &[MeasurementHandle],
         f: Box<SideChannelFn>,
     ) -> Vec<Register> {
-        let index_groups: Vec<_> = qs.iter().map(|q| &q.indices).cloned().collect();
+        let index_groups: Vec<_> = rs.iter().map(|r| &r.indices).cloned().collect();
         let f = Box::new(
             move |b: &mut dyn UnitaryBuilder,
-                  q: Register,
+                  r: Register,
                   ms: &[u64]|
                   -> Result<Vec<Register>, CircuitError> {
-                let (qs, _) = b.split_absolute_many(q, index_groups.clone())?;
-                f(b, qs, ms)
+                let (rs, _) = b.split_absolute_many(r, index_groups.clone())?;
+                f(b, rs, ms)
             },
         );
-        self.sidechannel_helper(qs, handles, f)
+        self.sidechannel_helper(rs, handles, f)
     }
 
     /// A helper function for the classical_sidechannel. Takes a set of Registers to pass to the
@@ -318,7 +334,7 @@ pub trait UnitaryBuilder {
     /// `single_register_classical_sidechannel`.
     fn sidechannel_helper(
         &mut self,
-        qs: Vec<Register>,
+        rs: Vec<Register>,
         handles: &[MeasurementHandle],
         f: Box<SideChannelHelperFn>,
     ) -> Vec<Register>;
@@ -327,22 +343,22 @@ pub trait UnitaryBuilder {
 /// Helper function for Boxing static functions and applying using the given UnitaryBuilder.
 pub fn apply_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
     b: &mut dyn UnitaryBuilder,
-    q_in: Register,
-    q_out: Register,
+    r_in: Register,
+    r_out: Register,
     f: F,
 ) -> Result<(Register, Register), CircuitError> {
-    b.apply_function(q_in, q_out, Box::new(f))
+    b.apply_function(r_in, r_out, Box::new(f))
 }
 
 /// Helper function for Boxing static functions and building sparse mats using the given
 /// UnitaryBuilder.
 pub fn apply_sparse_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
     b: &mut dyn UnitaryBuilder,
-    q_in: Register,
-    q_out: Register,
+    r_in: Register,
+    r_out: Register,
     f: F,
 ) -> Result<(Register, Register), CircuitError> {
-    b.apply_function(q_in, q_out, Box::new(f))
+    b.apply_function(r_in, r_out, Box::new(f))
 }
 
 /// A basic builder for unitary and non-unitary ops.
@@ -350,8 +366,8 @@ pub fn apply_sparse_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
 pub struct OpBuilder {
     qubit_index: u64,
     op_id: u64,
-    temp_zero_registers: Vec<Register>,
-    temp_one_registers: Vec<Register>,
+    temp_zero_qubits: Vec<Register>,
+    temp_one_qubits: Vec<Register>,
 }
 
 impl OpBuilder {
@@ -385,13 +401,16 @@ impl OpBuilder {
     }
 
     /// If you just plan to call unwrap this is cleaner.
-    pub fn q(&mut self, n: u64) -> Register {
+    pub fn r(&mut self, n: u64) -> Register {
         self.register(n).unwrap()
     }
 
     /// Build a new register with `n` indices, return it plus a handle which can be
     /// used for feeding in an initial state.
-    pub fn register_and_handle(&mut self, n: u64) -> Result<(Register, RegisterHandle), CircuitError> {
+    pub fn register_and_handle(
+        &mut self,
+        n: u64,
+    ) -> Result<(Register, RegisterHandle), CircuitError> {
         let r = self.register(n)?;
         let h = r.handle();
         Ok((r, h))
@@ -403,64 +422,64 @@ impl OpBuilder {
     /// returned, then new Registers may be allocated (and initialized with the correct value).
     pub fn get_temp_register(&mut self, n: u64, value: bool) -> Register {
         let (op_vec, other_vec) = if value {
-            (&mut self.temp_one_registers, &mut self.temp_zero_registers)
+            (&mut self.temp_one_qubits, &mut self.temp_zero_qubits)
         } else {
-            (&mut self.temp_zero_registers, &mut self.temp_one_registers)
+            (&mut self.temp_zero_qubits, &mut self.temp_one_qubits)
         };
-        let mut acquired_registers = op_vec.split_off(n as usize);
+        let mut acquired_qubits = op_vec.split_off(n as usize);
 
         // If we didn't get enough, take from temps with the wrong bit.
-        if acquired_registers.len() < n as usize {
-            let remaining = n - acquired_registers.len() as u64;
+        if acquired_qubits.len() < n as usize {
+            let remaining = n - acquired_qubits.len() as u64;
             let additional_registers = other_vec.split_off(remaining as usize);
-            let q = self.merge(additional_registers);
-            let q = self.not(q);
-            acquired_registers.extend(self.split_all(q).into_iter());
+            let r = self.merge(additional_registers);
+            let r = self.not(r);
+            acquired_qubits.push(r);
         }
 
-        // If there still aren't enough, start allocating more Register (and apply NOT if needed).
-        if acquired_registers.len() < n as usize {
-            let remaining = n - acquired_registers.len() as u64;
-            let q = self.register(remaining).unwrap();
-            let q = if value { self.not(q) } else { q };
-            acquired_registers.push(q);
+        // If there still aren't enough, start allocating more (and apply NOT if needed).
+        if acquired_qubits.len() < n as usize {
+            let remaining = n - acquired_qubits.len() as u64;
+            let r = self.register(remaining).unwrap();
+            let r = if value { self.not(r) } else { r };
+            acquired_qubits.push(r);
         };
 
         // Make the temp Register.
-        self.merge(acquired_registers)
+        self.merge(acquired_qubits)
     }
 
     /// Return a temporary Register which is supposed to have a given value `|0n>` or `|1n>`
     /// This value is not checked and may be subject to the noise of your circuit, in turn causing
     /// noise to future calls to `get_temp_register`.
-    pub fn return_temp_register(&mut self, q: Register, value: bool) {
-        let qs = self.split_all(q);
+    pub fn return_temp_register(&mut self, r: Register, value: bool) {
+        let rs = self.split_all(r);
         let op_vec = if value {
-            &mut self.temp_one_registers
+            &mut self.temp_one_qubits
         } else {
-            &mut self.temp_zero_registers
+            &mut self.temp_zero_qubits
         };
-        op_vec.extend(qs.into_iter());
+        op_vec.extend(rs.into_iter());
     }
 
-    /// Add a measure op to the pipeline for `q` and return a reference which can
+    /// Add a measure op to the pipeline for `r` and return a reference which can
     /// later be used to access the measured value from the results of `pipeline::run`.
-    pub fn measure(&mut self, q: Register) -> (Register, MeasurementHandle) {
-        self.measure_basis(q, 0.0)
+    pub fn measure(&mut self, r: Register) -> (Register, MeasurementHandle) {
+        self.measure_basis(r, 0.0)
     }
 
     /// Measure in the basis of `cos(phase)|0> + sin(phase)|1>`
-    pub fn measure_basis(&mut self, q: Register, angle: f64) -> (Register, MeasurementHandle) {
+    pub fn measure_basis(&mut self, r: Register, angle: f64) -> (Register, MeasurementHandle) {
         let id = self.get_op_id();
         let modifier = StateModifier::new_measurement_basis(
             String::from("measure"),
             id,
-            q.indices.clone(),
+            r.indices.clone(),
             angle,
         );
         let modifier = Some(modifier);
-        let q = Register::merge_with_modifier(id, vec![q], modifier);
-        Register::make_measurement_handle(self.get_op_id(), q)
+        let r = Register::merge_with_modifier(id, vec![r], modifier);
+        Register::make_measurement_handle(self.get_op_id(), r)
     }
 
     fn get_op_id(&mut self) -> u64 {
@@ -471,112 +490,117 @@ impl OpBuilder {
 }
 
 impl UnitaryBuilder for OpBuilder {
-    fn with_condition(&mut self, q: Register) -> ConditionalContextBuilder {
+    fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder {
         ConditionalContextBuilder {
             parent_builder: self,
-            conditioned_register: Some(q),
+            conditioned_register: Some(r),
         }
     }
 
-    fn mat(&mut self, name: &str, q: Register, mat: Vec<Complex<f64>>) -> Result<Register, CircuitError> {
+    fn mat(
+        &mut self,
+        name: &str,
+        r: Register,
+        mat: Vec<Complex<f64>>,
+    ) -> Result<Register, CircuitError> {
         // Special case for broadcasting ops
-        if q.indices.len() > 1 && mat.len() == (2 * 2) {
-            let qs = self.split_all(q);
-            let qs = qs
+        if r.indices.len() > 1 && mat.len() == (2 * 2) {
+            let rs = self.split_all(r);
+            let rs = rs
                 .into_iter()
-                .map(|q| self.mat(name, q, mat.clone()).unwrap())
+                .map(|r| self.mat(name, r, mat.clone()).unwrap())
                 .collect();
-            Ok(self.merge_with_op(qs, None))
+            Ok(self.merge_with_op(rs, None))
         } else {
-            let op = self.make_mat_op(&q, mat)?;
+            let op = self.make_mat_op(&r, mat)?;
             let name = String::from(name);
-            Ok(self.merge_with_op(vec![q], Some((name, op))))
+            Ok(self.merge_with_op(vec![r], Some((name, op))))
         }
     }
 
     fn sparse_mat(
         &mut self,
         name: &str,
-        q: Register,
+        r: Register,
         mat: Vec<Vec<(u64, Complex<f64>)>>,
         natural_order: bool,
     ) -> Result<Register, CircuitError> {
         // Special case for broadcasting ops
-        if q.indices.len() > 1 && mat.len() == (2 * 2) {
-            let qs = self.split_all(q);
-            let qs = qs
+        if r.indices.len() > 1 && mat.len() == (2 * 2) {
+            let rs = self.split_all(r);
+            let rs = rs
                 .into_iter()
-                .map(|q| {
-                    self.sparse_mat(name, q, mat.clone(), natural_order)
+                .map(|r| {
+                    self.sparse_mat(name, r, mat.clone(), natural_order)
                         .unwrap()
                 })
                 .collect();
-            Ok(self.merge_with_op(qs, None))
+            Ok(self.merge_with_op(rs, None))
         } else {
-            let op = self.make_sparse_mat_op(&q, mat, natural_order)?;
+            let op = self.make_sparse_mat_op(&r, mat, natural_order)?;
             let name = String::from(name);
-            Ok(self.merge_with_op(vec![q], Some((name, op))))
+            Ok(self.merge_with_op(vec![r], Some((name, op))))
         }
     }
 
     fn apply_function(
         &mut self,
-        q_in: Register,
-        q_out: Register,
+        r_in: Register,
+        r_out: Register,
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<(Register, Register), CircuitError> {
-        let op = self.make_function_op(&q_in, &q_out, f)?;
-        let in_indices = q_in.indices.clone();
+        let op = self.make_function_op(&r_in, &r_out, f)?;
+        let in_indices = r_in.indices.clone();
         let name = String::from("f");
-        let q = self.merge_with_op(vec![q_in, q_out], Some((name, op)));
-        self.split_absolute(q, in_indices)
+        let r = self.merge_with_op(vec![r_in, r_out], Some((name, op)));
+        self.split_absolute(r, in_indices)
     }
 
     fn split_absolute(
         &mut self,
-        q: Register,
+        r: Register,
         selected_indices: Vec<u64>,
     ) -> Result<(Register, Register), CircuitError> {
-        Register::split_absolute(self.get_op_id(), self.get_op_id(), q, selected_indices)
+        Register::split_absolute(self.get_op_id(), self.get_op_id(), r, selected_indices)
     }
 
     fn merge_with_op(
         &mut self,
-        qs: Vec<Register>,
+        rs: Vec<Register>,
         named_operator: Option<(String, UnitaryOp)>,
     ) -> Register {
         let modifier = named_operator.map(|(name, op)| StateModifier::new_unitary(name, op));
-        Register::merge_with_modifier(self.get_op_id(), qs, modifier)
+        Register::merge_with_modifier(self.get_op_id(), rs, modifier)
     }
 
-    fn stochastic_measure(&mut self, q: Register) -> (Register, u64) {
+    fn stochastic_measure(&mut self, r: Register) -> (Register, u64) {
         let id = self.get_op_id();
         let modifier = StateModifier::new_stochastic_measurement(
             String::from("stochastic"),
             id,
-            q.indices.clone(),
+            r.indices.clone(),
         );
         let modifier = Some(modifier);
-        let q = Register::merge_with_modifier(id, vec![q], modifier);
-        (q, id)
+        let r = Register::merge_with_modifier(id, vec![r], modifier);
+        (r, id)
     }
 
     fn sidechannel_helper(
         &mut self,
-        qs: Vec<Register>,
+        rs: Vec<Register>,
         handles: &[MeasurementHandle],
         f: Box<SideChannelHelperFn>,
     ) -> Vec<Register> {
-        let index_groups: Vec<_> = qs.iter().map(|q| &q.indices).cloned().collect();
+        let index_groups: Vec<_> = rs.iter().map(|r| &r.indices).cloned().collect();
         let req_qubits = self.qubit_index + 1;
 
         let f = Box::new(
             move |measurements: &[u64]| -> Result<Vec<StateModifier>, CircuitError> {
                 let mut b = Self::new();
-                let q = b.register(req_qubits)?;
-                let qs = f(&mut b, q, measurements)?;
-                let q = b.merge(qs);
-                Ok(get_owned_opfns(q))
+                let r = b.register(req_qubits)?;
+                let rs = f(&mut b, r, measurements)?;
+                let r = b.merge(rs);
+                Ok(get_owned_opfns(r))
             },
         );
 
@@ -585,11 +609,11 @@ impl UnitaryBuilder for OpBuilder {
             handles,
             f,
         ));
-        let q = Register::merge_with_modifier(self.get_op_id(), qs, modifier);
+        let r = Register::merge_with_modifier(self.get_op_id(), rs, modifier);
         let deps = handles.iter().map(|m| m.clone_register()).collect();
-        let q = Register::add_deps(q, deps);
-        let (qs, _) = self.split_absolute_many(q, index_groups).unwrap();
-        qs
+        let r = Register::add_deps(r, deps);
+        let (rs, _) = self.split_absolute_many(r, index_groups).unwrap();
+        rs
     }
 }
 
@@ -601,7 +625,11 @@ pub struct ConditionalContextBuilder<'a> {
 
 impl<'a> fmt::Debug for ConditionalContextBuilder<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ConditionalContextBuilder({:?})", self.conditioned_register)
+        write!(
+            f,
+            "ConditionalContextBuilder({:?})",
+            self.conditioned_register
+        )
     }
 }
 
@@ -609,7 +637,7 @@ impl<'a> ConditionalContextBuilder<'a> {
     /// Release the Register used to build this builder
     pub fn release_register(self: Self) -> Register {
         match self.conditioned_register {
-            Some(q) => q,
+            Some(r) => r,
             None => panic!("Conditional context builder failed to populate register."),
         }
     }
@@ -618,203 +646,212 @@ impl<'a> ConditionalContextBuilder<'a> {
         self.conditioned_register.take().unwrap()
     }
 
-    fn set_conditional_register(&mut self, cq: Register) {
-        self.conditioned_register = Some(cq);
+    fn set_conditional_register(&mut self, cr: Register) {
+        self.conditioned_register = Some(cr);
     }
 }
 
 impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
-    fn with_condition(&mut self, q: Register) -> ConditionalContextBuilder {
+    fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder {
         ConditionalContextBuilder {
             parent_builder: self,
-            conditioned_register: Some(q),
+            conditioned_register: Some(r),
         }
     }
 
-    fn mat(&mut self, name: &str, q: Register, mat: Vec<Complex<f64>>) -> Result<Register, CircuitError> {
+    fn mat(
+        &mut self,
+        name: &str,
+        r: Register,
+        mat: Vec<Complex<f64>>,
+    ) -> Result<Register, CircuitError> {
         // Special case for applying mat to each Register in collection.
-        if q.indices.len() > 1 && mat.len() == (2 * 2) {
-            let qs = self.split_all(q);
-            let qs = qs
+        if r.indices.len() > 1 && mat.len() == (2 * 2) {
+            let rs = self.split_all(r);
+            let rs = rs
                 .into_iter()
-                .map(|q| self.mat(name, q, mat.clone()).unwrap())
+                .map(|r| self.mat(name, r, mat.clone()).unwrap())
                 .collect();
-            Ok(self.merge_with_op(qs, None))
+            Ok(self.merge_with_op(rs, None))
         } else {
-            let op = self.make_mat_op(&q, mat)?;
-            let cq = self.get_conditional_register();
-            let cq_indices = cq.indices.clone();
+            let op = self.make_mat_op(&r, mat)?;
+            let cr = self.get_conditional_register();
+            let cr_indices = cr.indices.clone();
             let name = format!("C({})", name);
-            let q = self.merge_with_op(vec![cq, q], Some((name, op)));
-            let (cq, q) = self.split_absolute(q, cq_indices).unwrap();
+            let r = self.merge_with_op(vec![cr, r], Some((name, op)));
+            let (cr, r) = self.split_absolute(r, cr_indices).unwrap();
 
-            self.set_conditional_register(cq);
-            Ok(q)
+            self.set_conditional_register(cr);
+            Ok(r)
         }
     }
 
     fn sparse_mat(
         &mut self,
         name: &str,
-        q: Register,
+        r: Register,
         mat: Vec<Vec<(u64, Complex<f64>)>>,
         natural_order: bool,
     ) -> Result<Register, CircuitError> {
         // Special case for applying mat to each Register in collection.
-        if q.indices.len() > 1 && mat.len() == (2 * 2) {
-            let qs = self.split_all(q);
-            let qs = qs
+        if r.indices.len() > 1 && mat.len() == (2 * 2) {
+            let rs = self.split_all(r);
+            let rs = rs
                 .into_iter()
-                .map(|q| {
-                    self.sparse_mat(name, q, mat.clone(), natural_order)
+                .map(|r| {
+                    self.sparse_mat(name, r, mat.clone(), natural_order)
                         .unwrap()
                 })
                 .collect();
-            Ok(self.merge_with_op(qs, None))
+            Ok(self.merge_with_op(rs, None))
         } else {
-            let op = self.make_sparse_mat_op(&q, mat, natural_order)?;
-            let cq = self.get_conditional_register();
-            let cq_indices = cq.indices.clone();
+            let op = self.make_sparse_mat_op(&r, mat, natural_order)?;
+            let cr = self.get_conditional_register();
+            let cr_indices = cr.indices.clone();
             let name = format!("C({})", name);
-            let q = self.merge_with_op(vec![cq, q], Some((name, op)));
-            let (cq, q) = self.split_absolute(q, cq_indices).unwrap();
+            let r = self.merge_with_op(vec![cr, r], Some((name, op)));
+            let (cr, r) = self.split_absolute(r, cr_indices).unwrap();
 
-            self.set_conditional_register(cq);
-            Ok(q)
+            self.set_conditional_register(cr);
+            Ok(r)
         }
     }
 
-    fn swap(&mut self, qa: Register, qb: Register) -> Result<(Register, Register), CircuitError> {
-        let op = self.make_swap_op(&qa, &qb)?;
-        let cq = self.get_conditional_register();
-        let cq_indices = cq.indices.clone();
-        let qa_indices = qa.indices.clone();
+    fn swap(&mut self, ra: Register, rb: Register) -> Result<(Register, Register), CircuitError> {
+        let op = self.make_swap_op(&ra, &rb)?;
+        let cr = self.get_conditional_register();
+        let cr_indices = cr.indices.clone();
+        let ra_indices = ra.indices.clone();
         let name = String::from("C(swap)");
-        let q = self.merge_with_op(vec![cq, qa, qb], Some((name, op)));
-        let (cq, q) = self.split_absolute(q, cq_indices).unwrap();
-        let (qa, qb) = self.split_absolute(q, qa_indices).unwrap();
+        let r = self.merge_with_op(vec![cr, ra, rb], Some((name, op)));
+        let (cr, r) = self.split_absolute(r, cr_indices).unwrap();
+        let (ra, rb) = self.split_absolute(r, ra_indices).unwrap();
 
-        self.set_conditional_register(cq);
-        Ok((qa, qb))
+        self.set_conditional_register(cr);
+        Ok((ra, rb))
     }
 
     fn apply_function(
         &mut self,
-        q_in: Register,
-        q_out: Register,
+        r_in: Register,
+        r_out: Register,
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<(Register, Register), CircuitError> {
-        let op = self.make_function_op(&q_in, &q_out, f)?;
-        let cq = self.get_conditional_register();
+        let op = self.make_function_op(&r_in, &r_out, f)?;
+        let cr = self.get_conditional_register();
 
-        let cq_indices = cq.indices.clone();
-        let in_indices = q_in.indices.clone();
+        let cr_indices = cr.indices.clone();
+        let in_indices = r_in.indices.clone();
         let name = String::from("C(f)");
-        let q = self.merge_with_op(vec![cq, q_in, q_out], Some((name, op)));
-        let (cq, q) = self.split_absolute(q, cq_indices).unwrap();
-        let (q_in, q_out) = self.split_absolute(q, in_indices).unwrap();
+        let r = self.merge_with_op(vec![cr, r_in, r_out], Some((name, op)));
+        let (cr, r) = self.split_absolute(r, cr_indices).unwrap();
+        let (r_in, r_out) = self.split_absolute(r, in_indices).unwrap();
 
-        self.set_conditional_register(cq);
-        Ok((q_in, q_out))
+        self.set_conditional_register(cr);
+        Ok((r_in, r_out))
     }
 
     fn split_absolute(
         &mut self,
-        q: Register,
+        r: Register,
         selected_indices: Vec<u64>,
     ) -> Result<(Register, Register), CircuitError> {
-        self.parent_builder.split_absolute(q, selected_indices)
+        self.parent_builder.split_absolute(r, selected_indices)
     }
 
-    fn make_mat_op(&self, q: &Register, data: Vec<Complex<f64>>) -> Result<UnitaryOp, CircuitError> {
+    fn make_mat_op(
+        &self,
+        r: &Register,
+        data: Vec<Complex<f64>>,
+    ) -> Result<UnitaryOp, CircuitError> {
         match &self.conditioned_register {
-            Some(cq) => make_control_op(
-                cq.indices.clone(),
-                self.parent_builder.make_mat_op(q, data)?,
+            Some(cr) => make_control_op(
+                cr.indices.clone(),
+                self.parent_builder.make_mat_op(r, data)?,
             ),
-            None => panic!("Conditional context builder failed to populate qubit."),
+            None => panic!("Conditional context builder failed to populate Register."),
         }
     }
 
     fn make_sparse_mat_op(
         &self,
-        q: &Register,
+        r: &Register,
         data: Vec<Vec<(u64, Complex<f64>)>>,
         natural_order: bool,
     ) -> Result<UnitaryOp, CircuitError> {
         match &self.conditioned_register {
-            Some(cq) => make_control_op(
-                cq.indices.clone(),
+            Some(cr) => make_control_op(
+                cr.indices.clone(),
                 self.parent_builder
-                    .make_sparse_mat_op(q, data, natural_order)?,
+                    .make_sparse_mat_op(r, data, natural_order)?,
             ),
-            None => panic!("Conditional context builder failed to populate qubit."),
+            None => panic!("Conditional context builder failed to populate Register."),
         }
     }
 
-    fn make_swap_op(&self, qa: &Register, qb: &Register) -> Result<UnitaryOp, CircuitError> {
+    fn make_swap_op(&self, ra: &Register, rb: &Register) -> Result<UnitaryOp, CircuitError> {
         match &self.conditioned_register {
-            Some(cq) => {
-                let op = self.parent_builder.make_swap_op(qa, qb)?;
-                make_control_op(cq.indices.clone(), op)
+            Some(cr) => {
+                let op = self.parent_builder.make_swap_op(ra, rb)?;
+                make_control_op(cr.indices.clone(), op)
             }
-            None => panic!("Conditional context builder failed to populate qubit."),
+            None => panic!("Conditional context builder failed to populate Register."),
         }
     }
 
     fn make_function_op(
         &self,
-        q_in: &Register,
-        q_out: &Register,
+        r_in: &Register,
+        r_out: &Register,
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<UnitaryOp, CircuitError> {
         match &self.conditioned_register {
-            Some(cq) => {
-                let op = self.parent_builder.make_function_op(q_in, q_out, f)?;
-                make_control_op(cq.indices.clone(), op)
+            Some(cr) => {
+                let op = self.parent_builder.make_function_op(r_in, r_out, f)?;
+                make_control_op(cr.indices.clone(), op)
             }
-            None => panic!("Conditional context builder failed to populate qubit."),
+            None => panic!("Conditional context builder failed to populate Register."),
         }
     }
 
     fn merge_with_op(
         &mut self,
-        qs: Vec<Register>,
+        rs: Vec<Register>,
         named_operator: Option<(String, UnitaryOp)>,
     ) -> Register {
-        self.parent_builder.merge_with_op(qs, named_operator)
+        self.parent_builder.merge_with_op(rs, named_operator)
     }
 
-    fn stochastic_measure(&mut self, q: Register) -> (Register, u64) {
-        self.parent_builder.stochastic_measure(q)
+    fn stochastic_measure(&mut self, r: Register) -> (Register, u64) {
+        self.parent_builder.stochastic_measure(r)
     }
 
     fn sidechannel_helper(
         &mut self,
-        qs: Vec<Register>,
+        rs: Vec<Register>,
         handles: &[MeasurementHandle],
         f: Box<SideChannelHelperFn>,
     ) -> Vec<Register> {
-        let cq = self.get_conditional_register();
-        let conditioned_indices = cq.indices.clone();
+        let cr = self.get_conditional_register();
+        let conditioned_indices = cr.indices.clone();
         let cindices_clone = conditioned_indices.clone();
         let f = Box::new(
             move |b: &mut dyn UnitaryBuilder,
-                  q: Register,
+                  r: Register,
                   ms: &[u64]|
                   -> Result<Vec<Register>, CircuitError> {
-                let (cq, q) = b.split_absolute(q, conditioned_indices.clone())?;
-                let mut b = b.with_condition(cq);
-                f(&mut b, q, ms)
+                let (cr, r) = b.split_absolute(r, conditioned_indices.clone())?;
+                let mut b = b.with_condition(cr);
+                f(&mut b, r, ms)
             },
         );
-        let qs = self.parent_builder.sidechannel_helper(qs, handles, f);
-        let index_groups: Vec<_> = qs.iter().map(|q| q.indices.clone()).collect();
-        let q = self.merge(qs);
-        let q = self.merge(vec![cq, q]);
-        let (cq, q) = self.split_absolute(q, cindices_clone).unwrap();
-        self.set_conditional_register(cq);
-        let (qs, _) = self.split_absolute_many(q, index_groups).unwrap();
-        qs
+        let rs = self.parent_builder.sidechannel_helper(rs, handles, f);
+        let index_groups: Vec<_> = rs.iter().map(|r| r.indices.clone()).collect();
+        let r = self.merge(rs);
+        let r = self.merge(vec![cr, r]);
+        let (cr, r) = self.split_absolute(r, cindices_clone).unwrap();
+        self.set_conditional_register(cr);
+        let (rs, _) = self.split_absolute_many(r, index_groups).unwrap();
+        rs
     }
 }

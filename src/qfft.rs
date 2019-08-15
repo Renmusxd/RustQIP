@@ -5,12 +5,12 @@ use num::complex::Complex;
 use self::num::{One, Zero};
 use crate::{Register, UnitaryBuilder};
 
-/// Apply the QFFT circuit to a given qubit using the builder.
-pub fn qfft<B: UnitaryBuilder>(builder: &mut B, q: Register) -> Register {
-    let mut qs = builder.split_all(q);
-    qs.reverse();
-    let qs = rec_qfft(builder, vec![], qs);
-    builder.merge(qs)
+/// Apply the QFFT circuit to a given Register using the builder.
+pub fn qfft<B: UnitaryBuilder>(builder: &mut B, r: Register) -> Register {
+    let mut rs = builder.split_all(r);
+    rs.reverse();
+    let rs = rec_qfft(builder, vec![], rs);
+    builder.merge(rs)
 }
 
 fn rec_qfft<B: UnitaryBuilder>(

@@ -2,39 +2,39 @@ use crate::errors::CircuitError;
 /// Common circuits for general usage.
 use crate::{OpBuilder, Register, UnitaryBuilder};
 
-/// Condition a circuit defined by `f` using `cq`.
-pub fn condition<F, QS>(
+/// Condition a circuit defined by `f` using `cr`.
+pub fn condition<F, RS>(
     b: &mut dyn UnitaryBuilder,
-    cq: Register,
-    qs: QS,
+    cr: Register,
+    rs: RS,
     f: F,
-) -> Result<(Register, QS), CircuitError>
+) -> Result<(Register, RS), CircuitError>
 where
-    F: Fn(&mut dyn UnitaryBuilder, QS) -> Result<QS, CircuitError>,
+    F: Fn(&mut dyn UnitaryBuilder, RS) -> Result<RS, CircuitError>,
 {
-    let mut c = b.with_condition(cq);
-    let qs = f(&mut c, qs)?;
-    let q = c.release_register();
-    Ok((q, qs))
+    let mut c = b.with_condition(cr);
+    let rs = f(&mut c, rs)?;
+    let r = c.release_register();
+    Ok((r, rs))
 }
 
 /// Makes a pair of Register in the state `|0n>x|0n> + |1n>x|1n>`
 pub fn epr_pair(b: &mut OpBuilder, n: u64) -> (Register, Register) {
     let m = 2 * n;
 
-    let q = b.q(1);
-    let qs = b.q(m - 1);
+    let r = b.r(1);
+    let rs = b.r(m - 1);
 
-    let q = b.hadamard(q);
+    let r = b.hadamard(r);
 
-    let (q, qs) = condition(b, q, qs, |b, qs| Ok(b.not(qs))).unwrap();
+    let (r, rs) = condition(b, r, rs, |b, rs| Ok(b.not(rs))).unwrap();
 
-    let mut all_qs = vec![q];
-    all_qs.extend(b.split_all(qs));
+    let mut all_rs = vec![r];
+    all_rs.extend(b.split_all(rs));
 
-    let back_qs = all_qs.split_off(n as usize);
-    let qa = b.merge(all_qs);
-    let qb = b.merge(back_qs);
+    let back_rs = all_rs.split_off(n as usize);
+    let ra = b.merge(all_rs);
+    let rb = b.merge(back_rs);
 
-    (qa, qb)
+    (ra, rb)
 }
