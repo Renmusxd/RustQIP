@@ -271,20 +271,18 @@ pub fn select_matrix_coords(
 /// Get the index for a submatrix indexed by `indices` given the `full_index` for the larger 2^n by 2^n matrix.
 pub fn full_to_sub(n: u64, mat_indices: &[u64], full_index: u64) -> u64 {
     let nindices = mat_indices.len() as u64;
-    (0..nindices).fold(0, |acc, j| -> u64 {
-        let indx = mat_indices[j as usize];
-        let bit = get_bit(full_index, n - 1 - indx);
-        set_bit(acc, nindices - 1 - j, bit)
+    mat_indices.iter().enumerate().fold(0, |acc, (j, indx)| -> u64 {
+        let bit = get_bit(full_index, n - 1 - *indx);
+        set_bit(acc, nindices - 1 - j as u64, bit)
     })
 }
 
 /// Given the `sub_index` for the submatrix, and a base to overwrite values, get the full index for the 2^n by 2^n matrix.
 pub fn sub_to_full(n: u64, mat_indices: &[u64], sub_index: u64, base: u64) -> u64 {
     let nindices = mat_indices.len() as u64;
-    (0..nindices).fold(base, |acc, j| {
-        let indx = mat_indices[j as usize];
-        let bit = get_bit(sub_index, nindices - 1 - j);
-        set_bit(acc, n - 1 - indx, bit)
+    mat_indices.iter().enumerate().fold(base, |acc, (j, indx)| {
+        let bit = get_bit(sub_index, nindices - 1 - j as u64);
+        set_bit(acc, n - 1 - *indx, bit)
     })
 }
 

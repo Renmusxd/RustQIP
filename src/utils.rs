@@ -78,10 +78,8 @@ pub fn get_flat_index(nindices: u64, i: u64, j: u64) -> u64 {
 /// ```
 ///
 pub fn flip_bits(n: usize, num: u64) -> u64 {
-    (0..n).fold(0, |acc, i| {
-        let bit = (num >> i) & 1;
-        acc | (bit << (n - 1 - i))
-    })
+    let leading_zeros = 64 - n;
+    num.reverse_bits() >> leading_zeros
 }
 
 /// Extracts bits from a number in a particular order.
