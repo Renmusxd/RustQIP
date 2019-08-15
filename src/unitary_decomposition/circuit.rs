@@ -74,6 +74,17 @@ fn convert_decomp_ops_to_circuit(
                 });
                 (qs, new_mask)
             }
+            DecompOp::Negate { row_a, row_b, bit_index } => {
+                let new_mask = *row_b;
+                let qs = negate_difference(b, qs, mask, new_mask);
+
+                let qubit_index = qs.len() as u64 - bit_index - 1;
+                let qs = apply_to_index_with_control(b, qs, qubit_index, |cb, q| {
+                    cb.not(q)
+                });
+
+                (qs, new_mask)
+            }
         }
     });
     let qs = negate_difference(b, qs, mask, !0);
