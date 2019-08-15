@@ -45,16 +45,19 @@ impl BitPather {
                 let mask = 1 << indx;
                 let new_val = (val & !mask) | (!val & mask);
                 if self.reverse_lookup[new_val as usize] as usize >= valid_index {
-                    if !contained_values.contains(&new_val) && !path.contains(&new_val) {
-                        let mut new_path = path.clone();
-                        new_path.push(val);
-                        entries.push((new_val, new_path))
+                    let new_val_index = self.reverse_lookup[new_val as usize];
+                    if let Err(_) = contained_values.binary_search_by_key(&new_val_index, |c| self.reverse_lookup[(*c) as usize]) {
+                        if !path.contains(&new_val) {
+                            let mut new_path = path.clone();
+                            new_path.push(val);
+                            entries.push((new_val, new_path))
+                        }
                     }
                 }
                 entries
             })
         }).flatten().collect();
-        new_vals.par_sort_by_key(|(c,_)| *c);
+        new_vals.par_sort_by_key(|(c,_)| self.reverse_lookup[(*c) as usize]);
         let result = new_vals.into_iter().try_fold((None, vec![]), |(last_c, mut acc_v), (c, path)| {
             if endpoints.contains(&c) {
                 Err((c, path))
@@ -108,10 +111,13 @@ impl BitPather {
                 }
                 let sub_path = self.valid_path_to_closest(target_index as usize, last, &nonzeros)?;
                 // Should always have start and end in sub_path.
-                sub_path.windows(2).for_each(|entries| {
-                    let (from, to) = (entries[0], entries[1]);
-                    path.push((from, to))
-                });
+                let step = sub_path[1];
+                let step_index = self.reverse_lookup[step as usize];
+                let result = nonzeros.binary_search_by_key(&step_index, |c| self.reverse_lookup[(*c) as usize]);
+                if let Err(index) = result {
+                    nonzeros.insert(index, step);
+                }
+                path.push((last, step));
             }
             Ok(path)
         }
