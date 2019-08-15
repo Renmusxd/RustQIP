@@ -1,6 +1,6 @@
 use crate::errors::CircuitError;
 /// Common circuits for general usage.
-use crate::{OpBuilder, Register, UnitaryBuilder, Complex};
+use crate::{Complex, OpBuilder, Register, UnitaryBuilder};
 
 /// Add some common condition circuits to the UnitaryBuilder structs.
 pub trait ConditionCircuits {
@@ -20,9 +20,21 @@ pub trait ConditionCircuits {
         rb: Register,
     ) -> Result<(Register, Register, Register), CircuitError>;
     /// Apply a unitary matrix to the register. If mat is 2x2 then can broadcast to all qubits.
-    fn cmat(&mut self, name: &str, cr: Register, r: Register, mat: Vec<Complex<f64>>) -> Result<(Register, Register), CircuitError>;
+    fn cmat(
+        &mut self,
+        name: &str,
+        cr: Register,
+        r: Register,
+        mat: Vec<Complex<f64>>,
+    ) -> Result<(Register, Register), CircuitError>;
     /// Apply a orthonormal matrix to the register. If mat is 2x2 then can broadcast to all qubits.
-    fn crealmat(&mut self, name: &str, cr: Register, r: Register, mat: &[f64]) -> Result<(Register, Register), CircuitError>;
+    fn crealmat(
+        &mut self,
+        name: &str,
+        cr: Register,
+        r: Register,
+        mat: &[f64],
+    ) -> Result<(Register, Register), CircuitError>;
 }
 
 impl<B: UnitaryBuilder> ConditionCircuits for B {
@@ -47,11 +59,23 @@ impl<B: UnitaryBuilder> ConditionCircuits for B {
         let (cr, result) = condition(self, cr, (ra, rb), |b, (ra, rb)| b.swap(ra, rb));
         result.map(|(ra, rb)| (cr, ra, rb))
     }
-    fn cmat(&mut self, name: &str, cr: Register, r: Register, mat: Vec<Complex<f64>>) -> Result<(Register, Register), CircuitError> {
+    fn cmat(
+        &mut self,
+        name: &str,
+        cr: Register,
+        r: Register,
+        mat: Vec<Complex<f64>>,
+    ) -> Result<(Register, Register), CircuitError> {
         let (cr, result) = condition(self, cr, r, |b, r| b.mat(name, r, mat));
         result.map(|r| (cr, r))
     }
-    fn crealmat(&mut self, name: &str, cr: Register, r: Register, mat: &[f64]) -> Result<(Register, Register), CircuitError> {
+    fn crealmat(
+        &mut self,
+        name: &str,
+        cr: Register,
+        r: Register,
+        mat: &[f64],
+    ) -> Result<(Register, Register), CircuitError> {
         let (cr, result) = condition(self, cr, r, |b, r| b.real_mat(name, r, mat));
         result.map(|r| (cr, r))
     }

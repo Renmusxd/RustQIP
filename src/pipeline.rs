@@ -168,7 +168,6 @@ impl Clone for MeasurementHandle {
     }
 }
 
-
 impl Eq for MeasurementHandle {}
 
 impl PartialEq for MeasurementHandle {

@@ -22,7 +22,9 @@ pub(crate) fn gray_code(n: u64) -> Vec<u64> {
 }
 
 /// Transpose a sparse matrix.
-pub(crate) fn transpose_sparse<T: Sync + Send>(sparse_mat: Vec<Vec<(u64, T)>>) -> Vec<Vec<(u64, T)>> {
+pub(crate) fn transpose_sparse<T: Sync + Send>(
+    sparse_mat: Vec<Vec<(u64, T)>>,
+) -> Vec<Vec<(u64, T)>> {
     let sparse_len = sparse_mat.len();
     let flat_mat: Vec<_> = sparse_mat
         .into_par_iter()
@@ -282,14 +284,20 @@ pub(crate) fn print_sparse<P: Precision>(v: &[Vec<(u64, Complex<P>)>]) {
     });
 }
 
-pub(crate) fn row_magnitude_sqr<P: Precision>(row: u64, sparse_mat: &[Vec<(u64, Complex<P>)>]) -> P {
+pub(crate) fn row_magnitude_sqr<P: Precision>(
+    row: u64,
+    sparse_mat: &[Vec<(u64, Complex<P>)>],
+) -> P {
     sparse_mat[row as usize]
         .par_iter()
         .map(|(_, val)| val.norm_sqr())
         .sum()
 }
 
-pub(crate) fn column_magnitude_sqr<P: Precision>(column: u64, sparse_mat: &[Vec<(u64, Complex<P>)>]) -> P {
+pub(crate) fn column_magnitude_sqr<P: Precision>(
+    column: u64,
+    sparse_mat: &[Vec<(u64, Complex<P>)>],
+) -> P {
     sparse_mat
         .par_iter()
         .map(|v| {

@@ -17,10 +17,7 @@ impl BitPather {
             reverse_lookup[code as usize] = indx as u64;
         });
 
-        Self {
-            n,
-            reverse_lookup,
-        }
+        Self { n, reverse_lookup }
     }
 
     fn valid_path_to_closest(
@@ -103,7 +100,11 @@ impl BitPather {
 
     /// Take the list of indices with nonzero values and return the path through them
     /// to the target, returns the bits needed to swap (in the form `1 << index`).
-    pub(crate) fn path(&self, target: u64, through: &[u64]) -> Result<Vec<(u64, u64)>, CircuitError> {
+    pub(crate) fn path(
+        &self,
+        target: u64,
+        through: &[u64],
+    ) -> Result<Vec<(u64, u64)>, CircuitError> {
         if target as usize > self.reverse_lookup.len() {
             CircuitError::make_err(format!(
                 "Value to={:?} is greater than encoding length {:?}",

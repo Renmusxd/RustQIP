@@ -28,7 +28,6 @@ fn setup_cswap_circuit(
     // Define circuit
     let q = b.hadamard(q);
 
-
     let (q, _, _) = b.cswap(q, ra, rb)?;
     let q = b.hadamard(q);
 

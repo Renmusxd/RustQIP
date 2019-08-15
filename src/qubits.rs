@@ -2,9 +2,9 @@ use crate::errors::CircuitError;
 use crate::pipeline::*;
 use crate::types::Precision;
 use crate::Complex;
+use std::cmp::Ordering;
 use std::fmt;
 use std::rc::Rc;
-use std::cmp::Ordering;
 
 /// Possible relations to a parent Register
 #[derive(Debug)]

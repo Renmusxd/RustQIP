@@ -1,7 +1,7 @@
 use super::decomposition::decompose_unitary;
 use crate::errors::CircuitError;
 use crate::unitary_decomposition::decomposition::{BaseUnitary, DecompOp};
-use crate::{Complex, Register, UnitaryBuilder, condition};
+use crate::{condition, Complex, Register, UnitaryBuilder};
 use num::{One, Zero};
 
 /// Takes a unitary builder and a sparse unitary matrix and attempts to convert the matrix into the
