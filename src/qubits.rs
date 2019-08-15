@@ -4,6 +4,7 @@ use crate::types::Precision;
 use crate::Complex;
 use std::fmt;
 use std::rc::Rc;
+use std::cmp::Ordering;
 
 /// Possible relations to a parent Register
 #[derive(Debug)]
@@ -171,22 +172,22 @@ impl Register {
     }
 }
 
-impl std::cmp::Eq for Register {}
+impl Eq for Register {}
 
-impl std::cmp::PartialEq for Register {
+impl PartialEq for Register {
     fn eq(&self, other: &Register) -> bool {
         self.id == other.id
     }
 }
 
-impl std::cmp::Ord for Register {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+impl Ord for Register {
+    fn cmp(&self, other: &Self) -> Ordering {
         self.id.cmp(&other.id)
     }
 }
 
-impl std::cmp::PartialOrd for Register {
-    fn partial_cmp(&self, other: &Register) -> Option<std::cmp::Ordering> {
+impl PartialOrd for Register {
+    fn partial_cmp(&self, other: &Register) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }

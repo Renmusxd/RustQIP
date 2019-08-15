@@ -2,7 +2,7 @@ use crate::errors::CircuitError;
 use crate::unitary_decomposition::utils::gray_code;
 use rayon::prelude::*;
 
-pub struct BitPather {
+pub(crate) struct BitPather {
     n: u64,
     encoding: Vec<u64>,
     reverse_lookup: Vec<u64>,
@@ -107,7 +107,7 @@ impl BitPather {
 
     /// Take the list of indices with nonzero values and return the path through them
     /// to the target, returns the bits needed to swap (in the form `1 << index`).
-    pub fn path(&self, target: u64, through: &[u64]) -> Result<Vec<(u64, u64)>, CircuitError> {
+    pub(crate) fn path(&self, target: u64, through: &[u64]) -> Result<Vec<(u64, u64)>, CircuitError> {
         if target as usize > self.reverse_lookup.len() {
             CircuitError::make_err(format!(
                 "Value to={:?} is greater than encoding length {:?}",

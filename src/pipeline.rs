@@ -1,6 +1,6 @@
 extern crate rayon;
 
-use std::cmp::max;
+use std::cmp::{max, Ordering};
 use std::collections::HashMap;
 use std::collections::{BinaryHeap, VecDeque};
 
@@ -168,22 +168,23 @@ impl Clone for MeasurementHandle {
     }
 }
 
-impl std::cmp::Eq for MeasurementHandle {}
 
-impl std::cmp::PartialEq for MeasurementHandle {
+impl Eq for MeasurementHandle {}
+
+impl PartialEq for MeasurementHandle {
     fn eq(&self, other: &MeasurementHandle) -> bool {
         self.register == other.register
     }
 }
 
-impl std::cmp::Ord for MeasurementHandle {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+impl Ord for MeasurementHandle {
+    fn cmp(&self, other: &Self) -> Ordering {
         self.register.cmp(&other.register)
     }
 }
 
-impl std::cmp::PartialOrd for MeasurementHandle {
-    fn partial_cmp(&self, other: &MeasurementHandle) -> Option<std::cmp::Ordering> {
+impl PartialOrd for MeasurementHandle {
+    fn partial_cmp(&self, other: &MeasurementHandle) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
@@ -404,7 +405,7 @@ impl<P: Precision> LocalQuantumState<P> {
             let n = self.n;
             let state = &self.state;
             let f = |(i, outputloc): (usize, &mut Complex<P>)| {
-                *outputloc = state[utils::flip_bits(n as usize, i as u64) as usize];
+                *outputloc = state[flip_bits(n as usize, i as u64) as usize];
             };
 
             if self.multithread {
@@ -540,7 +541,7 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
             let n = self.n;
             let state = self.state;
             let f = |(i, outputloc): (usize, &mut Complex<P>)| {
-                *outputloc = state[utils::flip_bits(n as usize, i as u64) as usize];
+                *outputloc = state[flip_bits(n as usize, i as u64) as usize];
             };
 
             if self.multithread {
@@ -805,7 +806,7 @@ pub fn make_circuit_matrix<P: Precision>(
             (0..state.state.len())
                 .map(|i| {
                     let indx = if natural_order {
-                        utils::flip_bits(n as usize, i as u64) as usize
+                        flip_bits(n as usize, i as u64) as usize
                     } else {
                         i
                     };

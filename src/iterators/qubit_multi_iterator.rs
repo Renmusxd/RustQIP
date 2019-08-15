@@ -29,7 +29,7 @@ impl<'a, P: Precision> MultiOpIterator<'a, P> {
     }
 }
 
-impl<'a, P: Precision> std::iter::Iterator for MultiOpIterator<'a, P> {
+impl<'a, P: Precision> Iterator for MultiOpIterator<'a, P> {
     type Item = (u64, Complex<P>);
 
     fn next(&mut self) -> Option<Self::Item> {

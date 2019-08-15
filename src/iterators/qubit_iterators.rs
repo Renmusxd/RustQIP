@@ -30,7 +30,7 @@ impl<'a, P: Precision> MatrixOpIterator<'a, P> {
     }
 }
 
-impl<'a, P: Precision> std::iter::Iterator for MatrixOpIterator<'a, P> {
+impl<'a, P: Precision> Iterator for MatrixOpIterator<'a, P> {
     type Item = (u64, Complex<P>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -68,7 +68,7 @@ impl<'a, P: Precision> SparseMatrixOpIterator<'a, P> {
     }
 }
 
-impl<'a, P: Precision> std::iter::Iterator for SparseMatrixOpIterator<'a, P> {
+impl<'a, P: Precision> Iterator for SparseMatrixOpIterator<'a, P> {
     type Item = (u64, Complex<P>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -90,14 +90,14 @@ impl<'a, P: Precision> std::iter::Iterator for SparseMatrixOpIterator<'a, P> {
 
 /// Iterator which provides the indices of nonzero columns for a given row of a COp
 #[derive(Debug)]
-pub struct ControlledOpIterator<P: Precision, It: std::iter::Iterator<Item = (u64, Complex<P>)>> {
+pub struct ControlledOpIterator<P: Precision, It: Iterator<Item = (u64, Complex<P>)>> {
     row: u64,
     index_threshold: u64,
     op_iter: Option<It>,
     last_col: Option<u64>,
 }
 
-impl<P: Precision, It: std::iter::Iterator<Item = (u64, Complex<P>)>> ControlledOpIterator<P, It> {
+impl<P: Precision, It: Iterator<Item = (u64, Complex<P>)>> ControlledOpIterator<P, It> {
     /// Build a new iterator using the row index, the number of controlling indices, the number of
     /// op indices, and the iterator for the op.
     pub fn new<F: FnOnce(u64) -> It>(
@@ -122,7 +122,7 @@ impl<P: Precision, It: std::iter::Iterator<Item = (u64, Complex<P>)>> Controlled
     }
 }
 
-impl<P: Precision, It: std::iter::Iterator<Item = (u64, Complex<P>)>> std::iter::Iterator
+impl<P: Precision, It: Iterator<Item = (u64, Complex<P>)>> Iterator
     for ControlledOpIterator<P, It>
 {
     type Item = (u64, Complex<P>);
@@ -170,7 +170,7 @@ impl<P: Precision> SwapOpIterator<P> {
     }
 }
 
-impl<P: Precision> std::iter::Iterator for SwapOpIterator<P> {
+impl<P: Precision> Iterator for SwapOpIterator<P> {
     type Item = (u64, Complex<P>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -222,7 +222,7 @@ impl<P: Precision> FunctionOpIterator<P> {
     }
 }
 
-impl<P: Precision> std::iter::Iterator for FunctionOpIterator<P> {
+impl<P: Precision> Iterator for FunctionOpIterator<P> {
     type Item = (u64, Complex<P>);
 
     fn next(&mut self) -> Option<Self::Item> {

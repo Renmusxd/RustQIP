@@ -7,7 +7,7 @@ use num::{One, Zero};
 
 /// A controlled phase or rotation op.
 #[derive(Debug)]
-pub enum DecompOp<P: Precision> {
+pub(crate) enum DecompOp<P: Precision> {
     /// A phase rotation on all |row> entries.
     Phase {
         /// row to phase shift
@@ -35,15 +35,15 @@ pub enum DecompOp<P: Precision> {
 
 /// A base controlled single qubit op.
 #[derive(Debug)]
-pub struct BaseUnitary<P: Precision> {
+pub(crate) struct BaseUnitary<P: Precision> {
     /// row index for top entries `a` and `b`
-    pub top_row: u64,
+    pub(crate) top_row: u64,
     /// row index for bot entries `c` and `d`.
-    pub bot_row: u64,
+    pub(crate) bot_row: u64,
     /// Index of bit difference between top and bot
-    pub bit_index: u64,
+    pub(crate) bit_index: u64,
     /// Data of base `[[a,b],[c,d]]`
-    pub dat: [Complex<P>; 4],
+    pub(crate) dat: [Complex<P>; 4],
 }
 
 impl<P: Precision> Default for BaseUnitary<P> {
@@ -63,7 +63,7 @@ impl<P: Precision> Default for BaseUnitary<P> {
 }
 
 /// Use the ops and base unitary to reconstruct the decomposed unitary op.
-pub fn reconstruct_unitary<P: Precision + Clone>(
+pub(crate) fn reconstruct_unitary<P: Precision + Clone>(
     n: u64,
     ops: &[DecompOp<P>],
     base: &BaseUnitary<P>,
@@ -247,12 +247,12 @@ fn consolidate_column<P: Precision>(
 
 /// A successful decomposition with the list of ops to recreate the matrix, and a base controlled
 /// single qubit op.
-pub type DecompositionSuccess<P> = (Vec<DecompOp<P>>, BaseUnitary<P>);
+pub(crate) type DecompositionSuccess<P> = (Vec<DecompOp<P>>, BaseUnitary<P>);
 /// An unsuccessful decomposition with the list of ops applied and the remaining sparse matrix which
 /// is not a controlled single qubit op.
-pub type DecompositionFailure<P> = (Vec<DecompOp<P>>, Vec<Vec<(u64, Complex<P>)>>);
+pub(crate) type DecompositionFailure<P> = (Vec<DecompOp<P>>, Vec<Vec<(u64, Complex<P>)>>);
 /// The result of a decomposition.
-pub type DecompositionResult<P> = Result<DecompositionSuccess<P>, DecompositionFailure<P>>;
+pub(crate) type DecompositionResult<P> = Result<DecompositionSuccess<P>, DecompositionFailure<P>>;
 
 /// Decompose the unitary op (represented as a vector of sparse column/values).
 /// This uses the row-by-row rotation algorithm in gray-coding space to move weights from `|xj>` to
@@ -261,7 +261,7 @@ pub type DecompositionResult<P> = Result<DecompositionSuccess<P>, DecompositionF
 /// through all the gray codes, this is basically a Steiner tree on a graph where the graph is the
 /// vertices of a n-dimensional hypercube, it just so happens a paper was written on this:
 /// https://www.researchgate.net/publication/220617458_Near_Optimal_Bounds_for_Steiner_Trees_in_the_Hypercube
-pub fn decompose_unitary<P: Precision>(
+pub(crate) fn decompose_unitary<P: Precision>(
     n: u64,
     mut sparse_mat: Vec<Vec<(u64, Complex<P>)>>,
     drop_below_mag: P,

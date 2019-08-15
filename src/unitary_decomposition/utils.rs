@@ -7,7 +7,7 @@ use std::ops::{Add, Mul};
 use std::sync::{Arc, Mutex};
 
 /// Create an array of indices all one bit off from one another.
-pub fn gray_code(n: u64) -> Vec<u64> {
+pub(crate) fn gray_code(n: u64) -> Vec<u64> {
     if n == 0 {
         vec![]
     } else if n == 1 {
@@ -22,7 +22,7 @@ pub fn gray_code(n: u64) -> Vec<u64> {
 }
 
 /// Transpose a sparse matrix.
-pub fn transpose_sparse<T: Sync + Send>(sparse_mat: Vec<Vec<(u64, T)>>) -> Vec<Vec<(u64, T)>> {
+pub(crate) fn transpose_sparse<T: Sync + Send>(sparse_mat: Vec<Vec<(u64, T)>>) -> Vec<Vec<(u64, T)>> {
     let sparse_len = sparse_mat.len();
     let flat_mat: Vec<_> = sparse_mat
         .into_par_iter()
@@ -63,7 +63,7 @@ pub fn transpose_sparse<T: Sync + Send>(sparse_mat: Vec<Vec<(u64, T)>>) -> Vec<V
 }
 
 /// Get the value at a given column in a sorted sparse row.
-pub fn sparse_value_at_col<C: Ord, T>(col: C, row: &[(C, T)]) -> Option<&T> {
+pub(crate) fn sparse_value_at_col<C: Ord, T>(col: C, row: &[(C, T)]) -> Option<&T> {
     if row.is_empty() || row[0].0 > col {
         None
     } else if row[0].0 == col {
@@ -80,7 +80,7 @@ pub fn sparse_value_at_col<C: Ord, T>(col: C, row: &[(C, T)]) -> Option<&T> {
 }
 
 /// Get the value in a sparse matrix at given coords.
-pub fn sparse_value_at_coords<C: Ord, T>(
+pub(crate) fn sparse_value_at_coords<C: Ord, T>(
     row: usize,
     col: C,
     sparse_mat: &[Vec<(C, T)>],
@@ -89,7 +89,7 @@ pub fn sparse_value_at_coords<C: Ord, T>(
 }
 
 /// Apply a phase to the column of a sparse matrix.
-pub fn apply_phase_to_column<P: Precision>(
+pub(crate) fn apply_phase_to_column<P: Precision>(
     column: u64,
     phi: P,
     sparse_mat: &mut [Vec<(u64, Complex<P>)>],
@@ -115,7 +115,7 @@ pub fn apply_phase_to_column<P: Precision>(
 }
 
 /// Apply a phase to a row of a sparse matrix.
-pub fn apply_phase_to_row<P: Precision>(phi: P, sparse_row: &mut [(u64, Complex<P>)]) {
+pub(crate) fn apply_phase_to_row<P: Precision>(phi: P, sparse_row: &mut [(u64, Complex<P>)]) {
     let phi = Complex {
         re: P::zero(),
         im: phi,
@@ -127,7 +127,7 @@ pub fn apply_phase_to_row<P: Precision>(phi: P, sparse_row: &mut [(u64, Complex<
 }
 
 /// Apply a phase to all entries of a sparse matrix.
-pub fn apply_global_phase<P: Precision>(phi: P, sparse_mat: &mut [Vec<(u64, Complex<P>)>]) {
+pub(crate) fn apply_global_phase<P: Precision>(phi: P, sparse_mat: &mut [Vec<(u64, Complex<P>)>]) {
     let phi = Complex {
         re: P::zero(),
         im: phi,
@@ -143,7 +143,7 @@ pub fn apply_global_phase<P: Precision>(phi: P, sparse_mat: &mut [Vec<(u64, Comp
 /// Apply a rotation matrix to the two given rows. Specifically to the single bit difference between
 /// them, controlled by the remaining bits. Then remove all entries in which the value doesn't meet
 /// the criteria.
-pub fn apply_controlled_rotation_and_clean<
+pub(crate) fn apply_controlled_rotation_and_clean<
     P: Precision,
     T: Clone + Add<Output = T> + Mul<P, Output = T> + Send + Sync,
     F: Fn(&T) -> bool,
@@ -161,7 +161,7 @@ pub fn apply_controlled_rotation_and_clean<
 
 /// Apply a rotation matrix to the two given rows. Specifically to the single bit difference between
 /// them, controlled by the remaining bits.
-pub fn apply_controlled_rotation<
+pub(crate) fn apply_controlled_rotation<
     P: Precision,
     T: Clone + Add<Output = T> + Mul<P, Output = T> + Send + Sync,
 >(
@@ -258,7 +258,7 @@ fn merge_vecs<K: Eq + Ord, V, F: Fn(V, V) -> V>(
 }
 
 /// Flatten the sparse matrix and add row information.
-pub fn flat_sparse<T>(v: Vec<Vec<(u64, T)>>) -> Vec<(u64, u64, T)> {
+pub(crate) fn flat_sparse<T>(v: Vec<Vec<(u64, T)>>) -> Vec<(u64, u64, T)> {
     v.into_iter()
         .enumerate()
         .map(|(row, v)| -> Vec<(u64, u64, T)> {
@@ -271,7 +271,7 @@ pub fn flat_sparse<T>(v: Vec<Vec<(u64, T)>>) -> Vec<(u64, u64, T)> {
 }
 
 /// Print out a sparse matrix.
-pub fn print_sparse<P: Precision>(v: &[Vec<(u64, Complex<P>)>]) {
+pub(crate) fn print_sparse<P: Precision>(v: &[Vec<(u64, Complex<P>)>]) {
     v.iter().enumerate().for_each(|(row, v)| {
         print!("{:?}\t", row);
         v.iter().for_each(|(col, val)| {
@@ -282,14 +282,14 @@ pub fn print_sparse<P: Precision>(v: &[Vec<(u64, Complex<P>)>]) {
     });
 }
 
-pub fn row_magnitude_sqr<P: Precision>(row: u64, sparse_mat: &[Vec<(u64, Complex<P>)>]) -> P {
+pub(crate) fn row_magnitude_sqr<P: Precision>(row: u64, sparse_mat: &[Vec<(u64, Complex<P>)>]) -> P {
     sparse_mat[row as usize]
         .par_iter()
         .map(|(_, val)| val.norm_sqr())
         .sum()
 }
 
-pub fn column_magnitude_sqr<P: Precision>(column: u64, sparse_mat: &[Vec<(u64, Complex<P>)>]) -> P {
+pub(crate) fn column_magnitude_sqr<P: Precision>(column: u64, sparse_mat: &[Vec<(u64, Complex<P>)>]) -> P {
     sparse_mat
         .par_iter()
         .map(|v| {

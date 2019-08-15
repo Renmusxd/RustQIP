@@ -43,7 +43,7 @@ pub fn sum_for_ops_cols<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(
                     acc
                 });
                 acc.push(v);
-                let acc_row = acc_row >> *op_nindices as u64;
+                let acc_row = acc_row >> *op_nindices;
                 (acc, acc_row)
             });
     let v_slices: Vec<_> = v.iter().map(|v| v.as_slice()).collect();
