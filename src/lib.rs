@@ -60,7 +60,7 @@
 //!
 
 pub use self::builders::{OpBuilder, UnitaryBuilder};
-pub use self::common_circuits::condition;
+pub use self::common_circuits::*;
 pub use self::errors::*;
 pub use self::pipeline::{run_local, run_local_with_init, run_with_state, QuantumState};
 pub use self::pipeline_debug::run_debug;

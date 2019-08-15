@@ -36,7 +36,7 @@ impl BitPather {
         } else {
             let any_below = endpoints
                 .iter()
-                .any(|v| { (self.reverse_lookup[(*v) as usize] as usize) < valid_index });
+                .any(|v| (self.reverse_lookup[(*v) as usize] as usize) < valid_index);
             if any_below {
                 CircuitError::make_str_err("All endpoints must be in valid region.")
             } else {
@@ -61,9 +61,10 @@ impl BitPather {
                     let new_val = (val & !mask) | (!val & mask);
                     if self.reverse_lookup[new_val as usize] as usize >= valid_index {
                         let new_val_index = self.reverse_lookup[new_val as usize];
-                        let search_result = contained_values.binary_search_by_key(&new_val_index, |c| {
-                            self.reverse_lookup[(*c) as usize]
-                        });
+                        let search_result = contained_values
+                            .binary_search_by_key(&new_val_index, |c| {
+                                self.reverse_lookup[(*c) as usize]
+                            });
                         if search_result.is_err() {
                             if !path.contains(&new_val) {
                                 let mut new_path = path.clone();

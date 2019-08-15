@@ -1,7 +1,7 @@
 use super::decomposition::decompose_unitary;
 use crate::errors::CircuitError;
 use crate::unitary_decomposition::decomposition::{BaseUnitary, DecompOp};
-use crate::{Complex, Register, UnitaryBuilder};
+use crate::{Complex, Register, UnitaryBuilder, condition};
 use num::{One, Zero};
 
 /// Takes a unitary builder and a sparse unitary matrix and attempts to convert the matrix into the
@@ -102,9 +102,9 @@ fn apply_to_index_with_control<F: Fn(&mut dyn UnitaryBuilder, Register) -> Regis
 ) -> Vec<Register> {
     let r = rs.remove(indx as usize);
     let cr = b.merge(rs);
-    let mut cb = b.with_condition(cr);
-    let r = f(&mut cb, r);
-    let cr = cb.release_register();
+    let (cr, r) = condition(b, cr, r, |b, r| {
+        Ok(f(b, r))
+    }).unwrap();
     let mut rs = b.split_all(cr);
     rs.insert(indx as usize, r);
     rs
