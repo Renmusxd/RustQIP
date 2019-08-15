@@ -40,6 +40,7 @@ qip::run_debug(&q)?;
 // Run circuit
 let (_, measured) = run_local_with_init::<f64>(
     &q,
+    // Initialize ra to index 0 and rb to index 1 using their handles.
     &[ha.make_init_from_index(0)?, hb.make_init_from_index(1)?],
 )?;
 

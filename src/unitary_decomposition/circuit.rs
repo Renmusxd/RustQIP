@@ -58,7 +58,7 @@ fn convert_decomp_ops_to_circuit(
                 (rs, row)
             }
             DecompOp::Rotation {
-                from_bits,
+                from_bits: _,
                 to_bits,
                 bit_index,
                 theta,
