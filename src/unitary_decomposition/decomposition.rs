@@ -187,7 +187,17 @@ fn consolidate_column<P: Precision>(
 
     // Try to catch failures early, it's an expensive operation for each column.
     if sparse_mat[column as usize].len() != 1 {
-        CircuitError::make_err(format!("Could not consolidate col/row = {:?}", column))
+        let row_mag = row_magnitude_sqr(column, sparse_mat);
+        let col_mag = column_magnitude_sqr(column, sparse_mat);
+        let entry_mag = sparse_value_at_coords(column as usize, column, sparse_mat)
+            .map(|v| v.norm_sqr())
+            .unwrap_or_else(P::zero);
+
+        let message = format!(
+            "Could not consolidate col/row = {:?}. |mat[col,col]|={}. |column|={}. |row|={}",
+            column, entry_mag, col_mag, row_mag
+        );
+        CircuitError::make_err(message)
     } else {
         Ok(results)
     }

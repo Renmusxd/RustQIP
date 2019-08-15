@@ -3,7 +3,6 @@ extern crate rayon;
 use crate::{Complex, Precision};
 use rayon::prelude::*;
 use std::cmp::max;
-use std::fmt::Debug;
 use std::ops::{Add, Mul};
 use std::sync::{Arc, Mutex};
 
@@ -272,15 +271,33 @@ pub fn flat_sparse<T>(v: Vec<Vec<(u64, T)>>) -> Vec<(u64, u64, T)> {
 }
 
 /// Print out a sparse matrix.
-pub fn print_sparse<P: Precision + Debug>(v: &[Vec<(u64, Complex<P>)>]) {
+pub fn print_sparse<P: Precision>(v: &[Vec<(u64, Complex<P>)>]) {
     v.iter().enumerate().for_each(|(row, v)| {
         print!("{:?}\t", row);
         v.iter().for_each(|(col, val)| {
             let (r, p) = val.to_polar();
-            print!("({:?}, {:?}||{:?})\t", col, r, p)
+            print!("({}, {}||{})\t", col, r, p)
         });
         println!();
     });
+}
+
+pub fn row_magnitude_sqr<P: Precision>(row: u64, sparse_mat: &[Vec<(u64, Complex<P>)>]) -> P {
+    sparse_mat[row as usize]
+        .par_iter()
+        .map(|(_, val)| val.norm_sqr())
+        .sum()
+}
+
+pub fn column_magnitude_sqr<P: Precision>(column: u64, sparse_mat: &[Vec<(u64, Complex<P>)>]) -> P {
+    sparse_mat
+        .par_iter()
+        .map(|v| {
+            sparse_value_at_col(column, v)
+                .map(|v| v.norm_sqr())
+                .unwrap_or_else(P::zero)
+        })
+        .sum()
 }
 
 #[cfg(test)]

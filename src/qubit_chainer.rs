@@ -258,13 +258,9 @@ impl<'a, B: UnitaryBuilder> VecQubitChain<'a, B> {
             .partition(|(i, _)| f(*i as u64));
 
         if a.is_empty() {
-            CircuitError::make_str_err(
-                "Partition must provide at least one qubit to first entry.",
-            )
+            CircuitError::make_str_err("Partition must provide at least one qubit to first entry.")
         } else if b.is_empty() {
-            CircuitError::make_str_err(
-                "Partition must provide at least one qubit to second entry.",
-            )
+            CircuitError::make_str_err("Partition must provide at least one qubit to second entry.")
         } else {
             let f = |vs: Vec<(usize, Qubit)>| -> Vec<Qubit> {
                 vs.into_iter().map(|(_, q)| q).collect()

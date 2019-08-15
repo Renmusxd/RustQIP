@@ -64,10 +64,7 @@ impl fmt::Debug for QubitOp {
 }
 
 /// Make a Matrix QubitOp
-pub fn make_matrix_op(
-    indices: Vec<u64>,
-    dat: Vec<Complex<f64>>,
-) -> Result<QubitOp, CircuitError> {
+pub fn make_matrix_op(indices: Vec<u64>, dat: Vec<Complex<f64>>) -> Result<QubitOp, CircuitError> {
     let n = indices.len();
     let expected_mat_size = 1 << (2 * n);
     if indices.is_empty() {
@@ -166,10 +163,7 @@ pub fn make_sparse_matrix_from_function<F: Fn(u64) -> Vec<(u64, Complex<f64>)>>(
 }
 
 /// Make a Swap QubitOp
-pub fn make_swap_op(
-    a_indices: Vec<u64>,
-    b_indices: Vec<u64>,
-) -> Result<QubitOp, CircuitError> {
+pub fn make_swap_op(a_indices: Vec<u64>, b_indices: Vec<u64>) -> Result<QubitOp, CircuitError> {
     if a_indices.is_empty() || b_indices.is_empty() {
         CircuitError::make_str_err("Need at least 1 swap index for a and b")
     } else if a_indices.len() != b_indices.len() {

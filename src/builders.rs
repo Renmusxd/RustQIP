@@ -34,12 +34,7 @@ pub trait UnitaryBuilder {
     /// Build a generic matrix op, apply to `q`, if `q` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
     /// size for the number of indices in `q` (mat.len() == 2^(2n)).
-    fn mat(
-        &mut self,
-        name: &str,
-        q: Qubit,
-        mat: Vec<Complex<f64>>,
-    ) -> Result<Qubit, CircuitError>;
+    fn mat(&mut self, name: &str, q: Qubit, mat: Vec<Complex<f64>>) -> Result<Qubit, CircuitError>;
 
     /// Build a matrix op from real numbers, apply to `q`, if `q` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
@@ -235,11 +230,7 @@ pub trait UnitaryBuilder {
     }
 
     /// Build a generic matrix op.
-    fn make_mat_op(
-        &self,
-        q: &Qubit,
-        data: Vec<Complex<f64>>,
-    ) -> Result<QubitOp, CircuitError> {
+    fn make_mat_op(&self, q: &Qubit, data: Vec<Complex<f64>>) -> Result<QubitOp, CircuitError> {
         make_matrix_op(q.indices.clone(), data)
     }
 
@@ -487,12 +478,7 @@ impl UnitaryBuilder for OpBuilder {
         }
     }
 
-    fn mat(
-        &mut self,
-        name: &str,
-        q: Qubit,
-        mat: Vec<Complex<f64>>,
-    ) -> Result<Qubit, CircuitError> {
+    fn mat(&mut self, name: &str, q: Qubit, mat: Vec<Complex<f64>>) -> Result<Qubit, CircuitError> {
         // Special case for broadcasting ops
         if q.indices.len() > 1 && mat.len() == (2 * 2) {
             let qs = self.split_all(q);
@@ -646,12 +632,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         }
     }
 
-    fn mat(
-        &mut self,
-        name: &str,
-        q: Qubit,
-        mat: Vec<Complex<f64>>,
-    ) -> Result<Qubit, CircuitError> {
+    fn mat(&mut self, name: &str, q: Qubit, mat: Vec<Complex<f64>>) -> Result<Qubit, CircuitError> {
         // Special case for applying mat to each qubit in collection.
         if q.indices.len() > 1 && mat.len() == (2 * 2) {
             let qs = self.split_all(q);
@@ -746,11 +727,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         self.parent_builder.split_absolute(q, selected_indices)
     }
 
-    fn make_mat_op(
-        &self,
-        q: &Qubit,
-        data: Vec<Complex<f64>>,
-    ) -> Result<QubitOp, CircuitError> {
+    fn make_mat_op(&self, q: &Qubit, data: Vec<Complex<f64>>) -> Result<QubitOp, CircuitError> {
         match &self.conditioned_qubit {
             Some(cq) => make_control_op(
                 cq.indices.clone(),
