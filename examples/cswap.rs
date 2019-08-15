@@ -17,7 +17,7 @@ fn main() -> Result<(), CircuitError> {
     // Define circuit
     let q = b.hadamard(q);
 
-    let (q, _) = condition(&mut b, q, (ra, rb), |c, (ra, rb)| c.swap(ra, rb));
+    let (q, _, _) = b.cswap(q, ra, rb)?;
     let q = b.hadamard(q);
 
     let (q, m1) = b.measure(q);
@@ -25,11 +25,12 @@ fn main() -> Result<(), CircuitError> {
     // Print circuit diagram
     qip::run_debug(&q)?;
 
+    // Initialize ra to |0> and rb to |1> using their handles.
+    // Make an initial state: |0,000,001>
+    let initial_state = [ha.make_init_from_index(0)?, hb.make_init_from_index(1)?];
+
     // Run circuit
-    let (_, measured) = run_local_with_init::<f64>(
-        &q,
-        &[ha.make_init_from_index(0)?, hb.make_init_from_index(1)?],
-    )?;
+    let (_, measured) = run_local_with_init::<f64>(&q, &initial_state)?;
 
     println!("{:?}", measured.get_measurement(&m1));
 
