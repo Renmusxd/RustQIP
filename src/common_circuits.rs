@@ -63,7 +63,7 @@ pub fn condition<F, RS>(
     f: F,
 ) -> Result<(Register, RS), CircuitError>
 where
-    F: Fn(&mut dyn UnitaryBuilder, RS) -> Result<RS, CircuitError>,
+    F: FnOnce(&mut dyn UnitaryBuilder, RS) -> Result<RS, CircuitError>,
 {
     let mut c = b.with_condition(cr);
     let rs = f(&mut c, rs)?;
