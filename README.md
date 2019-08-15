@@ -29,7 +29,7 @@ let hb = rb.handle();
 // Define circuit
 let q = b.hadamard(q);
 
-let (q, _) = condition(&mut b, q, (ra, rb), |c, (ra, rb)| c.swap(ra, rb))?;
+let (q, _) = condition(&mut b, q, (ra, rb), |c, (ra, rb)| c.swap(ra, rb));
 let q = b.hadamard(q);
 
 let (q, m1) = b.measure(q);
