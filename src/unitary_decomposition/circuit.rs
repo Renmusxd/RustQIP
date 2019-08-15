@@ -1,7 +1,7 @@
 use super::decomposition::decompose_unitary;
 use crate::errors::CircuitError;
 use crate::unitary_decomposition::decomposition::{BaseUnitary, DecompOp};
-use crate::{Complex, Qubit, UnitaryBuilder};
+use crate::{Complex, Register, UnitaryBuilder};
 use num::{One, Zero};
 
 /// Takes a unitary builder and a sparse unitary matrix and attempts to convert the matrix into the
@@ -9,10 +9,10 @@ use num::{One, Zero};
 /// expensive for arbitrary matrices.
 pub fn convert_sparse_to_circuit(
     b: &mut dyn UnitaryBuilder,
-    q: Qubit,
+    q: Register,
     sparse_unitary: Vec<Vec<(u64, Complex<f64>)>>,
     drop_below: f64,
-) -> Result<Qubit, CircuitError> {
+) -> Result<Register, CircuitError> {
     let decomposition = decompose_unitary(q.n(), sparse_unitary, drop_below)?;
     let (ops, base) =
         decomposition.map_err(|_| CircuitError::new("Decomposition failed.".to_string()))?;
@@ -21,10 +21,10 @@ pub fn convert_sparse_to_circuit(
 
 fn convert_decomp_ops_to_circuit(
     b: &mut dyn UnitaryBuilder,
-    q: Qubit,
+    q: Register,
     base: &BaseUnitary<f64>,
     ops: &[DecompOp<f64>],
-) -> Result<Qubit, CircuitError> {
+) -> Result<Register, CircuitError> {
     let n = q.n();
     let qs = b.split_all(q);
 
@@ -92,17 +92,17 @@ fn convert_decomp_ops_to_circuit(
     Ok(q)
 }
 
-fn apply_to_index_with_control<F: Fn(&mut dyn UnitaryBuilder, Qubit) -> Qubit>(
+fn apply_to_index_with_control<F: Fn(&mut dyn UnitaryBuilder, Register) -> Register>(
     b: &mut dyn UnitaryBuilder,
-    mut qs: Vec<Qubit>,
+    mut qs: Vec<Register>,
     indx: u64,
     f: F,
-) -> Vec<Qubit> {
+) -> Vec<Register> {
     let q = qs.remove(indx as usize);
     let cq = b.merge(qs);
     let mut cb = b.with_condition(cq);
     let q = f(&mut cb, q);
-    let cq = cb.release_qubit();
+    let cq = cb.release_register();
     let mut qs = b.split_all(cq);
     qs.insert(indx as usize, q);
     qs
@@ -110,10 +110,10 @@ fn apply_to_index_with_control<F: Fn(&mut dyn UnitaryBuilder, Qubit) -> Qubit>(
 
 fn negate_difference(
     b: &mut dyn UnitaryBuilder,
-    qs: Vec<Qubit>,
+    qs: Vec<Register>,
     old_mask: u64,
     new_mask: u64,
-) -> Vec<Qubit> {
+) -> Vec<Register> {
     let needs_negation = old_mask ^ new_mask;
     (0..qs.len() as u64)
         .map(|indx| ((needs_negation >> indx) & 1) == 1)
@@ -174,7 +174,7 @@ mod unitary_decomp_circuit_tests {
     fn assert_decomp(n: u64, v: Vec<Vec<(u64, Complex<f64>)>>) -> Result<(), CircuitError> {
         let flat_v = flat_round(v.clone(), 10);
         let mut b = OpBuilder::new();
-        let q = b.qubit(n).unwrap();
+        let q = b.register(n).unwrap();
         let q = convert_sparse_to_circuit(&mut b, q, v, EPSILON)?;
 
         // Output circuit in case it fails.
@@ -220,7 +220,7 @@ mod unitary_decomp_circuit_tests {
             let reconstructed = reconstruct_unitary(n, ops, &base);
 
             let mut b = OpBuilder::new();
-            let q = b.qubit(n)?;
+            let q = b.register(n)?;
             let q = convert_decomp_ops_to_circuit(&mut b, q, &base, ops)?;
 
             run_debug(&q).unwrap();

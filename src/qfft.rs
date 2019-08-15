@@ -3,10 +3,10 @@ extern crate num;
 use num::complex::Complex;
 
 use self::num::{One, Zero};
-use crate::{Qubit, UnitaryBuilder};
+use crate::{Register, UnitaryBuilder};
 
 /// Apply the QFFT circuit to a given qubit using the builder.
-pub fn qfft<B: UnitaryBuilder>(builder: &mut B, q: Qubit) -> Qubit {
+pub fn qfft<B: UnitaryBuilder>(builder: &mut B, q: Register) -> Register {
     let mut qs = builder.split_all(q);
     qs.reverse();
     let qs = rec_qfft(builder, vec![], qs);
@@ -15,9 +15,9 @@ pub fn qfft<B: UnitaryBuilder>(builder: &mut B, q: Qubit) -> Qubit {
 
 fn rec_qfft<B: UnitaryBuilder>(
     builder: &mut B,
-    mut used_qs: Vec<Qubit>,
-    mut remaining_qs: Vec<Qubit>,
-) -> Vec<Qubit> {
+    mut used_qs: Vec<Register>,
+    mut remaining_qs: Vec<Register>,
+) -> Vec<Register> {
     let q = remaining_qs.pop();
     if let Some(q) = q {
         let mut q = builder.hadamard(q);
@@ -28,7 +28,7 @@ fn rec_qfft<B: UnitaryBuilder>(
             let mut cbuilder = builder.with_condition(cq);
             // Rm is a 2x2 matrix, so cannot panic on unwrap.
             q = cbuilder.mat("Rm", q, make_rm_mat(m)).unwrap();
-            pushing_qs.push(cbuilder.release_qubit());
+            pushing_qs.push(cbuilder.release_register());
         }
         pushing_qs.reverse();
         let qs = pushing_qs;

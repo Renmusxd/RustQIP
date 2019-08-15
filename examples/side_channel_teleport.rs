@@ -6,11 +6,11 @@ use qip::*;
 
 fn run_alice(
     b: &mut OpBuilder,
-    epr_alice: Qubit,
+    epr_alice: Register,
     initial_angle: f64,
 ) -> Result<MeasurementHandle, CircuitError> {
     // Set up the qubits
-    let q_random = b.qubit(1)?;
+    let q_random = b.register(1)?;
 
     // Create Alice's state
     let (sangle, cangle) = initial_angle.sin_cos();
@@ -29,10 +29,10 @@ fn run_alice(
 
 fn run_bob(
     b: &mut OpBuilder,
-    epr_bob: Qubit,
+    epr_bob: Register,
     handle: MeasurementHandle,
 ) -> Result<f64, CircuitError> {
-    let q_bob = b.single_qubit_classical_sidechannel(
+    let q_bob = b.single_register_classical_sidechannel(
         epr_bob,
         &[handle],
         Box::new(|b, q, measured| {

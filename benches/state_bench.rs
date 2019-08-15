@@ -6,12 +6,12 @@ extern crate qip;
 use bencher::Bencher;
 
 use num::Complex;
-use qip::state_ops::QubitOp::*;
+use qip::state_ops::UnitaryOp::*;
 use qip::state_ops::*;
 
 /// Make the full op matrix from `ops`.
 /// Not very efficient, use only for debugging.
-fn make_ops_matrix(n: u64, ops: &Vec<&QubitOp>) -> Vec<Vec<Complex<f64>>> {
+fn make_ops_matrix(n: u64, ops: &Vec<&UnitaryOp>) -> Vec<Vec<Complex<f64>>> {
     let zeros: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     (0..1 << n)
         .map(|i| {
@@ -32,7 +32,7 @@ fn bench_identity(b: &mut Bencher) {
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
 
-    let ops: Vec<QubitOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
+    let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
     let ops_ref = ops.iter().collect();
 
     let mat_nested = make_ops_matrix(n, &ops_ref);
@@ -52,7 +52,7 @@ fn bench_hadamard(b: &mut Bencher) {
     let mult = (1.0 / 2.0f64).sqrt();
     let mat = from_reals(&vec![mult, mult, mult, -mult]);
 
-    let ops: Vec<QubitOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
+    let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
     let ops_ref = ops.iter().collect();
 
     let mat_nested = make_ops_matrix(n, &ops_ref);
@@ -84,7 +84,7 @@ fn bench_identity_larger(b: &mut Bencher) {
 
     let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
 
-    let ops: Vec<QubitOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
+    let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
     let ops_ref = ops.iter().collect();
 
     let mat_nested = make_ops_matrix(n, &ops_ref);
@@ -104,7 +104,7 @@ fn bench_hadamard_larger(b: &mut Bencher) {
     let mult = (1.0 / 2.0f64).sqrt();
     let mat = from_reals(&vec![mult, mult, mult, -mult]);
 
-    let ops: Vec<QubitOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
+    let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
     let ops_ref = ops.iter().collect();
 
     let mat_nested = make_ops_matrix(n, &ops_ref);

@@ -5,7 +5,7 @@ use std::fmt;
 
 /// A private version of QubitOp with variable precision, this is used so we can change the f64
 /// default qubit op to a variable one at the beginning of execution and not at each operation.
-pub enum PrecisionQubitOp<'a, P: Precision> {
+pub enum PrecisionUnitaryOp<'a, P: Precision> {
     /// Indices, Matrix data
     Matrix(Vec<u64>, Vec<Complex<P>>),
     /// Indices, per row [(col, value)]
@@ -13,7 +13,7 @@ pub enum PrecisionQubitOp<'a, P: Precision> {
     /// A indices, B indices
     Swap(Vec<u64>, Vec<u64>),
     /// Control indices, Op indices, Op
-    Control(Vec<u64>, Vec<u64>, Box<PrecisionQubitOp<'a, P>>),
+    Control(Vec<u64>, Vec<u64>, Box<PrecisionUnitaryOp<'a, P>>),
     /// Function which maps |x,y> to |x,f(x) xor y> where x,y are both m bits.
     Function(
         Vec<u64>,
@@ -22,14 +22,14 @@ pub enum PrecisionQubitOp<'a, P: Precision> {
     ),
 }
 
-impl<'a, P: Precision> fmt::Debug for PrecisionQubitOp<'a, P> {
+impl<'a, P: Precision> fmt::Debug for PrecisionUnitaryOp<'a, P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (name, indices) = match self {
-            PrecisionQubitOp::Matrix(indices, _) => ("Matrix".to_string(), indices.clone()),
-            PrecisionQubitOp::SparseMatrix(indices, _) => {
+            PrecisionUnitaryOp::Matrix(indices, _) => ("Matrix".to_string(), indices.clone()),
+            PrecisionUnitaryOp::SparseMatrix(indices, _) => {
                 ("SparseMatrix".to_string(), indices.clone())
             }
-            PrecisionQubitOp::Swap(a_indices, b_indices) => {
+            PrecisionUnitaryOp::Swap(a_indices, b_indices) => {
                 let indices: Vec<_> = a_indices
                     .iter()
                     .cloned()
@@ -37,11 +37,11 @@ impl<'a, P: Precision> fmt::Debug for PrecisionQubitOp<'a, P> {
                     .collect();
                 ("Swap".to_string(), indices)
             }
-            PrecisionQubitOp::Control(indices, _, op) => {
+            PrecisionUnitaryOp::Control(indices, _, op) => {
                 let name = format!("C({:?})", *op);
                 (name, indices.clone())
             }
-            PrecisionQubitOp::Function(a_indices, b_indices, _) => {
+            PrecisionUnitaryOp::Function(a_indices, b_indices, _) => {
                 let indices: Vec<_> = a_indices
                     .iter()
                     .cloned()
@@ -60,36 +60,36 @@ impl<'a, P: Precision> fmt::Debug for PrecisionQubitOp<'a, P> {
 }
 
 /// Get the number of indices represented by `op`
-pub fn precision_num_indices<P: Precision>(op: &PrecisionQubitOp<P>) -> usize {
+pub fn precision_num_indices<P: Precision>(op: &PrecisionUnitaryOp<P>) -> usize {
     match &op {
-        PrecisionQubitOp::Matrix(indices, _) => indices.len(),
-        PrecisionQubitOp::SparseMatrix(indices, _) => indices.len(),
-        PrecisionQubitOp::Swap(a, b) => a.len() + b.len(),
-        PrecisionQubitOp::Control(cs, os, _) => cs.len() + os.len(),
-        PrecisionQubitOp::Function(inputs, outputs, _) => inputs.len() + outputs.len(),
+        PrecisionUnitaryOp::Matrix(indices, _) => indices.len(),
+        PrecisionUnitaryOp::SparseMatrix(indices, _) => indices.len(),
+        PrecisionUnitaryOp::Swap(a, b) => a.len() + b.len(),
+        PrecisionUnitaryOp::Control(cs, os, _) => cs.len() + os.len(),
+        PrecisionUnitaryOp::Function(inputs, outputs, _) => inputs.len() + outputs.len(),
     }
 }
 
 /// Get the `i`th qubit index for `op`
-pub fn precision_get_index<P: Precision>(op: &PrecisionQubitOp<P>, i: usize) -> u64 {
+pub fn precision_get_index<P: Precision>(op: &PrecisionUnitaryOp<P>, i: usize) -> u64 {
     match &op {
-        PrecisionQubitOp::Matrix(indices, _) => indices[i],
-        PrecisionQubitOp::SparseMatrix(indices, _) => indices[i],
-        PrecisionQubitOp::Swap(a, b) => {
+        PrecisionUnitaryOp::Matrix(indices, _) => indices[i],
+        PrecisionUnitaryOp::SparseMatrix(indices, _) => indices[i],
+        PrecisionUnitaryOp::Swap(a, b) => {
             if i < a.len() {
                 a[i]
             } else {
                 b[i - a.len()]
             }
         }
-        PrecisionQubitOp::Control(cs, os, _) => {
+        PrecisionUnitaryOp::Control(cs, os, _) => {
             if i < cs.len() {
                 cs[i]
             } else {
                 os[i - cs.len()]
             }
         }
-        PrecisionQubitOp::Function(inputs, outputs, _) => {
+        PrecisionUnitaryOp::Function(inputs, outputs, _) => {
             if i < inputs.len() {
                 inputs[i]
             } else {

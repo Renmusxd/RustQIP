@@ -1,7 +1,7 @@
 extern crate num;
 
 use self::num::Zero;
-use super::ops::PrecisionQubitOp;
+use super::ops::PrecisionUnitaryOp;
 use super::qubit_iterators::*;
 use crate::iterators::{precision_num_indices, MultiOpIterator};
 use crate::types::Precision;
@@ -15,7 +15,7 @@ use num::Complex;
 pub fn sum_for_op_cols<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(
     nindices: u64,
     row: u64,
-    op: &PrecisionQubitOp<P>,
+    op: &PrecisionUnitaryOp<P>,
     f: F,
 ) -> Complex<P> {
     let init = Complex::zero();
@@ -25,7 +25,7 @@ pub fn sum_for_op_cols<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(
 /// Like `sum_for_op_cols` but takes multiple ops at once.
 pub fn sum_for_ops_cols<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(
     row: u64,
-    ops: &[PrecisionQubitOp<P>],
+    ops: &[PrecisionUnitaryOp<P>],
     f: F,
 ) -> Complex<P> {
     let ns: Vec<_> = ops
@@ -56,24 +56,24 @@ pub fn sum_for_ops_cols<P: Precision, F: Fn((u64, Complex<P>)) -> Complex<P>>(
 pub fn fold_for_op_cols<P: Precision, T, F: Fn(T, (u64, Complex<P>)) -> T>(
     nindices: u64,
     row: u64,
-    op: &PrecisionQubitOp<P>,
+    op: &PrecisionUnitaryOp<P>,
     init: T,
     f: F,
 ) -> T {
     match &op {
-        PrecisionQubitOp::Matrix(_, data) => {
+        PrecisionUnitaryOp::Matrix(_, data) => {
             MatrixOpIterator::new(row, nindices, &data).fold(init, f)
         }
-        PrecisionQubitOp::SparseMatrix(_, data) => {
+        PrecisionUnitaryOp::SparseMatrix(_, data) => {
             SparseMatrixOpIterator::new(row, &data).fold(init, f)
         }
-        PrecisionQubitOp::Swap(_, _) => SwapOpIterator::new(row, nindices).fold(init, f),
-        PrecisionQubitOp::Control(c_indices, o_indices, op) => {
+        PrecisionUnitaryOp::Swap(_, _) => SwapOpIterator::new(row, nindices).fold(init, f),
+        PrecisionUnitaryOp::Control(c_indices, o_indices, op) => {
             let n_control_indices = c_indices.len() as u64;
             let n_op_indices = o_indices.len() as u64;
             fold_with_control_iterator(row, &op, n_control_indices, n_op_indices, init, f)
         }
-        PrecisionQubitOp::Function(inputs, outputs, op_f) => {
+        PrecisionUnitaryOp::Function(inputs, outputs, op_f) => {
             let input_n = inputs.len() as u64;
             let output_n = outputs.len() as u64;
             FunctionOpIterator::new(row, input_n, output_n, op_f).fold(init, f)
@@ -84,29 +84,29 @@ pub fn fold_for_op_cols<P: Precision, T, F: Fn(T, (u64, Complex<P>)) -> T>(
 /// Builds a ControlledOpIterator for the given `op`, then maps using `f` and sums.
 fn fold_with_control_iterator<P: Precision, T, F: Fn(T, (u64, Complex<P>)) -> T>(
     row: u64,
-    op: &PrecisionQubitOp<P>,
+    op: &PrecisionUnitaryOp<P>,
     n_control_indices: u64,
     n_op_indices: u64,
     init: T,
     f: F,
 ) -> T {
     match op {
-        PrecisionQubitOp::Matrix(_, data) => {
+        PrecisionUnitaryOp::Matrix(_, data) => {
             let iter_builder = |row: u64| MatrixOpIterator::new(row, n_op_indices, &data);
             let it = ControlledOpIterator::new(row, n_control_indices, n_op_indices, iter_builder);
             it.fold(init, f)
         }
-        PrecisionQubitOp::SparseMatrix(_, data) => {
+        PrecisionUnitaryOp::SparseMatrix(_, data) => {
             let iter_builder = |row: u64| SparseMatrixOpIterator::new(row, &data);
             let it = ControlledOpIterator::new(row, n_control_indices, n_op_indices, iter_builder);
             it.fold(init, f)
         }
-        PrecisionQubitOp::Swap(_, _) => {
+        PrecisionUnitaryOp::Swap(_, _) => {
             let iter_builder = |row: u64| SwapOpIterator::new(row, n_op_indices);
             let it = ControlledOpIterator::new(row, n_control_indices, n_op_indices, iter_builder);
             it.fold(init, f)
         }
-        PrecisionQubitOp::Function(inputs, outputs, op_f) => {
+        PrecisionUnitaryOp::Function(inputs, outputs, op_f) => {
             let input_n = inputs.len() as u64;
             let output_n = outputs.len() as u64;
             let iter_builder = |row: u64| FunctionOpIterator::new(row, input_n, output_n, op_f);
@@ -115,7 +115,7 @@ fn fold_with_control_iterator<P: Precision, T, F: Fn(T, (u64, Complex<P>)) -> T>
         }
         // Control ops are automatically collapsed if made with helper, but implement this anyway
         // just to account for the possibility.
-        PrecisionQubitOp::Control(c_indices, o_indices, op) => {
+        PrecisionUnitaryOp::Control(c_indices, o_indices, op) => {
             let n_control_indices = n_control_indices + c_indices.len() as u64;
             let n_op_indices = o_indices.len() as u64;
             fold_with_control_iterator(row, op, n_control_indices, n_op_indices, init, f)

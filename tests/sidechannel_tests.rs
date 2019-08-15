@@ -1,6 +1,6 @@
 extern crate qip;
 use qip::pipeline::MeasurementHandle;
-use qip::qubits::QubitHandle;
+use qip::qubits::RegisterHandle;
 use qip::*;
 
 fn assert_almost_eq(a: f64, b: f64, prec: i32) {
@@ -12,12 +12,12 @@ fn assert_almost_eq(a: f64, b: f64, prec: i32) {
 
 fn setup_cswap_sidechannel_circuit(
     vec_n: u64,
-) -> Result<(Qubit, QubitHandle, QubitHandle, MeasurementHandle), CircuitError> {
+) -> Result<(Register, RegisterHandle, RegisterHandle, MeasurementHandle), CircuitError> {
     // Setup inputs
     let mut b = OpBuilder::new();
-    let q1 = b.qubit(1)?;
-    let q2 = b.qubit(vec_n)?;
-    let q3 = b.qubit(vec_n)?;
+    let q1 = b.register(1)?;
+    let q2 = b.register(vec_n)?;
+    let q3 = b.register(vec_n)?;
 
     // We will want to feed in some inputs later.
     let h2 = q2.handle();
@@ -27,7 +27,7 @@ fn setup_cswap_sidechannel_circuit(
     let q1 = b.hadamard(q1);
 
     // Make a qubit whose sole use is for sidechannels
-    let q4 = b.qubit(1)?;
+    let q4 = b.register(1)?;
     let q4 = b.hadamard(q4);
     let (q4, h4) = b.measure(q4);
 
@@ -42,7 +42,7 @@ fn setup_cswap_sidechannel_circuit(
             Ok(vec![q2, q3])
         }),
     );
-    let q1 = c.release_qubit();
+    let q1 = c.release_register();
 
     let q1 = b.hadamard(q1);
 

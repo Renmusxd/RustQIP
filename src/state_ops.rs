@@ -11,7 +11,7 @@ use std::cmp::{max, min};
 use std::fmt;
 
 /// Types of unitary ops which can be applied to a state.
-pub enum QubitOp {
+pub enum UnitaryOp {
     /// Indices, Matrix data
     Matrix(Vec<u64>, Vec<Complex<f64>>),
     /// Indices, Matrix data
@@ -19,7 +19,7 @@ pub enum QubitOp {
     /// A indices, B indices
     Swap(Vec<u64>, Vec<u64>),
     /// Control indices, Op indices, Op
-    Control(Vec<u64>, Vec<u64>, Box<QubitOp>),
+    Control(Vec<u64>, Vec<u64>, Box<UnitaryOp>),
     /// Function which maps |x,y> to |x,f(x) xor y>
     Function(
         Vec<u64>,
@@ -28,12 +28,12 @@ pub enum QubitOp {
     ),
 }
 
-impl fmt::Debug for QubitOp {
+impl fmt::Debug for UnitaryOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (name, indices) = match self {
-            QubitOp::Matrix(indices, _) => ("Matrix".to_string(), indices.clone()),
-            QubitOp::SparseMatrix(indices, _) => ("SparseMatrix".to_string(), indices.clone()),
-            QubitOp::Swap(a_indices, b_indices) => {
+            UnitaryOp::Matrix(indices, _) => ("Matrix".to_string(), indices.clone()),
+            UnitaryOp::SparseMatrix(indices, _) => ("SparseMatrix".to_string(), indices.clone()),
+            UnitaryOp::Swap(a_indices, b_indices) => {
                 let indices: Vec<_> = a_indices
                     .iter()
                     .cloned()
@@ -41,11 +41,11 @@ impl fmt::Debug for QubitOp {
                     .collect();
                 ("Swap".to_string(), indices)
             }
-            QubitOp::Control(indices, _, op) => {
+            UnitaryOp::Control(indices, _, op) => {
                 let name = format!("C({:?})", *op);
                 (name, indices.clone())
             }
-            QubitOp::Function(a_indices, b_indices, _) => {
+            UnitaryOp::Function(a_indices, b_indices, _) => {
                 let indices: Vec<_> = a_indices
                     .iter()
                     .cloned()
@@ -64,7 +64,7 @@ impl fmt::Debug for QubitOp {
 }
 
 /// Make a Matrix QubitOp
-pub fn make_matrix_op(indices: Vec<u64>, dat: Vec<Complex<f64>>) -> Result<QubitOp, CircuitError> {
+pub fn make_matrix_op(indices: Vec<u64>, dat: Vec<Complex<f64>>) -> Result<UnitaryOp, CircuitError> {
     let n = indices.len();
     let expected_mat_size = 1 << (2 * n);
     if indices.is_empty() {
@@ -77,7 +77,7 @@ pub fn make_matrix_op(indices: Vec<u64>, dat: Vec<Complex<f64>>) -> Result<Qubit
         );
         CircuitError::make_err(message)
     } else {
-        Ok(QubitOp::Matrix(indices, dat))
+        Ok(UnitaryOp::Matrix(indices, dat))
     }
 }
 
@@ -88,7 +88,7 @@ pub fn make_sparse_matrix_op(
     indices: Vec<u64>,
     dat: Vec<Vec<(u64, Complex<f64>)>>,
     natural_order: bool,
-) -> Result<QubitOp, CircuitError> {
+) -> Result<UnitaryOp, CircuitError> {
     let n = indices.len();
     let expected_mat_size = 1 << n;
     if indices.is_empty() {
@@ -130,7 +130,7 @@ pub fn make_sparse_matrix_op(
             dat
         };
 
-        Ok(QubitOp::SparseMatrix(indices, dat))
+        Ok(UnitaryOp::SparseMatrix(indices, dat))
     }
 }
 
@@ -163,7 +163,7 @@ pub fn make_sparse_matrix_from_function<F: Fn(u64) -> Vec<(u64, Complex<f64>)>>(
 }
 
 /// Make a Swap QubitOp
-pub fn make_swap_op(a_indices: Vec<u64>, b_indices: Vec<u64>) -> Result<QubitOp, CircuitError> {
+pub fn make_swap_op(a_indices: Vec<u64>, b_indices: Vec<u64>) -> Result<UnitaryOp, CircuitError> {
     if a_indices.is_empty() || b_indices.is_empty() {
         CircuitError::make_str_err("Need at least 1 swap index for a and b")
     } else if a_indices.len() != b_indices.len() {
@@ -174,7 +174,7 @@ pub fn make_swap_op(a_indices: Vec<u64>, b_indices: Vec<u64>) -> Result<QubitOp,
         );
         CircuitError::make_err(message)
     } else {
-        Ok(QubitOp::Swap(a_indices, b_indices))
+        Ok(UnitaryOp::Swap(a_indices, b_indices))
     }
 }
 
@@ -183,7 +183,7 @@ pub fn make_swap_op(a_indices: Vec<u64>, b_indices: Vec<u64>) -> Result<QubitOp,
 /// # Example
 /// ```
 /// use qip::state_ops::make_control_op;
-/// use qip::state_ops::QubitOp::{Matrix, Control};
+/// use qip::state_ops::UnitaryOp::{Matrix, Control};
 /// let op = Matrix(vec![1], vec![/* ... */]);
 /// let cop = make_control_op(vec![0], op).unwrap();
 ///
@@ -194,18 +194,18 @@ pub fn make_swap_op(a_indices: Vec<u64>, b_indices: Vec<u64>) -> Result<QubitOp,
 ///     assert!(false);
 /// }
 /// ```
-pub fn make_control_op(mut c_indices: Vec<u64>, op: QubitOp) -> Result<QubitOp, CircuitError> {
+pub fn make_control_op(mut c_indices: Vec<u64>, op: UnitaryOp) -> Result<UnitaryOp, CircuitError> {
     if c_indices.is_empty() {
         CircuitError::make_str_err("Must supply at least one control index")
     } else {
         match op {
-            QubitOp::Control(oc_indices, oo_indices, op) => {
+            UnitaryOp::Control(oc_indices, oo_indices, op) => {
                 c_indices.extend(oc_indices);
-                Ok(QubitOp::Control(c_indices, oo_indices, op))
+                Ok(UnitaryOp::Control(c_indices, oo_indices, op))
             }
             op => {
                 let o_indices = (0..num_indices(&op)).map(|i| get_index(&op, i)).collect();
-                Ok(QubitOp::Control(c_indices, o_indices, Box::new(op)))
+                Ok(UnitaryOp::Control(c_indices, o_indices, Box::new(op)))
             }
         }
     }
@@ -216,11 +216,11 @@ pub fn make_function_op(
     input_indices: Vec<u64>,
     output_indices: Vec<u64>,
     f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
-) -> Result<QubitOp, CircuitError> {
+) -> Result<UnitaryOp, CircuitError> {
     if input_indices.is_empty() || output_indices.is_empty() {
         CircuitError::make_str_err("Input and Output indices must not be empty")
     } else {
-        Ok(QubitOp::Function(input_indices, output_indices, f))
+        Ok(UnitaryOp::Function(input_indices, output_indices, f))
     }
 }
 
@@ -286,36 +286,36 @@ pub fn sub_to_full(n: u64, mat_indices: &[u64], sub_index: u64, base: u64) -> u6
 }
 
 /// Get the number of indices represented by `op`
-pub fn num_indices(op: &QubitOp) -> usize {
+pub fn num_indices(op: &UnitaryOp) -> usize {
     match &op {
-        QubitOp::Matrix(indices, _) => indices.len(),
-        QubitOp::SparseMatrix(indices, _) => indices.len(),
-        QubitOp::Swap(a, b) => a.len() + b.len(),
-        QubitOp::Control(cs, os, _) => cs.len() + os.len(),
-        QubitOp::Function(inputs, outputs, _) => inputs.len() + outputs.len(),
+        UnitaryOp::Matrix(indices, _) => indices.len(),
+        UnitaryOp::SparseMatrix(indices, _) => indices.len(),
+        UnitaryOp::Swap(a, b) => a.len() + b.len(),
+        UnitaryOp::Control(cs, os, _) => cs.len() + os.len(),
+        UnitaryOp::Function(inputs, outputs, _) => inputs.len() + outputs.len(),
     }
 }
 
 /// Get the `i`th qubit index for `op`
-pub fn get_index(op: &QubitOp, i: usize) -> u64 {
+pub fn get_index(op: &UnitaryOp, i: usize) -> u64 {
     match &op {
-        QubitOp::Matrix(indices, _) => indices[i],
-        QubitOp::SparseMatrix(indices, _) => indices[i],
-        QubitOp::Swap(a, b) => {
+        UnitaryOp::Matrix(indices, _) => indices[i],
+        UnitaryOp::SparseMatrix(indices, _) => indices[i],
+        UnitaryOp::Swap(a, b) => {
             if i < a.len() {
                 a[i]
             } else {
                 b[i - a.len()]
             }
         }
-        QubitOp::Control(cs, os, _) => {
+        UnitaryOp::Control(cs, os, _) => {
             if i < cs.len() {
                 cs[i]
             } else {
                 os[i - cs.len()]
             }
         }
-        QubitOp::Function(inputs, outputs, _) => {
+        UnitaryOp::Function(inputs, outputs, _) => {
             if i < inputs.len() {
                 inputs[i]
             } else {
@@ -326,9 +326,9 @@ pub fn get_index(op: &QubitOp, i: usize) -> u64 {
 }
 
 /// Convert &QubitOp to equivalent PrecisionQubitOp<P>
-fn clone_as_precision_op<P: Precision>(op: &QubitOp) -> PrecisionQubitOp<P> {
+fn clone_as_precision_op<P: Precision>(op: &UnitaryOp) -> PrecisionUnitaryOp<P> {
     match op {
-        QubitOp::Matrix(indices, data) => {
+        UnitaryOp::Matrix(indices, data) => {
             let data: Vec<_> = data
                 .iter()
                 .map(|c| Complex {
@@ -336,9 +336,9 @@ fn clone_as_precision_op<P: Precision>(op: &QubitOp) -> PrecisionQubitOp<P> {
                     im: P::from(c.im).unwrap(),
                 })
                 .collect();
-            PrecisionQubitOp::Matrix(indices.clone(), data)
+            PrecisionUnitaryOp::Matrix(indices.clone(), data)
         }
-        QubitOp::SparseMatrix(indices, data) => {
+        UnitaryOp::SparseMatrix(indices, data) => {
             let data: Vec<Vec<_>> = data
                 .iter()
                 .map(|v| {
@@ -355,18 +355,18 @@ fn clone_as_precision_op<P: Precision>(op: &QubitOp) -> PrecisionQubitOp<P> {
                         .collect()
                 })
                 .collect();
-            PrecisionQubitOp::SparseMatrix(indices.clone(), data)
+            PrecisionUnitaryOp::SparseMatrix(indices.clone(), data)
         }
-        QubitOp::Swap(a_indices, b_indices) => {
-            PrecisionQubitOp::Swap(a_indices.clone(), b_indices.clone())
+        UnitaryOp::Swap(a_indices, b_indices) => {
+            PrecisionUnitaryOp::Swap(a_indices.clone(), b_indices.clone())
         }
-        QubitOp::Control(c_indices, o_indices, op) => PrecisionQubitOp::Control(
+        UnitaryOp::Control(c_indices, o_indices, op) => PrecisionUnitaryOp::Control(
             c_indices.clone(),
             o_indices.clone(),
             Box::new(clone_as_precision_op(op)),
         ),
-        QubitOp::Function(inputs, outputs, f) => {
-            PrecisionQubitOp::Function(inputs.clone(), outputs.clone(), f)
+        UnitaryOp::Function(inputs, outputs, f) => {
+            PrecisionUnitaryOp::Function(inputs.clone(), outputs.clone(), f)
         }
     }
 }
@@ -375,7 +375,7 @@ fn clone_as_precision_op<P: Precision>(op: &QubitOp) -> PrecisionQubitOp<P> {
 /// index in their 0th index, use `input/output_offset`.
 pub fn apply_op<P: Precision>(
     n: u64,
-    op: &QubitOp,
+    op: &UnitaryOp,
     input: &[Complex<P>],
     output: &mut [Complex<P>],
     input_offset: u64,
@@ -425,7 +425,7 @@ pub fn apply_op<P: Precision>(
 /// be applied in sequence, do so with `apply_op`.
 pub fn apply_ops<P: Precision>(
     n: u64,
-    ops: &[&QubitOp],
+    ops: &[&UnitaryOp],
     input: &[Complex<P>],
     output: &mut [Complex<P>],
     input_offset: u64,
@@ -520,7 +520,7 @@ pub fn apply_ops<P: Precision>(
 /// Not very efficient, use only for debugging.
 pub fn make_op_matrix<P: Precision>(
     n: u64,
-    op: &QubitOp,
+    op: &UnitaryOp,
     multithread: bool,
 ) -> Vec<Vec<Complex<P>>> {
     let zeros: Vec<P> = (0..1 << n).map(|_| P::zero()).collect();
@@ -553,7 +553,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_get_index_simple() {
-        let op = QubitOp::Matrix(vec![0, 1, 2], vec![]);
+        let op = UnitaryOp::Matrix(vec![0, 1, 2], vec![]);
         assert_eq!(num_indices(&op), 3);
         assert_eq!(get_index(&op, 0), 0);
         assert_eq!(get_index(&op, 1), 1);
@@ -562,7 +562,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_get_index_condition() {
-        let mop = QubitOp::Matrix(vec![2, 3], vec![]);
+        let mop = UnitaryOp::Matrix(vec![2, 3], vec![]);
         let op = make_control_op(vec![0, 1], mop).unwrap();
         assert_eq!(num_indices(&op), 4);
         assert_eq!(get_index(&op, 0), 0);
@@ -573,7 +573,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_get_index_swap() {
-        let op = QubitOp::Swap(vec![0, 1], vec![2, 3]);
+        let op = UnitaryOp::Swap(vec![0, 1], vec![2, 3]);
         assert_eq!(num_indices(&op), 4);
         assert_eq!(get_index(&op, 0), 0);
         assert_eq!(get_index(&op, 1), 1);
@@ -583,7 +583,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_apply_identity() {
-        let op = QubitOp::Matrix(vec![0], from_reals(&[1.0, 0.0, 0.0, 1.0]));
+        let op = UnitaryOp::Matrix(vec![0], from_reals(&[1.0, 0.0, 0.0, 1.0]));
         let input = from_reals(&[1.0, 0.0]);
         let mut output = from_reals(&[0.0, 0.0]);
         apply_op(1, &op, &input, &mut output, 0, 0, false);
@@ -593,7 +593,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_apply_swap_mat() {
-        let op = QubitOp::Matrix(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
+        let op = UnitaryOp::Matrix(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
         let mut input = from_reals(&[1.0, 0.0]);
         let mut output = from_reals(&[0.0, 0.0]);
         apply_op(1, &op, &input, &mut output, 0, 0, false);
@@ -604,7 +604,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_apply_swap_mat_first() {
-        let op = QubitOp::Matrix(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
+        let op = UnitaryOp::Matrix(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
 
         let input = from_reals(&[1.0, 0.0, 0.0, 0.0]);
         let mut output = from_reals(&[0.0, 0.0, 0.0, 0.0]);
@@ -613,7 +613,7 @@ mod state_ops_tests {
         let expected = from_reals(&[0.0, 0.0, 1.0, 0.0]);
         assert_eq!(expected, output);
 
-        let op = QubitOp::Matrix(vec![1], from_reals(&[0.0, 1.0, 1.0, 0.0]));
+        let op = UnitaryOp::Matrix(vec![1], from_reals(&[0.0, 1.0, 1.0, 0.0]));
         let mut output = from_reals(&[0.0, 0.0, 0.0, 0.0]);
         apply_op(2, &op, &input, &mut output, 0, 0, false);
 
@@ -627,7 +627,7 @@ mod state_ops_tests {
 
         let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
         let ops: Vec<_> = (0..n)
-            .map(|indx| QubitOp::Matrix(vec![indx], mat.clone()))
+            .map(|indx| UnitaryOp::Matrix(vec![indx], mat.clone()))
             .collect();
         let r_ops: Vec<_> = ops.iter().collect();
 
@@ -661,10 +661,10 @@ mod state_ops_tests {
         .unwrap();
 
         // Both should not be in natural order.
-        if let QubitOp::SparseMatrix(_, data) = op1 {
+        if let UnitaryOp::SparseMatrix(_, data) = op1 {
             assert_eq!(data, expected_dat);
         }
-        if let QubitOp::SparseMatrix(_, data) = op2 {
+        if let UnitaryOp::SparseMatrix(_, data) = op2 {
             assert_eq!(data, expected_dat);
         }
     }

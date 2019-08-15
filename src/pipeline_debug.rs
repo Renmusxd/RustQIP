@@ -3,8 +3,8 @@ use crate::measurement_ops::MeasuredCondition;
 use crate::pipeline::{
     get_required_state_size_from_frontier, run_with_statebuilder, InitialState, QuantumState,
 };
-use crate::state_ops::{get_index, num_indices, QubitOp};
-use crate::{Complex, Precision, Qubit};
+use crate::state_ops::{get_index, num_indices, UnitaryOp};
+use crate::{Complex, Precision, Register};
 use std::marker::PhantomData;
 
 struct PrintPipeline<P: Precision> {
@@ -38,9 +38,9 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
         self.n
     }
 
-    fn apply_op_with_name(&mut self, name: Option<&str>, op: &QubitOp) {
+    fn apply_op_with_name(&mut self, name: Option<&str>, op: &UnitaryOp) {
         match op {
-            QubitOp::Control(c_indices, o_indices, _) => {
+            UnitaryOp::Control(c_indices, o_indices, _) => {
                 let lower = c_indices
                     .iter()
                     .chain(o_indices.iter())
@@ -75,7 +75,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
                 }
                 println!()
             }
-            QubitOp::Swap(a_indices, b_indices) => {
+            UnitaryOp::Swap(a_indices, b_indices) => {
                 let lower = a_indices
                     .iter()
                     .chain(b_indices.iter())
@@ -164,7 +164,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
 }
 
 /// Print out an ASCII representation of the circuit.
-pub fn run_debug(q: &Qubit) -> Result<(), CircuitError> {
+pub fn run_debug(q: &Register) -> Result<(), CircuitError> {
     run_with_statebuilder(q, |qs| {
         let n = get_required_state_size_from_frontier(&qs);
         Ok(PrintPipeline::<f32>::new(n))

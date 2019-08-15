@@ -4,7 +4,7 @@ use qip::common_circuits::epr_pair;
 use qip::errors::CircuitError;
 use qip::*;
 
-fn run_alice(b: &mut OpBuilder, epr_alice: Qubit, bit_a: bool, bit_b: bool) -> Qubit {
+fn run_alice(b: &mut OpBuilder, epr_alice: Register, bit_a: bool, bit_b: bool) -> Register {
     match (bit_a, bit_b) {
         (false, false) => epr_alice,
         (false, true) => b.x(epr_alice),
@@ -13,7 +13,7 @@ fn run_alice(b: &mut OpBuilder, epr_alice: Qubit, bit_a: bool, bit_b: bool) -> Q
     }
 }
 
-fn run_bob(b: &mut OpBuilder, q_alice: Qubit, epr_bob: Qubit) -> (bool, bool) {
+fn run_bob(b: &mut OpBuilder, q_alice: Register, epr_bob: Register) -> (bool, bool) {
     let (q_alice, q_bob) = condition(b, q_alice, epr_bob, |c, q| Ok(c.not(q))).unwrap();
     let q_alice = b.hadamard(q_alice);
     let q = b.merge(vec![q_bob, q_alice]);

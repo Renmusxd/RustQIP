@@ -2,7 +2,7 @@ extern crate num;
 extern crate qip;
 
 use qip::pipeline::MeasurementHandle;
-use qip::qubits::QubitHandle;
+use qip::qubits::RegisterHandle;
 use qip::*;
 
 fn assert_almost_eq(a: f64, b: f64, prec: i32) {
@@ -14,12 +14,12 @@ fn assert_almost_eq(a: f64, b: f64, prec: i32) {
 
 fn setup_cswap_circuit(
     vec_n: u64,
-) -> Result<(Qubit, QubitHandle, QubitHandle, MeasurementHandle), CircuitError> {
+) -> Result<(Register, RegisterHandle, RegisterHandle, MeasurementHandle), CircuitError> {
     // Setup inputs
     let mut b = OpBuilder::new();
-    let q1 = b.qubit(1)?;
-    let q2 = b.qubit(vec_n)?;
-    let q3 = b.qubit(vec_n)?;
+    let q1 = b.register(1)?;
+    let q2 = b.register(vec_n)?;
+    let q3 = b.register(vec_n)?;
 
     // We will want to feed in some inputs later.
     let h2 = q2.handle();

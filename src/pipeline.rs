@@ -25,7 +25,7 @@ pub type SideChannelModifierFn = dyn Fn(&[u64]) -> Result<Vec<StateModifier>, Ci
 /// The set of ways to modify a QuantumState
 pub enum StateModifierType {
     /// Ops such as matrices, swaps, and conditions
-    UnitaryOp(QubitOp),
+    UnitaryOp(UnitaryOp),
     /// Measurements of the quantum state
     MeasureState(u64, Vec<u64>, f64),
     /// Stochastic measurements which don't affect the state.
@@ -75,7 +75,7 @@ pub struct StateModifier {
 
 impl StateModifier {
     /// Create a new unitary state modifier (matrices, swaps, ...)
-    pub fn new_unitary(name: String, op: QubitOp) -> StateModifier {
+    pub fn new_unitary(name: String, op: UnitaryOp) -> StateModifier {
         StateModifier {
             name,
             modifier: StateModifierType::UnitaryOp(op),
@@ -138,32 +138,32 @@ impl StateModifier {
 /// A handle which can be used to retrieve measured values.
 #[derive(Debug)]
 pub struct MeasurementHandle {
-    qubit: Rc<Qubit>,
+    register: Rc<Register>,
 }
 
 impl MeasurementHandle {
-    /// Build a new MeasurementHandle from a qubit being measured.
-    pub fn new(qubit: &Rc<Qubit>) -> Self {
+    /// Build a new MeasurementHandle from a Register being measured.
+    pub fn new(register: &Rc<Register>) -> Self {
         MeasurementHandle {
-            qubit: qubit.clone(),
+            register: register.clone(),
         }
     }
 
-    /// Get a cloned reference of the measured qubit.
-    pub fn clone_qubit(&self) -> Rc<Qubit> {
-        self.qubit.clone()
+    /// Get a cloned reference of the measured Register.
+    pub fn clone_register(&self) -> Rc<Register> {
+        self.register.clone()
     }
 
     /// Get the id of this MeasurementHandle
     pub fn get_id(&self) -> u64 {
-        self.qubit.id
+        self.register.id
     }
 }
 
 impl Clone for MeasurementHandle {
     fn clone(&self) -> Self {
         MeasurementHandle {
-            qubit: self.qubit.clone(),
+            register: self.register.clone(),
         }
     }
 }
@@ -172,13 +172,13 @@ impl std::cmp::Eq for MeasurementHandle {}
 
 impl std::cmp::PartialEq for MeasurementHandle {
     fn eq(&self, other: &MeasurementHandle) -> bool {
-        self.qubit == other.qubit
+        self.register == other.register
     }
 }
 
 impl std::cmp::Ord for MeasurementHandle {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.qubit.cmp(&other.qubit)
+        self.register.cmp(&other.register)
     }
 }
 
@@ -223,18 +223,18 @@ pub trait QuantumState<P: Precision> {
     fn new(n: u64) -> Self;
 
     /// Initialize new state with initial states.
-    fn new_from_initial_states(n: u64, states: &[QubitInitialState<P>]) -> Self;
+    fn new_from_initial_states(n: u64, states: &[RegisterInitialState<P>]) -> Self;
 
     /// Get number of qubits represented by this state.
     fn n(&self) -> u64;
 
     /// Function to mutate self into the state with op applied.
-    fn apply_op(&mut self, op: &QubitOp) {
+    fn apply_op(&mut self, op: &UnitaryOp) {
         self.apply_op_with_name(None, op)
     }
 
     /// Apply op with a given name. Mutate self using op.
-    fn apply_op_with_name(&mut self, name: Option<&str>, op: &QubitOp);
+    fn apply_op_with_name(&mut self, name: Option<&str>, op: &UnitaryOp);
 
     /// Mutate self with measurement, return result as index and probability
     fn measure(
@@ -274,10 +274,10 @@ pub struct LocalQuantumState<P: Precision> {
 
 impl<P: Precision> LocalQuantumState<P> {
     /// Build a local state using a set of initial states for subsets of the qubits.
-    /// These initial states are made from the qubit handles.
+    /// These initial states are made from the Register handles.
     fn new_from_initial_states_and_multithread(
         n: u64,
-        states: &[QubitInitialState<P>],
+        states: &[RegisterInitialState<P>],
         multithread: bool,
     ) -> LocalQuantumState<P> {
         let max_init_n = states
@@ -459,7 +459,7 @@ pub enum InitialState<P: Precision> {
 }
 
 /// A set of indices and their initial state.
-pub type QubitInitialState<P> = (Vec<u64>, InitialState<P>);
+pub type RegisterInitialState<P> = (Vec<u64>, InitialState<P>);
 
 impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
     /// Build a new LocalQuantumState
@@ -469,7 +469,7 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
 
     /// Build a local state using a set of initial states for subsets of the qubits.
     /// These initial states are made from the qubit handles.
-    fn new_from_initial_states(n: u64, states: &[QubitInitialState<P>]) -> LocalQuantumState<P> {
+    fn new_from_initial_states(n: u64, states: &[RegisterInitialState<P>]) -> LocalQuantumState<P> {
         Self::new_from_initial_states_and_multithread(n, states, true)
     }
 
@@ -477,7 +477,7 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
         self.n
     }
 
-    fn apply_op_with_name(&mut self, _name: Option<&str>, op: &QubitOp) {
+    fn apply_op_with_name(&mut self, _name: Option<&str>, op: &UnitaryOp) {
         apply_op(
             self.n,
             op,
@@ -597,7 +597,7 @@ fn fold_modify_state<P: Precision, QS: QuantumState<P>>(
 
 /// Return the required number of qubits for a given frontier of qubits (those in the circuit
 /// with no parent qubits).
-pub fn get_required_state_size_from_frontier(frontier: &[&Qubit]) -> u64 {
+pub fn get_required_state_size_from_frontier(frontier: &[&Register]) -> u64 {
     frontier
         .iter()
         .map(|q| &q.indices)
@@ -608,11 +608,11 @@ pub fn get_required_state_size_from_frontier(frontier: &[&Qubit]) -> u64 {
         .unwrap_or(0)
 }
 
-/// Return the required number of qubits for a given frontier of qubits (those in the circuit
-/// with no parent qubits) and a set of initial states.
+/// Return the required number of qubits for a given frontier of Registers (those in the circuit
+/// with no parent Registers) and a set of initial states.
 pub fn get_required_state_size<P: Precision>(
-    frontier: &[&Qubit],
-    states: &[QubitInitialState<P>],
+    frontier: &[&Register],
+    states: &[RegisterInitialState<P>],
 ) -> u64 {
     let max_qubit_n = get_required_state_size_from_frontier(frontier);
     let max_init_n = states
@@ -628,7 +628,7 @@ pub fn get_required_state_size<P: Precision>(
 
 /// Builds a default state of size `n`
 pub fn run<P: Precision, QS: QuantumState<P>>(
-    q: &Qubit,
+    q: &Register,
 ) -> Result<(QS, MeasuredResults<P>), CircuitError> {
     run_with_statebuilder(q, |qs| -> Result<QS, CircuitError> {
         let n = get_required_state_size_from_frontier(&qs);
@@ -638,8 +638,8 @@ pub fn run<P: Precision, QS: QuantumState<P>>(
 
 /// Run the circuit, starting by building the quantum state QS with a set of initial states.
 pub fn run_with_init<P: Precision, QS: QuantumState<P>>(
-    q: &Qubit,
-    states: &[QubitInitialState<P>],
+    q: &Register,
+    states: &[RegisterInitialState<P>],
 ) -> Result<(QS, MeasuredResults<P>), CircuitError> {
     run_with_statebuilder(q, |qs| -> Result<QS, CircuitError> {
         let n = get_required_state_size(&qs, states);
@@ -651,9 +651,9 @@ pub fn run_with_init<P: Precision, QS: QuantumState<P>>(
 pub fn run_with_statebuilder<
     P: Precision,
     QS: QuantumState<P>,
-    F: FnOnce(Vec<&Qubit>) -> Result<QS, CircuitError>,
+    F: FnOnce(Vec<&Register>) -> Result<QS, CircuitError>,
 >(
-    q: &Qubit,
+    q: &Register,
     state_builder: F,
 ) -> Result<(QS, MeasuredResults<P>), CircuitError> {
     let (frontier, ops) = get_opfns_and_frontier(q);
@@ -663,7 +663,7 @@ pub fn run_with_statebuilder<
 
 /// Run the circuit with a given starting state.
 pub fn run_with_state<P: Precision, QS: QuantumState<P>>(
-    q: &Qubit,
+    q: &Register,
     state: QS,
 ) -> Result<(QS, MeasuredResults<P>), CircuitError> {
     let (frontier, ops) = get_opfns_and_frontier(q);
@@ -684,15 +684,15 @@ pub fn run_with_state<P: Precision, QS: QuantumState<P>>(
 
 /// `run` the pipeline using `LocalQuantumState`.
 pub fn run_local<P: Precision>(
-    q: &Qubit,
+    q: &Register,
 ) -> Result<(LocalQuantumState<P>, MeasuredResults<P>), CircuitError> {
     run(q)
 }
 
 /// `run_with_init` the pipeline using `LocalQuantumState`
 pub fn run_local_with_init<P: Precision>(
-    q: &Qubit,
-    states: &[QubitInitialState<P>],
+    q: &Register,
+    states: &[RegisterInitialState<P>],
 ) -> Result<(LocalQuantumState<P>, MeasuredResults<P>), CircuitError> {
     run_with_init(q, states)
 }
@@ -708,10 +708,10 @@ fn run_with_state_and_ops<P: Precision, QS: QuantumState<P>>(
 
 /// Get the frontier of a circuit as well as references to all the StateModifiers needed in the
 /// correct order.
-pub fn get_opfns_and_frontier(q: &Qubit) -> (Vec<&Qubit>, Vec<&StateModifier>) {
+pub fn get_opfns_and_frontier(q: &Register) -> (Vec<&Register>, Vec<&StateModifier>) {
     let mut heap = BinaryHeap::new();
     heap.push(q);
-    let mut frontier_qubits: Vec<&Qubit> = vec![];
+    let mut frontier_registers: Vec<&Register> = vec![];
     let mut fn_queue = VecDeque::new();
     while !heap.is_empty() {
         if let Some(q) = heap.pop() {
@@ -730,7 +730,7 @@ pub fn get_opfns_and_frontier(q: &Qubit) -> (Vec<&Qubit>, Vec<&StateModifier>) {
                         }
                     }
                 },
-                None => frontier_qubits.push(q),
+                None => frontier_registers.push(q),
             }
             if let Some(deps) = &q.deps {
                 deps.iter().for_each(|q| {
@@ -742,11 +742,11 @@ pub fn get_opfns_and_frontier(q: &Qubit) -> (Vec<&Qubit>, Vec<&StateModifier>) {
             }
         }
     }
-    (frontier_qubits, fn_queue.into_iter().collect())
+    (frontier_registers, fn_queue.into_iter().collect())
 }
 
 /// Deconstruct the circuit and own all the StateModifiers needed to run it.
-pub fn get_owned_opfns(q: Qubit) -> Vec<StateModifier> {
+pub fn get_owned_opfns(q: Register) -> Vec<StateModifier> {
     let mut heap = BinaryHeap::new();
     heap.push(q);
     let mut fn_queue = VecDeque::new();
@@ -794,7 +794,7 @@ fn in_heap<T: Eq>(q: T, heap: &BinaryHeap<T>) -> bool {
 /// the simulator).
 pub fn make_circuit_matrix<P: Precision>(
     n: u64,
-    q: &Qubit,
+    q: &Register,
     natural_order: bool,
 ) -> Vec<Vec<Complex<P>>> {
     let indices: Vec<u64> = (0..n).collect();

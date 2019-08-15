@@ -5,35 +5,35 @@ use crate::Complex;
 use std::fmt;
 use std::rc::Rc;
 
-/// Possible relations to a parent qubit
+/// Possible relations to a parent Register
 #[derive(Debug)]
 pub enum Parent {
-    /// A set of owned parents by a given qubit, that qubit has the union of all indices of
+    /// A set of owned parents by a given Register, that Register has the union of all indices of
     /// its parents. The transition is governed by the StateModifier if present.
-    Owned(Vec<Qubit>, Option<StateModifier>),
+    Owned(Vec<Register>, Option<StateModifier>),
     /// A single shared parent, the child has a subsection of the indices of the parent.
-    Shared(Rc<Qubit>),
+    Shared(Rc<Register>),
 }
 
 /// A qubit object, possible representing multiple physical qubit indices.
-pub struct Qubit {
-    /// The set of indices represented by this qubit.
+pub struct Register {
+    /// The set of indices (qubits) represented by this Register.
     pub indices: Vec<u64>,
-    /// The parent(s) of this qubit (prior in time in the quantum circuit).
+    /// The parent(s) of this Register (prior in time in the quantum circuit).
     pub parent: Option<Parent>,
-    /// Additional dependencies for this qubit (such as if it relies on the classical measurements
-    /// of other qubits).
-    pub deps: Option<Vec<Rc<Qubit>>>,
-    /// The unique ID of this qubit.
+    /// Additional dependencies for this Register (such as if it relies on the classical
+    /// measurements of other Register).
+    pub deps: Option<Vec<Rc<Register>>>,
+    /// The unique ID of this Register.
     pub id: u64,
 }
 
-impl Qubit {
-    pub(crate) fn new(id: u64, indices: Vec<u64>) -> Result<Qubit, CircuitError> {
+impl Register {
+    pub(crate) fn new(id: u64, indices: Vec<u64>) -> Result<Register, CircuitError> {
         if indices.is_empty() {
-            CircuitError::make_str_err("Qubit must have at least one index assigned.")
+            CircuitError::make_str_err("Register must have at least one index assigned.")
         } else {
-            Ok(Qubit {
+            Ok(Register {
                 indices,
                 parent: None,
                 deps: None,
@@ -43,23 +43,23 @@ impl Qubit {
     }
 
     /// Create a handle for feeding values.
-    pub fn handle(&self) -> QubitHandle {
-        QubitHandle {
+    pub fn handle(&self) -> RegisterHandle {
+        RegisterHandle {
             indices: self.indices.clone(),
         }
     }
 
-    /// Merge qubits to for a new qubit object.
+    /// Merge Registers to form a new Register object.
     pub fn merge_with_modifier(
         id: u64,
-        qubits: Vec<Qubit>,
+        registers: Vec<Register>,
         modifier: Option<StateModifier>,
-    ) -> Qubit {
-        let all_indices = qubits.iter().map(|q| q.indices.clone()).flatten().collect();
+    ) -> Register {
+        let all_indices = registers.iter().map(|q| q.indices.clone()).flatten().collect();
 
-        Qubit {
+        Register {
             indices: all_indices,
-            parent: Some(Parent::Owned(qubits, modifier)),
+            parent: Some(Parent::Owned(registers, modifier)),
             deps: None,
             id,
         }
@@ -69,9 +69,9 @@ impl Qubit {
     pub fn split(
         ida: u64,
         idb: u64,
-        q: Qubit,
+        q: Register,
         indices: Vec<u64>,
-    ) -> Result<(Qubit, Qubit), CircuitError> {
+    ) -> Result<(Register, Register), CircuitError> {
         for indx in &indices {
             if *indx > q.n() {
                 let message = format!("All indices for splitting must be below q.n = {:?}", q.n());
@@ -93,9 +93,9 @@ impl Qubit {
     pub fn split_absolute(
         ida: u64,
         idb: u64,
-        q: Qubit,
+        q: Register,
         selected_indices: Vec<u64>,
-    ) -> Result<(Qubit, Qubit), CircuitError> {
+    ) -> Result<(Register, Register), CircuitError> {
         if selected_indices.len() == q.indices.len() {
             return CircuitError::make_str_err("Cannot split out all indices into own qubit.");
         } else if selected_indices.is_empty() {
@@ -120,13 +120,13 @@ impl Qubit {
         let shared_parent = Rc::new(q);
 
         Ok((
-            Qubit {
+            Register {
                 indices: selected_indices,
                 parent: Some(Parent::Shared(shared_parent.clone())),
                 deps: None,
                 id: ida,
             },
-            Qubit {
+            Register {
                 indices: remaining,
                 parent: Some(Parent::Shared(shared_parent.clone())),
                 deps: None,
@@ -136,12 +136,12 @@ impl Qubit {
     }
 
     /// Make a measurement handle and a qubit which depends on that measurement.
-    pub fn make_measurement_handle(id: u64, q: Qubit) -> (Qubit, MeasurementHandle) {
+    pub fn make_measurement_handle(id: u64, q: Register) -> (Register, MeasurementHandle) {
         let indices = q.indices.clone();
         let shared_parent = Rc::new(q);
         let handle = MeasurementHandle::new(&shared_parent);
         (
-            Qubit {
+            Register {
                 indices,
                 parent: Some(Parent::Shared(shared_parent)),
                 deps: None,
@@ -152,8 +152,8 @@ impl Qubit {
     }
 
     /// Add additional qubit dependencies to a given qubit.
-    pub fn add_deps(q: Qubit, deps: Vec<Rc<Qubit>>) -> Qubit {
-        Qubit {
+    pub fn add_deps(q: Register, deps: Vec<Rc<Register>>) -> Register {
+        Register {
             indices: q.indices,
             parent: q.parent,
             deps: Some(deps),
@@ -167,27 +167,27 @@ impl Qubit {
     }
 }
 
-impl std::cmp::Eq for Qubit {}
+impl std::cmp::Eq for Register {}
 
-impl std::cmp::PartialEq for Qubit {
-    fn eq(&self, other: &Qubit) -> bool {
+impl std::cmp::PartialEq for Register {
+    fn eq(&self, other: &Register) -> bool {
         self.id == other.id
     }
 }
 
-impl std::cmp::Ord for Qubit {
+impl std::cmp::Ord for Register {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.id.cmp(&other.id)
     }
 }
 
-impl std::cmp::PartialOrd for Qubit {
-    fn partial_cmp(&self, other: &Qubit) -> Option<std::cmp::Ordering> {
+impl std::cmp::PartialOrd for Register {
+    fn partial_cmp(&self, other: &Register) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl fmt::Debug for Qubit {
+impl fmt::Debug for Register {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let int_strings = self
             .indices
@@ -206,16 +206,16 @@ impl fmt::Debug for Qubit {
 
 /// A qubit handle for using when setting initial states for the circuit.
 #[derive(Debug)]
-pub struct QubitHandle {
+pub struct RegisterHandle {
     indices: Vec<u64>,
 }
 
-impl QubitHandle {
+impl RegisterHandle {
     /// Make an initial state for the handle using an index: `|index>`
     pub fn make_init_from_index<P: Precision>(
         &self,
         index: u64,
-    ) -> Result<QubitInitialState<P>, CircuitError> {
+    ) -> Result<RegisterInitialState<P>, CircuitError> {
         let n = self.indices.len();
         if index < (1 << n) as u64 {
             Ok((self.indices.clone(), InitialState::Index(index)))
@@ -232,7 +232,7 @@ impl QubitHandle {
     pub fn make_init_from_state<P: Precision>(
         &self,
         state: Vec<Complex<P>>,
-    ) -> Result<QubitInitialState<P>, CircuitError> {
+    ) -> Result<RegisterInitialState<P>, CircuitError> {
         let n = self.indices.len();
         if state.len() == 1 << n {
             Ok((self.indices.clone(), InitialState::FullState(state)))
