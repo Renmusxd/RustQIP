@@ -34,7 +34,7 @@
 //! // Then run this subcircuit conditioned on r, applied to ra and rb
 //! let (q, _) = condition(&mut b, q, (ra, rb), |c, (ra, rb)| {
 //!     c.swap(ra, rb)
-//! })?;
+//! });
 //! // Finally apply H to q again.
 //! let q = b.hadamard(q);
 //!

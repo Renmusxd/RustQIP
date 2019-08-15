@@ -17,7 +17,7 @@ fn run_alice(
     let q_random = b.real_mat("Rotate", q_random, &[cangle, -sangle, sangle, cangle])?;
 
     // Alice prepares her state: a|0> + b|1>
-    let (q_random, q_alice) = condition(b, q_random, epr_alice, |c, q| Ok(c.not(q)))?;
+    let (q_random, q_alice) = condition(b, q_random, epr_alice, |c, q| c.not(q));
     let q_random = b.hadamard(q_random);
 
     // Now she measures her two particles

@@ -102,9 +102,7 @@ fn apply_to_index_with_control<F: Fn(&mut dyn UnitaryBuilder, Register) -> Regis
 ) -> Vec<Register> {
     let r = rs.remove(indx as usize);
     let cr = b.merge(rs);
-    let (cr, r) = condition(b, cr, r, |b, r| {
-        Ok(f(b, r))
-    }).unwrap();
+    let (cr, r) = condition(b, cr, r, |b, r| f(b, r));
     let mut rs = b.split_all(cr);
     rs.insert(indx as usize, r);
     rs
