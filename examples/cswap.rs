@@ -6,7 +6,7 @@ use qip::*;
 fn main() -> Result<(), CircuitError> {
     // Setup inputs
     let mut b = OpBuilder::new();
-    let q = b.register(1)?;
+    let q = b.qubit();
     let ra = b.register(3)?;
     let rb = b.register(3)?;
 

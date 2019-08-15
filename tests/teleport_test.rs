@@ -7,7 +7,7 @@ use std::error::Error;
 
 fn run_alice(b: &mut OpBuilder, epr_alice: Register, initial_angle: f64) -> MeasurementHandle {
     // Set up the qubits
-    let q_random = b.register(1).unwrap();
+    let q_random = b.qubit();
 
     // Create Alice's state
     let (sangle, cangle) = initial_angle.sin_cos();

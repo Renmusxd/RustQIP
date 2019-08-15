@@ -715,7 +715,7 @@ pub fn get_opfns_and_frontier(r: &Register) -> (Vec<&Register>, Vec<&StateModifi
     let mut fn_queue = VecDeque::new();
     while !heap.is_empty() {
         if let Some(r) = heap.pop() {
-            match & r.parent {
+            match &r.parent {
                 Some(parent) => match &parent {
                     Parent::Owned(parents, modifier) => {
                         if let Some(modifier) = modifier {

@@ -17,7 +17,7 @@ fn setup_cswap_circuit(
 ) -> Result<(Register, RegisterHandle, RegisterHandle, MeasurementHandle), CircuitError> {
     // Setup inputs
     let mut b = OpBuilder::new();
-    let q = b.register(1)?;
+    let q = b.qubit();
     let ra = b.register(vec_n)?;
     let rb = b.register(vec_n)?;
 

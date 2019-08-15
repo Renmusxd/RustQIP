@@ -159,7 +159,7 @@ impl Register {
     pub fn add_deps(r: Register, deps: Vec<Rc<Register>>) -> Register {
         Register {
             indices: r.indices,
-            parent:  r.parent,
+            parent: r.parent,
             deps: Some(deps),
             id: r.id,
         }

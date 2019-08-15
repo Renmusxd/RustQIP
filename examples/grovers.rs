@@ -11,7 +11,7 @@ fn prepare_state<P: Precision>(n: u64) -> Result<LocalQuantumState<P>, CircuitEr
     let r = b.register(n).unwrap();
     let r = b.hadamard(r);
 
-    let anc = b.register(1).unwrap();
+    let anc = b.qubit();
     let anc = b.not(anc);
     let anc = b.hadamard(anc);
 
@@ -49,7 +49,7 @@ fn apply_grover_iteration<P: Precision>(
 ) -> Result<LocalQuantumState<P>, CircuitError> {
     let mut b = OpBuilder::new();
     let r = b.register(s.n() - 1)?;
-    let anc = b.register(1)?;
+    let anc = b.qubit();
 
     let (r, anc) = apply_uw(&mut b, r, anc, x)?;
     let (r, _) = apply_us(&mut b, r, anc)?;

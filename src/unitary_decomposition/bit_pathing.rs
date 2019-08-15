@@ -33,13 +33,15 @@ impl BitPather {
     ) -> Result<Vec<u64>, CircuitError> {
         if endpoints.is_empty() {
             CircuitError::make_str_err("Enpoints must contain a value")
-        } else if endpoints
-            .iter()
-            .any(|v| -> bool { (self.reverse_lookup[(*v) as usize] as usize) < valid_index })
-        {
-            CircuitError::make_str_err("All endpoints must be in valid region.")
         } else {
-            Ok(self.valid_path_helper(valid_index, vec![(start, vec![])], endpoints))
+            let any_below = endpoints
+                .iter()
+                .any(|v| { (self.reverse_lookup[(*v) as usize] as usize) < valid_index });
+            if any_below {
+                CircuitError::make_str_err("All endpoints must be in valid region.")
+            } else {
+                Ok(self.valid_path_helper(valid_index, vec![(start, vec![])], endpoints))
+            }
         }
     }
 
@@ -59,9 +61,10 @@ impl BitPather {
                     let new_val = (val & !mask) | (!val & mask);
                     if self.reverse_lookup[new_val as usize] as usize >= valid_index {
                         let new_val_index = self.reverse_lookup[new_val as usize];
-                        if let Err(_) = contained_values.binary_search_by_key(&new_val_index, |c| {
+                        let search_result = contained_values.binary_search_by_key(&new_val_index, |c| {
                             self.reverse_lookup[(*c) as usize]
-                        }) {
+                        });
+                        if search_result.is_err() {
                             if !path.contains(&new_val) {
                                 let mut new_path = path.clone();
                                 new_path.push(val);

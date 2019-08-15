@@ -16,43 +16,32 @@ easily and safely when they do get larger.
 ```rust
 use qip::*;
 
-// Make a new circuit builder.
+// Setup inputs
 let mut b = OpBuilder::new();
+let q = b.qubit();
+let ra = b.register(3)?;
+let rb = b.register(3)?;
 
-// Make three logical groups of qubits of sizes 1, 3, 3 (7 qubits total).
-let q = b.qubit(1)?;
-let qa = b.qubit(3)?;
-let qb = b.qubit(3)?;
-
-// We will want to feed in some inputs later, hang on to the handles
-// so we don't need to actually remember any indices.
-let a_handle = qa.handle();
-let b_handle = qb.handle();
+// We will want to feed in some inputs later.
+let ha = ra.handle();
+let hb = rb.handle();
 
 // Define circuit
-// First apply an H to q1
-let q = b.hadamard(q);
-// Then run this subcircuit conditioned on q, applied to qa and qb
-let (q, _) = condition(&mut b, q, (qa, qb), |c, (qa, qb)| {
-    c.swap(qa, qb)
-})?;
-// Finally apply H to q again.
 let q = b.hadamard(q);
 
-// Add a measurement to the first qubit, save a reference so we can get the result later.
-let (q, m_handle) = b.measure(q);
+let (q, _) = condition(&mut b, q, (ra, rb), |c, (ra, rb)| c.swap(ra, rb))?;
+let q = b.hadamard(q);
 
-// Now q is the end result of the above circuit, and we can run the circuit by referencing it.
+let (q, m1) = b.measure(q);
 
-// Make an initial state: |0,000,001>
-let initial_state = [a_handle.make_init_from_index(0)?,
-                     b_handle.make_init_from_index(1)?];
-// Run circuit with a given precision.
-let (_, measured) = run_local_with_init::<f64>(&q, &initial_state)?;
+// Print circuit diagram
+qip::run_debug(&q)?;
 
-// Lookup the result of the measurement we performed using the handle.
-let (result, p) = measured.get_measurement(&m_handle).unwrap();
+// Run circuit
+let (_, measured) = run_local_with_init::<f64>(
+    &q,
+    &[ha.make_init_from_index(0)?, hb.make_init_from_index(1)?],
+)?;
 
-// Print the measured result
-println!("Measured: {:?} (with chance {:?})", result, p);
+println!("{:?}", measured.get_measurement(&m1));
 ```

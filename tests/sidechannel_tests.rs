@@ -15,7 +15,7 @@ fn setup_cswap_sidechannel_circuit(
 ) -> Result<(Register, RegisterHandle, RegisterHandle, MeasurementHandle), CircuitError> {
     // Setup inputs
     let mut b = OpBuilder::new();
-    let q1 = b.register(1)?;
+    let q1 = b.qubit();
     let ra = b.register(vec_n)?;
     let rb = b.register(vec_n)?;
 
@@ -27,7 +27,7 @@ fn setup_cswap_sidechannel_circuit(
     let q1 = b.hadamard(q1);
 
     // Make a qubit whose sole use is for sidechannels
-    let q2 = b.register(1)?;
+    let q2 = b.qubit();
     let q2 = b.hadamard(q2);
     let (q2, h2) = b.measure(q2);
 

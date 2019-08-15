@@ -131,7 +131,7 @@ fn consolidate_column<P: Precision>(
         });
 
     let path = pathfinder.path(column, &nonzeros)?;
-    let results = if path.len() == 0 {
+    let results = if path.is_empty() {
         let phi = sparse_value_at_coords(column as usize, column, &sparse_mat)
             .map(|c| c.to_polar().1)
             .unwrap_or_else(P::zero);

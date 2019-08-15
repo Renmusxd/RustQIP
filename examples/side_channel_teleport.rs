@@ -10,7 +10,7 @@ fn run_alice(
     initial_angle: f64,
 ) -> Result<MeasurementHandle, CircuitError> {
     // Set up the qubits
-    let q_random = b.register(1)?;
+    let q_random = b.qubit();
 
     // Create Alice's state
     let (sangle, cangle) = initial_angle.sin_cos();

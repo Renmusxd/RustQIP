@@ -405,6 +405,11 @@ impl OpBuilder {
         self.register(n).unwrap()
     }
 
+    /// Create a single qubit register.
+    pub fn qubit(&mut self) -> Register {
+        self.r(1)
+    }
+
     /// Build a new register with `n` indices, return it plus a handle which can be
     /// used for feeding in an initial state.
     pub fn register_and_handle(

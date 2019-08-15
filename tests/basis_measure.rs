@@ -13,10 +13,10 @@ fn assert_almost_eq(a: f64, b: f64, prec: i32) {
 #[test]
 fn test_measure_true() -> Result<(), CircuitError> {
     let mut b = OpBuilder::new();
-    let r = b.register(1)?;
-    let r = b.hadamard(r);
-    let (r, m) = b.measure_basis(r, std::f64::consts::FRAC_PI_4);
-    let (_, measured) = run_local(&r)?;
+    let q = b.qubit();
+    let q = b.hadamard(q);
+    let (q, m) = b.measure_basis(q, std::f64::consts::FRAC_PI_4);
+    let (_, measured) = run_local(&q)?;
 
     let (m, p) = measured.get_measurement(&m).unwrap();
     assert_eq!(m, 1);
@@ -28,10 +28,10 @@ fn test_measure_true() -> Result<(), CircuitError> {
 #[test]
 fn test_measure_false() -> Result<(), CircuitError> {
     let mut b = OpBuilder::new();
-    let r = b.register(1)?;
-    let r = b.hadamard(r);
-    let (r, m) = b.measure_basis(r, -std::f64::consts::FRAC_PI_4);
-    let (_, measured) = run_local(&r)?;
+    let q = b.qubit();
+    let q = b.hadamard(q);
+    let (q, m) = b.measure_basis(q, -std::f64::consts::FRAC_PI_4);
+    let (_, measured) = run_local(&q)?;
 
     let (m, p) = measured.get_measurement(&m).unwrap();
     assert_eq!(m, 0);

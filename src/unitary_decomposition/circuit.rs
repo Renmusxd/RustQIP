@@ -75,7 +75,7 @@ fn convert_decomp_ops_to_circuit(
                 (rs, new_mask)
             }
             DecompOp::Negate {
-                row_a,
+                row_a: _,
                 row_b,
                 bit_index,
             } => {

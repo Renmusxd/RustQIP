@@ -19,7 +19,7 @@
 //! let mut b = OpBuilder::new();
 //!
 //! // Make three registers of sizes 1, 3, 3 (7 qubits total).
-//! let q = b.register(1)?;
+//! let q = b.qubit();
 //! let ra = b.register(3)?;
 //! let rb = b.register(3)?;
 //!
