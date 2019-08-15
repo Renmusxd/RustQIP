@@ -130,63 +130,38 @@ fn consolidate_column<P: Precision>(
             }
         });
 
-    let results = pathfinder.path(column, &nonzeros)?.into_iter().try_fold(
-        vec![],
-        |mut ops, (from_code, to_code)| {
-            let from_row = &sparse_mat[from_code as usize];
-            let to_row = &sparse_mat[to_code as usize];
+    let path = pathfinder.path(column, &nonzeros)?;
+    let results = if path.len() == 0 {
+        let phi = sparse_value_at_coords(column as usize, column, &sparse_mat)
+            .map(|c| c.to_polar().1)
+            .unwrap_or_else(P::zero);
+        if phi != P::zero() {
+            apply_phase_to_row(-phi, &mut sparse_mat[column as usize]);
+            vec![DecompOp::Phase { row: column, phi }]
+        } else {
+            vec![]
+        }
+    } else {
+        path.into_iter().try_fold(
+            vec![],
+            |mut ops, (from_code, to_code)| {
+                let from_row = &sparse_mat[from_code as usize];
+                let to_row = &sparse_mat[to_code as usize];
 
-            let from_val = sparse_value_at_col(column, from_row)
-                .copied()
-                .unwrap_or_default();
-            let to_val = sparse_value_at_col(column, to_row)
-                .copied()
-                .unwrap_or_default();
+                let from_val = sparse_value_at_col(column, from_row)
+                    .copied()
+                    .unwrap_or_default();
+                let to_val = sparse_value_at_col(column, to_row)
+                    .copied()
+                    .unwrap_or_default();
 
-            let (from_r, from_phi) = from_val.to_polar();
-            let (to_r, _) = to_val.to_polar();
+                let (from_r, from_phi) = from_val.to_polar();
+                let (to_r, _) = to_val.to_polar();
 
-            if to_r == P::zero() {
-                // If moving into a 0 value row, then use negate instead of rotate.
-                // Swap all |a><...| with |b><...|
-                sparse_mat.swap(from_code as usize, to_code as usize);
-
-                let mut mask = from_code ^ to_code;
-                let mut mask_index = 0;
-                mask >>= 1;
-                while mask > 0 {
-                    mask >>= 1;
-                    mask_index += 1;
-                }
-                ops.push(DecompOp::Negate {
-                    row_a: from_code,
-                    row_b: to_code,
-                    bit_index: mask_index,
-                });
-            } else {
-                // now we have a(to)e^{i*phi}|to> + a(from)|from>
-                // now we have a*sin(theta)*e^{i*phi}|to> + a*cos(theta)|from>
-                // a = sqrt(|a(to)|^2 + |a(from)|^2)
-                // cos(theta) = |a(to)|/a
-                // sin(theta) = |a(from)|/a
-                // Therefore: theta = atan(|a(from)|/|a(to)|)
-                let theta = from_r.atan2(to_r);
-                if from_phi != P::zero() {
-                    apply_phase_to_row(-from_phi, &mut sparse_mat[from_code as usize]);
-                    ops.push(DecompOp::Phase {
-                        row: from_code,
-                        phi: from_phi,
-                    });
-                }
-
-                if theta != P::zero() {
-                    apply_controlled_rotation_and_clean(
-                        from_code,
-                        to_code,
-                        theta,
-                        sparse_mat,
-                        |val| val.norm_sqr() >= keep_threshold,
-                    );
+                if to_r == P::zero() {
+                    // If moving into a 0 value row, then use negate instead of rotate.
+                    // Swap all |a><...| with |b><...|
+                    sparse_mat.swap(from_code as usize, to_code as usize);
 
                     let mut mask = from_code ^ to_code;
                     let mut mask_index = 0;
@@ -195,26 +170,64 @@ fn consolidate_column<P: Precision>(
                         mask >>= 1;
                         mask_index += 1;
                     }
-                    ops.push(DecompOp::Rotation {
-                        from_bits: to_code,
-                        to_bits: from_code,
+                    ops.push(DecompOp::Negate {
+                        row_a: from_code,
+                        row_b: to_code,
                         bit_index: mask_index,
-                        theta,
                     });
+                } else {
+                    // now we have a(to)e^{i*phi}|to> + a(from)|from>
+                    // now we have a*sin(theta)*e^{i*phi}|to> + a*cos(theta)|from>
+                    // a = sqrt(|a(to)|^2 + |a(from)|^2)
+                    // cos(theta) = |a(to)|/a
+                    // sin(theta) = |a(from)|/a
+                    // Therefore: theta = atan(|a(from)|/|a(to)|)
+                    let theta = from_r.atan2(to_r);
+                    if from_phi != P::zero() {
+                        apply_phase_to_row(-from_phi, &mut sparse_mat[from_code as usize]);
+                        ops.push(DecompOp::Phase {
+                            row: from_code,
+                            phi: from_phi,
+                        });
+                    }
+
+                    if theta != P::zero() {
+                        apply_controlled_rotation_and_clean(
+                            from_code,
+                            to_code,
+                            theta,
+                            sparse_mat,
+                            |val| val.norm_sqr() >= keep_threshold,
+                        );
+
+                        let mut mask = from_code ^ to_code;
+                        let mut mask_index = 0;
+                        mask >>= 1;
+                        while mask > 0 {
+                            mask >>= 1;
+                            mask_index += 1;
+                        }
+                        ops.push(DecompOp::Rotation {
+                            from_bits: to_code,
+                            to_bits: from_code,
+                            bit_index: mask_index,
+                            theta,
+                        });
+                    }
                 }
-            }
 
-            let phi = sparse_value_at_coords(to_code as usize, column, &sparse_mat)
-                .map(|c| c.to_polar().1)
-                .unwrap_or_else(P::zero);
-            if phi != P::zero() {
-                apply_phase_to_row(-phi, &mut sparse_mat[to_code as usize]);
-                ops.push(DecompOp::Phase { row: to_code, phi });
-            }
+                let phi = sparse_value_at_coords(to_code as usize, column, &sparse_mat)
+                    .map(|c| c.to_polar().1)
+                    .unwrap_or_else(P::zero);
+                if phi != P::zero() {
+                    apply_phase_to_row(-phi, &mut sparse_mat[to_code as usize]);
+                    ops.push(DecompOp::Phase { row: to_code, phi });
+                }
 
-            Ok(ops)
-        },
-    )?;
+                Ok(ops)
+            },
+        )?
+    };
 
     // Try to catch failures early, it's an expensive operation for each column.
     if sparse_mat[column as usize].len() != 1 {
