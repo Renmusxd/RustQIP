@@ -193,6 +193,9 @@ where
 /// like more qubits from the register just put all the indices together and split them out inside
 /// the closure (or call `register_expr!` again inside).
 ///
+/// Macro automatically uses `?` on CircuitErrors, you should wrap in a function if you'd like to
+/// catch and handle those manually.
+///
 /// # Example
 /// ```
 /// use qip::*;
@@ -203,7 +206,7 @@ where
 /// let ra = b.register(n)?;
 /// let rb = b.register(n)?;
 /// // Apply NOT to ra[0..n], and rb[1]
-/// register_expr!(&mut b, ra, rb[1]; |b, (ra, rb)| {
+/// let (ra, rb) = register_expr!(&mut b, ra, rb[1]; |b, (ra, rb)| {
 ///   let ra = b.not(ra);
 ///   let rb = b.not(rb);
 ///   Ok((ra, rb))
@@ -319,7 +322,7 @@ macro_rules! register_expr {
     };
 
     ($builder:expr, $($tail:tt)*) => {
-        let register_expr!(@names_in () <- $($tail)*) = {
+        {
             // $name is now a tuple of split thing and original
             let mut remaining_qubits = vec![];
             register_expr!(@splitter(remaining_qubits) $builder, $($tail)*);
@@ -329,7 +332,7 @@ macro_rules! register_expr {
 
             register_expr!(@joiner(remaining_qubits) $builder, $($tail)*);
             register_expr!(@names_out () <- $($tail)*)
-        };
+        }
     };
 }
 
@@ -377,7 +380,7 @@ mod common_circuit_tests {
 
         let mut b = OpBuilder::new();
         let r = b.register(n)?;
-        register_expr!(&mut b, r[0]; |b, r| {
+        let r = register_expr!(&mut b, r[0]; |b, r| {
             let r = b.not(r);
             Ok((r))
         });
@@ -401,7 +404,7 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let ra = b.register(n)?;
         let rb = b.register(n)?;
-        register_expr!(&mut b, ra[0,2], rb[1]; |b, (ra, rb)| {
+        let (ra, rb) = register_expr!(&mut b, ra[0,2], rb[1]; |b, (ra, rb)| {
             let rb = b.not(rb);
             Ok((ra, rb))
         });
@@ -428,7 +431,7 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let ra = b.register(n)?;
         let rb = b.register(n)?;
-        register_expr!(&mut b, ra[0,2], rb; |b, (ra, rb)| {
+        let (ra, rb) = register_expr!(&mut b, ra[0,2], rb; |b, (ra, rb)| {
             let rb = b.not(rb);
             Ok((ra, rb))
         });
