@@ -2,163 +2,6 @@ use crate::errors::CircuitError;
 /// Common circuits for general usage.
 use crate::{Complex, OpBuilder, Register, UnitaryBuilder};
 
-/// Add some common condition circuits to the UnitaryBuilder structs.
-pub trait ConditionBuilder {
-    /// A controlled x, using `cr` as control and `r` as input.
-    fn cx(&mut self, cr: Register, r: Register) -> (Register, Register);
-    /// A controlled y, using `cr` as control and `r` as input.
-    fn cy(&mut self, cr: Register, r: Register) -> (Register, Register);
-    /// A controlled z, using `cr` as control and `r` as input.
-    fn cz(&mut self, cr: Register, r: Register) -> (Register, Register);
-    /// A controlled not, using `cr` as control and `r` as input.
-    fn cnot(&mut self, cr: Register, r: Register) -> (Register, Register);
-    /// Swap `ra` and `rb` controlled by `cr`.
-    fn cswap(
-        &mut self,
-        cr: Register,
-        ra: Register,
-        rb: Register,
-    ) -> Result<(Register, Register, Register), CircuitError>;
-    /// Apply a unitary matrix to the register. If mat is 2x2 then can broadcast to all qubits.
-    fn cmat(
-        &mut self,
-        name: &str,
-        cr: Register,
-        r: Register,
-        mat: Vec<Complex<f64>>,
-    ) -> Result<(Register, Register), CircuitError>;
-    /// Apply a orthonormal matrix to the register. If mat is 2x2 then can broadcast to all qubits.
-    fn crealmat(
-        &mut self,
-        name: &str,
-        cr: Register,
-        r: Register,
-        mat: &[f64],
-    ) -> Result<(Register, Register), CircuitError>;
-}
-
-impl<B: UnitaryBuilder> ConditionBuilder for B {
-    fn cx(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(self, cr, rb, |b, r| b.x(r))
-    }
-    fn cy(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(self, cr, rb, |b, r| b.y(r))
-    }
-    fn cz(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(self, cr, rb, |b, r| b.z(r))
-    }
-    fn cnot(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(self, cr, rb, |b, r| b.not(r))
-    }
-    fn cswap(
-        &mut self,
-        cr: Register,
-        ra: Register,
-        rb: Register,
-    ) -> Result<(Register, Register, Register), CircuitError> {
-        let (cr, (ra, rb)) = try_condition(self, cr, (ra, rb), |b, (ra, rb)| b.swap(ra, rb))?;
-        Ok((cr, ra, rb))
-    }
-    fn cmat(
-        &mut self,
-        name: &str,
-        cr: Register,
-        r: Register,
-        mat: Vec<Complex<f64>>,
-    ) -> Result<(Register, Register), CircuitError> {
-        let (cr, r) = try_condition(self, cr, r, |b, r| b.mat(name, r, mat))?;
-        Ok((cr, r))
-    }
-    fn crealmat(
-        &mut self,
-        name: &str,
-        cr: Register,
-        r: Register,
-        mat: &[f64],
-    ) -> Result<(Register, Register), CircuitError> {
-        let (cr, r) = try_condition(self, cr, r, |b, r| b.real_mat(name, r, mat))?;
-        Ok((cr, r))
-    }
-}
-
-// Add an implementation for references to the unitary builder so you don't have to do some type
-// shenanigans.
-impl ConditionBuilder for &mut dyn UnitaryBuilder {
-    fn cx(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(*self, cr, rb, |b, r| b.x(r))
-    }
-    fn cy(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(*self, cr, rb, |b, r| b.y(r))
-    }
-    fn cz(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(*self, cr, rb, |b, r| b.z(r))
-    }
-    fn cnot(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(*self, cr, rb, |b, r| b.not(r))
-    }
-    fn cswap(
-        &mut self,
-        cr: Register,
-        ra: Register,
-        rb: Register,
-    ) -> Result<(Register, Register, Register), CircuitError> {
-        let (cr, (ra, rb)) = try_condition(*self, cr, (ra, rb), |b, (ra, rb)| b.swap(ra, rb))?;
-        Ok((cr, ra, rb))
-    }
-    fn cmat(
-        &mut self,
-        name: &str,
-        cr: Register,
-        r: Register,
-        mat: Vec<Complex<f64>>,
-    ) -> Result<(Register, Register), CircuitError> {
-        let (cr, r) = try_condition(*self, cr, r, |b, r| b.mat(name, r, mat))?;
-        Ok((cr, r))
-    }
-    fn crealmat(
-        &mut self,
-        name: &str,
-        cr: Register,
-        r: Register,
-        mat: &[f64],
-    ) -> Result<(Register, Register), CircuitError> {
-        let (cr, r) = try_condition(*self, cr, r, |b, r| b.real_mat(name, r, mat))?;
-        Ok((cr, r))
-    }
-}
-
-/// Condition a circuit defined by `f` using `cr`.
-pub fn condition<F, RS, OS>(
-    b: &mut dyn UnitaryBuilder,
-    cr: Register,
-    rs: RS,
-    f: F,
-) -> (Register, OS)
-where
-    F: FnOnce(&mut dyn UnitaryBuilder, RS) -> OS,
-{
-    let mut c = b.with_condition(cr);
-    let rs = f(&mut c, rs);
-    let r = c.release_register();
-    (r, rs)
-}
-
-/// Condition a circuit defined by `f` using `cr`, better supports Result types.
-pub fn try_condition<F, RS, OS>(
-    b: &mut dyn UnitaryBuilder,
-    cr: Register,
-    rs: RS,
-    f: F,
-) -> Result<(Register, OS), CircuitError>
-where
-    F: FnOnce(&mut dyn UnitaryBuilder, RS) -> Result<OS, CircuitError>,
-{
-    let mut c = b.with_condition(cr);
-    let rs = f(&mut c, rs)?;
-    let r = c.release_register();
-    Ok((r, rs))
-}
-
 /// Extract a set of indices, provide them to a function, then reinsert them in the correct order.
 pub fn work_on<F>(
     b: &mut dyn UnitaryBuilder,
@@ -312,8 +155,7 @@ macro_rules! register_expr {
     // Main public entry point.
     ($builder:expr, $($tail:tt)*) => {
         {
-            fn run_register(b: &mut dyn UnitaryBuilder, rs: register_expr!(@registers_for_names () <- $($tail)*)
-            ) -> Result<register_expr!(@registers_for_names () <- $($tail)*), CircuitError> {
+            let run_register = |b: &mut dyn UnitaryBuilder, rs: register_expr!(@registers_for_names () <- $($tail)*)| -> Result<register_expr!(@registers_for_names () <- $($tail)*), CircuitError> {
                 let register_expr!(@name_tuple () <- $($tail)*) = rs;
                 // $name is now a tuple of split thing and original
                 let mut remaining_qubits = vec![];
@@ -324,7 +166,7 @@ macro_rules! register_expr {
 
                 register_expr!(@joiner(remaining_qubits) b, $($tail)*);
                 Ok(register_expr!(@name_tuple () <- $($tail)*))
-            }
+            };
             let rs = register_expr!(@name_tuple () <- $($tail)*);
             run_register($builder, rs)
         }
@@ -356,7 +198,6 @@ pub fn epr_pair(b: &mut OpBuilder, n: u64) -> (Register, Register) {
 mod common_circuit_tests {
     use super::*;
     use crate::pipeline::make_circuit_matrix;
-    use crate::run_debug;
 
     #[test]
     fn test_work_on() -> Result<(), CircuitError> {

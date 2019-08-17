@@ -159,6 +159,38 @@ pub trait UnitaryBuilder {
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<(Register, Register), CircuitError>;
 
+    /// A controlled x, using `cr` as control and `r` as input.
+    fn cx(&mut self, cr: Register, r: Register) -> (Register, Register);
+    /// A controlled y, using `cr` as control and `r` as input.
+    fn cy(&mut self, cr: Register, r: Register) -> (Register, Register);
+    /// A controlled z, using `cr` as control and `r` as input.
+    fn cz(&mut self, cr: Register, r: Register) -> (Register, Register);
+    /// A controlled not, using `cr` as control and `r` as input.
+    fn cnot(&mut self, cr: Register, r: Register) -> (Register, Register);
+    /// Swap `ra` and `rb` controlled by `cr`.
+    fn cswap(
+        &mut self,
+        cr: Register,
+        ra: Register,
+        rb: Register,
+    ) -> Result<(Register, Register, Register), CircuitError>;
+    /// Apply a unitary matrix to the register. If mat is 2x2 then can broadcast to all qubits.
+    fn cmat(
+        &mut self,
+        name: &str,
+        cr: Register,
+        r: Register,
+        mat: Vec<Complex<f64>>,
+    ) -> Result<(Register, Register), CircuitError>;
+    /// Apply a orthonormal matrix to the register. If mat is 2x2 then can broadcast to all qubits.
+    fn crealmat(
+        &mut self,
+        name: &str,
+        cr: Register,
+        r: Register,
+        mat: &[f64],
+    ) -> Result<(Register, Register), CircuitError>;
+
     /// Merge the Registers in `rs` into a single Register.
     fn merge(&mut self, rs: Vec<Register>) -> Register {
         self.merge_with_op(rs, None)
@@ -631,6 +663,48 @@ impl UnitaryBuilder for OpBuilder {
         self.split_absolute(r, &in_indices)
     }
 
+    fn cx(&mut self, cr: Register, rb: Register) -> (Register, Register) {
+        condition(self, cr, rb, |b, r| b.x(r))
+    }
+    fn cy(&mut self, cr: Register, rb: Register) -> (Register, Register) {
+        condition(self, cr, rb, |b, r| b.y(r))
+    }
+    fn cz(&mut self, cr: Register, rb: Register) -> (Register, Register) {
+        condition(self, cr, rb, |b, r| b.z(r))
+    }
+    fn cnot(&mut self, cr: Register, rb: Register) -> (Register, Register) {
+        condition(self, cr, rb, |b, r| b.not(r))
+    }
+    fn cswap(
+        &mut self,
+        cr: Register,
+        ra: Register,
+        rb: Register,
+    ) -> Result<(Register, Register, Register), CircuitError> {
+        let (cr, (ra, rb)) = try_condition(self, cr, (ra, rb), |b, (ra, rb)| b.swap(ra, rb))?;
+        Ok((cr, ra, rb))
+    }
+    fn cmat(
+        &mut self,
+        name: &str,
+        cr: Register,
+        r: Register,
+        mat: Vec<Complex<f64>>,
+    ) -> Result<(Register, Register), CircuitError> {
+        let (cr, r) = try_condition(self, cr, r, |b, r| b.mat(name, r, mat))?;
+        Ok((cr, r))
+    }
+    fn crealmat(
+        &mut self,
+        name: &str,
+        cr: Register,
+        r: Register,
+        mat: &[f64],
+    ) -> Result<(Register, Register), CircuitError> {
+        let (cr, r) = try_condition(self, cr, r, |b, r| b.real_mat(name, r, mat))?;
+        Ok((cr, r))
+    }
+
     fn split_absolute(
         &mut self,
         r: Register,
@@ -826,6 +900,48 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         Ok((r_in, r_out))
     }
 
+    fn cx(&mut self, cr: Register, rb: Register) -> (Register, Register) {
+        condition(self, cr, rb, |b, r| b.x(r))
+    }
+    fn cy(&mut self, cr: Register, rb: Register) -> (Register, Register) {
+        condition(self, cr, rb, |b, r| b.y(r))
+    }
+    fn cz(&mut self, cr: Register, rb: Register) -> (Register, Register) {
+        condition(self, cr, rb, |b, r| b.z(r))
+    }
+    fn cnot(&mut self, cr: Register, rb: Register) -> (Register, Register) {
+        condition(self, cr, rb, |b, r| b.not(r))
+    }
+    fn cswap(
+        &mut self,
+        cr: Register,
+        ra: Register,
+        rb: Register,
+    ) -> Result<(Register, Register, Register), CircuitError> {
+        let (cr, (ra, rb)) = try_condition(self, cr, (ra, rb), |b, (ra, rb)| b.swap(ra, rb))?;
+        Ok((cr, ra, rb))
+    }
+    fn cmat(
+        &mut self,
+        name: &str,
+        cr: Register,
+        r: Register,
+        mat: Vec<Complex<f64>>,
+    ) -> Result<(Register, Register), CircuitError> {
+        let (cr, r) = try_condition(self, cr, r, |b, r| b.mat(name, r, mat))?;
+        Ok((cr, r))
+    }
+    fn crealmat(
+        &mut self,
+        name: &str,
+        cr: Register,
+        r: Register,
+        mat: &[f64],
+    ) -> Result<(Register, Register), CircuitError> {
+        let (cr, r) = try_condition(self, cr, r, |b, r| b.real_mat(name, r, mat))?;
+        Ok((cr, r))
+    }
+
     fn split_absolute(
         &mut self,
         r: Register,
@@ -929,4 +1045,36 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         let (rs, _) = self.split_absolute_many(r, &index_groups).unwrap();
         rs
     }
+}
+
+/// Condition a circuit defined by `f` using `cr`.
+pub fn condition<F, RS, OS>(
+    b: &mut dyn UnitaryBuilder,
+    cr: Register,
+    rs: RS,
+    f: F,
+) -> (Register, OS)
+    where
+        F: FnOnce(&mut dyn UnitaryBuilder, RS) -> OS,
+{
+    let mut c = b.with_condition(cr);
+    let rs = f(&mut c, rs);
+    let r = c.release_register();
+    (r, rs)
+}
+
+/// Condition a circuit defined by `f` using `cr`, better supports Result types.
+pub fn try_condition<F, RS, OS>(
+    b: &mut dyn UnitaryBuilder,
+    cr: Register,
+    rs: RS,
+    f: F,
+) -> Result<(Register, OS), CircuitError>
+    where
+        F: FnOnce(&mut dyn UnitaryBuilder, RS) -> Result<OS, CircuitError>,
+{
+    let mut c = b.with_condition(cr);
+    let rs = f(&mut c, rs)?;
+    let r = c.release_register();
+    Ok((r, rs))
 }
