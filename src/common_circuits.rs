@@ -173,6 +173,57 @@ macro_rules! register_expr {
     };
 }
 
+macro_rules! program {
+    (@splitter($builder:expr) $name:ident; $($tail:tt)*) => {
+        let mut $name: Vec<Option<Register>> = $builder.split_all($name).into_iter().map(|q| Some(q)).collect();
+    };
+    (@splitter($builder:expr) $name:ident, $($tail:tt)*) => {
+        let mut $name: Vec<Option<Register>> = $builder.split_all($name).into_iter().map(|q| Some(q)).collect();
+        register_expr!(@splitter($acc) $builder, $($tail)*)
+    };
+
+    (@joiner($builder:expr) $name:ident; $($tail:tt)*) => {
+        let $name: Vec<Register> = $name.into_iter().map(|q| q.unwrap()).collect();
+        let $name: Register = b.merge($name)
+    };
+    (@joiner($builder:expr) $name:ident, $($tail:tt)*) => {
+        let $name: Vec<Register> = $name.into_iter().map(|q| q.unwrap()).collect();
+        let $name: Register = b.merge($name)
+        register_expr!(@splitter($acc) $builder, $($tail)*)
+    };
+
+
+    (@program_acc($builder:expr, $func:expr, $args:ident) $name:ident $indices:expr, $($tail:tt)*) => {
+        // TODO
+    };
+
+    (@program_acc($builder:expr, $func:expr, $args:ident) $name:ident $indices:expr, $($tail:tt)*) => {
+        let mut tmp_acc: Vec<Register> = vec![];
+        for indx in $indices {
+            tmp_acc.push($name[indx].take().map(|r| Ok(r)).unwrap());
+        }
+        let tmp_r = $builder.merge(tmp_acc);
+        $args.push(tmp_acc);
+
+        program!(@program_acc($builder, $func) $($tail)*)
+    };
+
+    (@program($builder:expr) $func:ident $($tail:tt)*) => {
+        let mut acc_vec = vec![];
+        program!(@program_acc($builder, $func, acc_vec) () <- $($tail)*)
+    };
+
+    // (builder; qubits; programs;...)
+    ($builder:expr; $($tail:tt)*) => {
+        // First reassign each name to a vec
+        program!(@splitter($builder) $($tail)*);
+
+
+
+        program!(@joiner($builder) $($tail)*);
+    };
+}
+
 /// Makes a pair of Register in the state `|0n>x|0n> + |1n>x|1n>`
 pub fn epr_pair(b: &mut OpBuilder, n: u64) -> (Register, Register) {
     let m = 2 * n;
