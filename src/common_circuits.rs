@@ -210,7 +210,7 @@ where
 /// })?;
 /// let r = b.merge(vec![ra, rb]);
 ///
-/// Ok(())
+/// # Ok(())
 /// # }
 /// ```
 #[macro_export]
