@@ -193,9 +193,6 @@ where
 /// like more qubits from the register just put all the indices together and split them out inside
 /// the closure (or call `register_expr!` again inside).
 ///
-/// Macro automatically uses `?` on CircuitErrors, you should wrap in a function if you'd like to
-/// catch and handle those manually.
-///
 /// # Example
 /// ```
 /// use qip::*;
@@ -210,7 +207,7 @@ where
 ///   let ra = b.not(ra);
 ///   let rb = b.not(rb);
 ///   Ok((ra, rb))
-/// });
+/// })?;
 /// let r = b.merge(vec![ra, rb]);
 ///
 /// Ok(())
@@ -218,6 +215,7 @@ where
 /// ```
 #[macro_export]
 macro_rules! register_expr {
+    // Split the names into the selected indices, pushing the remaining to the acc vector.
     (@splitter($acc:ident) $builder:expr, $name:ident $indices:expr; $($tail:tt)*) => {
         let $name: (Register, Register) = $builder.split($name, &$indices)?;
         $acc.push($name.1);
@@ -237,6 +235,8 @@ macro_rules! register_expr {
         register_expr!(@splitter($acc) $builder, $($tail)*)
     };
 
+    // Join together all the names back to their original indices by pulling from the
+    // remaining vector.
     (@joiner($remaining:ident) $builder:expr, $name:ident $indices:expr; $($tail:tt)*) => {
         let tmp: Vec<Register> = $builder.split_all($name);
         let $name: Register = $builder.merge_with_indices($remaining.pop().unwrap(), tmp, &$indices)?;
@@ -254,44 +254,18 @@ macro_rules! register_expr {
         // let $name = $name
     };
 
-    (@as_expr $e:expr) => { $e };
-    (@args ($($body:tt)*) <- $name:ident $indices:expr; $($tail:tt)*) => {
-        register_expr!(@as_expr ($($body)* $name))
-    };
-    (@args ($($body:tt)*) <- $name:ident $indices:expr, $($tail:tt)*) => {
-        register_expr!(@args ($($body)* $name,) <- $($tail)*)
-    };
-    (@args ($($body:tt)*) <- $name:ident; $($tail:tt)*) => {
-        register_expr!(@as_expr ($($body)* $name))
-    };
-    (@args ($($body:tt)*) <- $name:ident, $($tail:tt)*) => {
-        register_expr!(@args ($($body)* $name,) <- $($tail)*)
-    };
-
-    (@names_out ($($body:tt)*) <- $name:ident $indices:expr; $($tail:tt)*) => {
-        register_expr!(@as_expr ($($body)* $name))
-    };
-    (@names_out ($($body:tt)*) <- $name:ident $indices:expr, $($tail:tt)*) => {
-        register_expr!(@names_out ($($body)* $name,) <- $($tail)*)
-    };
-    (@names_out ($($body:tt)*) <- $name:ident; $($tail:tt)*) => {
-        register_expr!(@as_expr ($($body)* $name))
-    };
-    (@names_out ($($body:tt)*) <- $name:ident, $($tail:tt)*) => {
-        register_expr!(@names_out ($($body)* $name,) <- $($tail)*)
-    };
-
-    (@names_in ($($body:tt)*) <- $name:ident $indices:expr; $($tail:tt)*) => {
+    // Output (name_1, name_2, ...)
+    (@name_tuple ($($body:tt)*) <- $name:ident $indices:expr; $($tail:tt)*) => {
         ($($body)* $name)
     };
-    (@names_in ($($body:tt)*) <- $name:ident $indices:expr, $($tail:tt)*) => {
-        register_expr!(@names_in ($($body)* $name,) <- $($tail)*)
+    (@name_tuple ($($body:tt)*) <- $name:ident $indices:expr, $($tail:tt)*) => {
+        register_expr!(@name_tuple ($($body)* $name,) <- $($tail)*)
     };
-    (@names_in ($($body:tt)*) <- $name:ident; $($tail:tt)*) => {
+    (@name_tuple ($($body:tt)*) <- $name:ident; $($tail:tt)*) => {
         ($($body)* $name)
     };
-    (@names_in ($($body:tt)*) <- $name:ident, $($tail:tt)*) => {
-        register_expr!(@names_in ($($body)* $name,) <- $($tail)*)
+    (@name_tuple ($($body:tt)*) <- $name:ident, $($tail:tt)*) => {
+        register_expr!(@name_tuple ($($body)* $name,) <- $($tail)*)
     };
 
     // Use a wrapper function called run_f in order to force any contained lambda to take on the
@@ -321,17 +295,38 @@ macro_rules! register_expr {
         register_expr!(@func($builder, $args) ($($body)* Register,) <- $($tail)*)
     };
 
+    // output (Register, Register, ...) for each name
+    (@registers_for_names ($($body:tt)*) <- $name:ident $indices:expr; $($tail:tt)*) => {
+        ($($body)* Register)
+    };
+    (@registers_for_names ($($body:tt)*) <- $name:ident $indices:expr, $($tail:tt)*) => {
+        register_expr!(@registers_for_names ($($body)* Register,) <- $($tail)*)
+    };
+    (@registers_for_names ($($body:tt)*) <- $name:ident; $($tail:tt)*) => {
+        ($($body)* Register)
+    };
+    (@registers_for_names ($($body:tt)*) <- $name:ident, $($tail:tt)*) => {
+        register_expr!(@registers_for_names ($($body)* Register,) <- $($tail)*)
+    };
+
+    // Main public entry point.
     ($builder:expr, $($tail:tt)*) => {
         {
-            // $name is now a tuple of split thing and original
-            let mut remaining_qubits = vec![];
-            register_expr!(@splitter(remaining_qubits) $builder, $($tail)*);
+            fn run_register(b: &mut dyn UnitaryBuilder, rs: register_expr!(@registers_for_names () <- $($tail)*)
+            ) -> Result<register_expr!(@registers_for_names () <- $($tail)*), CircuitError> {
+                let register_expr!(@name_tuple () <- $($tail)*) = rs;
+                // $name is now a tuple of split thing and original
+                let mut remaining_qubits = vec![];
+                register_expr!(@splitter(remaining_qubits) b, $($tail)*);
 
-            let args = register_expr!(@args () <- $($tail)*);
-            let register_expr!(@names_in () <- $($tail)*) = register_expr!(@func($builder, args) () <- $($tail)*)?;
+                let args = register_expr!(@name_tuple () <- $($tail)*);
+                let register_expr!(@name_tuple () <- $($tail)*) = register_expr!(@func(b, args) () <- $($tail)*)?;
 
-            register_expr!(@joiner(remaining_qubits) $builder, $($tail)*);
-            register_expr!(@names_out () <- $($tail)*)
+                register_expr!(@joiner(remaining_qubits) b, $($tail)*);
+                Ok(register_expr!(@name_tuple () <- $($tail)*))
+            }
+            let rs = register_expr!(@name_tuple () <- $($tail)*);
+            run_register($builder, rs)
         }
     };
 }
@@ -383,7 +378,7 @@ mod common_circuit_tests {
         let r = register_expr!(&mut b, r[0]; |b, r| {
             let r = b.not(r);
             Ok((r))
-        });
+        })?;
 
         // Compare to expected value
         let macro_circuit = make_circuit_matrix::<f64>(n, &r, true);
@@ -407,7 +402,7 @@ mod common_circuit_tests {
         let (ra, rb) = register_expr!(&mut b, ra[0,2], rb[1]; |b, (ra, rb)| {
             let rb = b.not(rb);
             Ok((ra, rb))
-        });
+        })?;
         let r = b.merge(vec![ra, rb]);
 
         // Compare to expected value
@@ -434,7 +429,7 @@ mod common_circuit_tests {
         let (ra, rb) = register_expr!(&mut b, ra[0,2], rb; |b, (ra, rb)| {
             let rb = b.not(rb);
             Ok((ra, rb))
-        });
+        })?;
         let r = b.merge(vec![ra, rb]);
 
         // Compare to expected value
