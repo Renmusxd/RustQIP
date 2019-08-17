@@ -67,7 +67,7 @@
 //! ```
 //!
 
-pub use self::builders::{OpBuilder, UnitaryBuilder};
+pub use self::builders::*;
 pub use self::common_circuits::*;
 pub use self::errors::*;
 pub use self::pipeline::{run_local, run_local_with_init, run_with_state, QuantumState};
@@ -77,9 +77,12 @@ pub use self::qubits::Register;
 pub use self::types::Precision;
 pub use num::Complex;
 
+/// Common circuits for boolean logic.
+pub mod boolean_circuits;
 /// Opbuilder and such
 pub mod builders;
 /// Common circuits for general usage.
+#[macro_use]
 pub mod common_circuits;
 /// Error values for the library.
 pub mod errors;

@@ -75,11 +75,15 @@ impl Register {
         ida: u64,
         idb: u64,
         r: Register,
-        indices: Vec<u64>,
+        indices: &[u64],
     ) -> Result<(Register, Register), CircuitError> {
-        for indx in &indices {
+        for indx in indices {
             if *indx > r.n() {
-                let message = format!("All indices for splitting must be below r.n = {:?}", r.n());
+                let message = format!(
+                    "All indices for splitting must be below r.n={:?}, found indx={:?}",
+                    r.n(),
+                    *indx
+                );
                 return CircuitError::make_err(message);
             }
         }
@@ -88,9 +92,11 @@ impl Register {
         } else if indices.is_empty() {
             CircuitError::make_str_err("Must provide indices to split.")
         } else {
-            let selected_indices: Vec<u64> =
-                indices.into_iter().map(|i| r.indices[i as usize]).collect();
-            Self::split_absolute(ida, idb, r, selected_indices)
+            let selected_indices: Vec<u64> = indices
+                .into_iter()
+                .map(|i| r.indices[(*i) as usize])
+                .collect();
+            Self::split_absolute(ida, idb, r, &selected_indices)
         }
     }
 
@@ -99,14 +105,14 @@ impl Register {
         ida: u64,
         idb: u64,
         r: Register,
-        selected_indices: Vec<u64>,
+        selected_indices: &[u64],
     ) -> Result<(Register, Register), CircuitError> {
         if selected_indices.len() == r.indices.len() {
             return CircuitError::make_str_err("Cannot split out all indices into own Registers.");
         } else if selected_indices.is_empty() {
             return CircuitError::make_str_err("Must provide indices to split.");
         }
-        for indx in &selected_indices {
+        for indx in selected_indices {
             if !r.indices.contains(indx) {
                 let message = format!(
                     "Index {:?} not found in Register with indices {:?}",
@@ -126,7 +132,7 @@ impl Register {
 
         Ok((
             Register {
-                indices: selected_indices,
+                indices: selected_indices.to_vec(),
                 parent: Some(Parent::Shared(shared_parent.clone())),
                 deps: None,
                 id: ida,

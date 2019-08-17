@@ -71,7 +71,7 @@ impl<'a, B: UnitaryBuilder> SingleRegisterChain<'a, B> {
     /// Split the Register, select the given indices and transfer them to a new Register, leave the
     /// remaining indices in another Register. This uses the relative indices (0 refers to whatever the
     /// first index of the contained Register is).
-    pub fn split(self, indices: Vec<u64>) -> Result<DoubleRegisterChain<'a, B>, CircuitError> {
+    pub fn split(self, indices: &[u64]) -> Result<DoubleRegisterChain<'a, B>, CircuitError> {
         let (ra, rb) = self.builder.split(self.r, indices)?;
         Ok(DoubleRegisterChain::new(self.builder, ra, rb))
     }
@@ -80,7 +80,7 @@ impl<'a, B: UnitaryBuilder> SingleRegisterChain<'a, B> {
     /// absolute index, even if it isn't in the contained Register, throwing an error).
     pub fn split_absolute(
         self,
-        selected_indices: Vec<u64>,
+        selected_indices: &[u64],
     ) -> Result<DoubleRegisterChain<'a, B>, CircuitError> {
         let (ra, rb) = self.builder.split_absolute(self.r, selected_indices)?;
         Ok(DoubleRegisterChain::new(self.builder, ra, rb))
