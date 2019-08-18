@@ -173,6 +173,39 @@ macro_rules! register_expr {
     };
 }
 
+/// A helper macro for applying functions to specific qubits in registers.
+///
+/// The macro takes an expression which yields `&mut dyn UnitaryBuilder`, a list of registers, then
+/// a series of function call expressions of the form:
+/// `function [register <indices?>, ...];`
+///
+/// # Example
+/// ```
+/// use qip::*;
+/// # fn main() -> Result<(), CircuitError> {
+///
+/// let n = 3;
+/// let mut b = OpBuilder::new();
+/// let ra = b.register(n)?;
+/// let rb = b.register(n)?;
+///
+/// let gamma = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+///     let rb = rs.pop().unwrap();
+///     let ra = rs.pop().unwrap();
+///     let (ra, rb) = b.cnot(ra, rb);
+///     Ok(vec![ra, rb])
+/// };
+///
+/// let (ra, rb) = program!(&mut b, ra, rb;
+///     gamma ra, rb[2];
+///     gamma ra[0], rb;
+/// );
+/// let r = b.merge(vec![ra, rb]);
+///
+/// # Ok(())
+/// # }
+/// ```
+#[macro_export]
 macro_rules! program {
     (@name_tuple ($($body:tt)*) <- $name:ident; $($tail:tt)*) => {
         ($($body)* $name)
@@ -188,10 +221,7 @@ macro_rules! program {
         $reg_vec.push((tmp_name, tmp_indices));
     };
     (@splitter($builder:expr, $reg_vec:ident) $name:ident, $($tail:tt)*) => {
-        let tmp_indices = $name.indices.clone();
-        let tmp_name: Vec<Option<Register>> = $builder.split_all($name).into_iter().map(|q| Some(q)).collect();
-        let $name = $reg_vec.len();
-        $reg_vec.push((tmp_name, tmp_indices));
+        program!(@splitter($builder, $reg_vec) $name; $($tail)*)
         program!(@splitter($builder, $reg_vec) $($tail)*)
     };
 
@@ -200,11 +230,11 @@ macro_rules! program {
         let $name: Register = $builder.merge($name)
     };
     (@joiner($builder:expr, $reg_vec:ident) $name:ident, $($tail:tt)*) => {
-        let $name: Vec<Register> = $reg_vec.pop().unwrap().0.into_iter().map(|q| q.unwrap()).collect();
-        let $name: Register = $builder.merge($name)
+        program!(@joiner($builder, $reg_vec) $name; $($tail)*)
         program!(@joiner($builder, $reg_vec) $($tail)*)
     };
 
+    // @program_acc for cases where no indices are provided
     (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) $name:ident; $($tail:tt)*) => {
         let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name].0.len()).collect();
         program!(@program_acc($builder, $reg_vec, $func, $args) $name tmp_all_indices; $($tail)*)
@@ -213,6 +243,7 @@ macro_rules! program {
         let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name].0.len()).collect();
         program!(@program_acc($builder, $reg_vec, $func, $args) $name tmp_all_indices, $($tail)*)
     };
+    // Extract the indices from each register and add to the vector of args to be passed to func.
     (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) $name:ident $indices:expr, $($tail:tt)*) => {
         let mut tmp_acc: Vec<Register> = vec![];
         for indx in &$indices {
@@ -223,7 +254,7 @@ macro_rules! program {
 
         program!(@program_acc($builder, $reg_vec, $func, $args) $($tail)*)
     };
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) $name:ident $indices:expr; $($tail:tt)*) => {
+    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) $name:ident $indices:expr;) => {
         let mut tmp_acc: Vec<Register> = vec![];
         for indx in &$indices {
             tmp_acc.push($reg_vec[$name].0[*indx].take().unwrap());
@@ -232,10 +263,12 @@ macro_rules! program {
         $args.push(tmp_r);
 
         let tmp_results: Vec<Register> = $func($builder, $args)?;
-        // This is not efficient, but the best I can do without fancy custom datastructures
-        // or, more importantly, the ability to make identifiers in macros.
+        // This is not efficient, but the best I can do without fancy custom structs or, more
+        // importantly, the ability to make identifiers in macros.
         // Luckily it's O(n^2) where n can't be too big because the actual circuit simulation is
         // O(2^n).
+        // for each register in output, for each qubit in the register, find the correct spot in the
+        // input register arrays where it originally came from.
         for tmp_register in tmp_results.into_iter() {
             let tmp_indices = tmp_register.indices.clone();
             let tmp_registers = $builder.split_all(tmp_register);
@@ -250,15 +283,19 @@ macro_rules! program {
                 }
             }
         }
-
+    };
+    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) $name:ident $indices:expr; $($tail:tt)*) => {
+        program!(@program_acc($builder, $reg_vec, $func, $args) $name $indices;);
         program!(@program($builder, $reg_vec) $($tail)*);
     };
 
+    // Start parsing a program of the form "function [register <indices>, ...];"
     (@program($builder:expr, $reg_vec:ident) $func:ident $($tail:tt)*) => {
         let mut acc_vec: Vec<Register> = vec![];
         program!(@program_acc($builder, $reg_vec, $func, acc_vec) $($tail)*)
     };
 
+    // Skip past the register list and start running programs.
     (@skip_to_program($builder:expr, $reg_vec:ident) $name:ident; $($tail:tt)*) => {
         program!(@program($builder, $reg_vec) $($tail)*)
     };
@@ -403,10 +440,8 @@ mod common_circuit_tests {
         let rb = b.register(n)?;
 
         let cnot = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
-            dbg!(&rs);
             let rb = rs.pop().unwrap();
             let ra = rs.pop().unwrap();
-
             let (ra, rb) = b.cnot(ra, rb);
             Ok(vec![ra, rb])
         };
@@ -419,20 +454,56 @@ mod common_circuit_tests {
 
         run_debug(&r);
 
-        assert!(false);
+        // Compare to expected value
+        let macro_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
+        let mut b = OpBuilder::new();
+        let ra = b.register(n)?;
+        let rb = b.register(n)?;
+        let (r, rb) = b.split(rb, &[2])?;
+        let (ra, r) = b.cnot(ra, r);
+        let rb = b.merge_with_indices(rb, vec![r], &[2])?;
+        let (r, ra) = b.split(ra, &[0])?;
+        let (r, rb) = b.cnot(r, rb);
+        let ra = b.merge_with_indices(ra, vec![r], &[0])?;
+        let r = b.merge(vec![ra, rb]);
+        run_debug(&r);
+        let basic_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
+        assert_eq!(macro_circuit, basic_circuit);
+        Ok(())
+    }
 
-//
-//        // Compare to expected value
-//        let macro_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
-//        let mut b = OpBuilder::new();
-//        let ra = b.register(n)?;
-//        let rb = b.register(n)?;
-//        let (r, rb) = b.split(rb, &[0])?;
-//        let (ra, r) = b.cnot(ra, r);
-//        let rb = b.merge_with_indices(rb, vec![r], &[0])?;
-//        let r = b.merge(vec![ra, rb]);
-//        let basic_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
-//        assert_eq!(macro_circuit, basic_circuit);
+
+    #[test]
+    fn test_program_macro_reuse() -> Result<(), CircuitError> {
+        let n = 3;
+
+        let mut b = OpBuilder::new();
+        let r = b.register(n)?;
+
+        let cnot = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+            let rb = rs.pop().unwrap();
+            let ra = rs.pop().unwrap();
+            let (ra, rb) = b.cnot(ra, rb);
+            Ok(vec![ra, rb])
+        };
+
+        let r = program!(&mut b, r;
+            cnot r[0], r[1];
+        );
+
+        run_debug(&r);
+
+        // Compare to expected value
+        let macro_circuit = make_circuit_matrix::<f64>(n, &r, true);
+        let mut b = OpBuilder::new();
+        let r = b.register(n)?;
+        let (r1, r2) = b.split(r, &[0])?;
+        let (r2, r3) = b.split(r2, &[0])?;
+        let (r1, r2) = b.cnot(r1, r2);
+        let r = b.merge(vec![r1, r2, r3]);
+        run_debug(&r);
+        let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
+        assert_eq!(macro_circuit, basic_circuit);
         Ok(())
     }
 }
