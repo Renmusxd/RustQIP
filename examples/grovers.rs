@@ -15,7 +15,7 @@ fn prepare_state<P: Precision>(n: u64) -> Result<LocalQuantumState<P>, CircuitEr
     let anc = b.not(anc);
     let anc = b.hadamard(anc);
 
-    let r = b.merge(vec![r, anc]);
+    let r = b.merge(vec![r, anc])?;
 
     run_local(&r).map(|(s, _)| s)
 }

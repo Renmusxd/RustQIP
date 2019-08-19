@@ -16,7 +16,7 @@ fn run_alice(b: &mut OpBuilder, epr_alice: Register, bit_a: bool, bit_b: bool) -
 fn run_bob(b: &mut OpBuilder, r_alice: Register, epr_bob: Register) -> (bool, bool) {
     let (r_alice, r_bob) = b.cnot(r_alice, epr_bob);
     let r_alice = b.hadamard(r_alice);
-    let r = b.merge(vec![r_bob, r_alice]);
+    let r = b.merge(vec![r_bob, r_alice]).unwrap();
     let (r, m) = b.measure(r);
 
     let (_, measurements) = run_local::<f64>(&r).unwrap();

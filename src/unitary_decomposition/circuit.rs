@@ -90,8 +90,7 @@ fn convert_decomp_ops_to_circuit(
         }
     });
     let rs = negate_difference(b, rs, mask, !0);
-    let r = b.merge(rs);
-    Ok(r)
+    b.merge(rs)
 }
 
 fn apply_to_index_with_control<F: Fn(&mut dyn UnitaryBuilder, Register) -> Register>(
@@ -101,7 +100,7 @@ fn apply_to_index_with_control<F: Fn(&mut dyn UnitaryBuilder, Register) -> Regis
     f: F,
 ) -> Vec<Register> {
     let r = rs.remove(indx as usize);
-    let cr = b.merge(rs);
+    let cr = b.merge(rs).unwrap();
     let (cr, r) = condition(b, cr, r, |b, r| f(b, r));
     let mut rs = b.split_all(cr);
     rs.insert(indx as usize, r);

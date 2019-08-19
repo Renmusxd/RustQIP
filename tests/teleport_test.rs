@@ -3,7 +3,6 @@ use qip::common_circuits::epr_pair;
 use qip::errors::CircuitError;
 use qip::pipeline::MeasurementHandle;
 use qip::*;
-use std::error::Error;
 
 fn run_alice(b: &mut OpBuilder, epr_alice: Register, initial_angle: f64) -> MeasurementHandle {
     // Set up the qubits
@@ -20,7 +19,7 @@ fn run_alice(b: &mut OpBuilder, epr_alice: Register, initial_angle: f64) -> Meas
     let q_random = b.hadamard(q_random);
 
     // Now she measures her two particles
-    let q = b.merge(vec![q_random, q_alice]);
+    let q = b.merge(vec![q_random, q_alice]).unwrap();
     let (q, handle) = b.measure(q);
 
     handle

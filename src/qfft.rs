@@ -10,7 +10,7 @@ pub fn qfft<B: UnitaryBuilder>(builder: &mut B, r: Register) -> Register {
     let mut rs = builder.split_all(r);
     rs.reverse();
     let rs = rec_qfft(builder, vec![], rs);
-    builder.merge(rs)
+    builder.merge(rs).unwrap()
 }
 
 fn rec_qfft<B: UnitaryBuilder>(

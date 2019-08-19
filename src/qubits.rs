@@ -55,18 +55,22 @@ impl Register {
         id: u64,
         registers: Vec<Register>,
         modifier: Option<StateModifier>,
-    ) -> Register {
-        let all_indices = registers
-            .iter()
-            .map(|r| r.indices.clone())
-            .flatten()
-            .collect();
-
-        Register {
-            indices: all_indices,
-            parent: Some(Parent::Owned(registers, modifier)),
-            deps: None,
-            id,
+    ) -> Result<Register, CircuitError> {
+        if registers.len() == 0 {
+            panic!("Merging zero indices.");
+//            CircuitError::make_str_err("Cannot merge zero registers.")
+        } else {
+            let all_indices = registers
+                .iter()
+                .map(|r| r.indices.clone())
+                .flatten()
+                .collect();
+            Ok(Register {
+                indices: all_indices,
+                parent: Some(Parent::Owned(registers, modifier)),
+                deps: None,
+                id,
+            })
         }
     }
 

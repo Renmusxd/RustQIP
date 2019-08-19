@@ -174,13 +174,13 @@ impl<'a, B: UnitaryBuilder> DoubleRegisterChain<'a, B> {
     }
     /// Merge the contained Register tuple into a single Register, wrap in a chaining struct.
     pub fn merge(self) -> SingleRegisterChain<'a, B> {
-        let r = self.builder.merge(vec![self.ra, self.rb]);
+        let r = self.builder.merge(vec![self.ra, self.rb]).unwrap();
         SingleRegisterChain::new(self.builder, r)
     }
     /// Split all the indices for each Register into their own Registers, returned the chained struct for
     /// the vec of Registers.
     pub fn split_all(self) -> VecRegisterChain<'a, B> {
-        let r = self.builder.merge(vec![self.ra, self.rb]);
+        let r = self.builder.merge(vec![self.ra, self.rb]).unwrap();
         let qs = self.builder.split_all(r);
         VecRegisterChain::new(self.builder, qs)
     }
@@ -249,7 +249,7 @@ impl<'a, B: UnitaryBuilder> VecRegisterChain<'a, B> {
     }
     /// Merge the contained vec of Registers into a single Register.
     pub fn merge(self) -> SingleRegisterChain<'a, B> {
-        let r = self.builder.merge(self.rs);
+        let r = self.builder.merge(self.rs).unwrap();
         SingleRegisterChain::new(self.builder, r)
     }
     /// Partition the contained Registers into two groups by their index in the underlying vector.
@@ -276,8 +276,8 @@ impl<'a, B: UnitaryBuilder> VecRegisterChain<'a, B> {
             let f = |vs: Vec<(usize, Register)>| -> Vec<Register> {
                 vs.into_iter().map(|(_, r)| r).collect()
             };
-            let ra = self.builder.merge(f(a));
-            let rb = self.builder.merge(f(b));
+            let ra = self.builder.merge(f(a))?;
+            let rb = self.builder.merge(f(b))?;
             Ok(DoubleRegisterChain::new(self.builder, ra, rb))
         }
     }

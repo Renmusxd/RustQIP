@@ -145,7 +145,7 @@ pub trait UnitaryBuilder {
         let ra_indices = ra.indices.clone();
 
         let name = String::from("swap");
-        let r = self.merge_with_op(vec![ra, rb], Some((name, op)));
+        let r = self.merge_with_op(vec![ra, rb], Some((name, op)))?;
         self.split_absolute(r, &ra_indices)
     }
 
@@ -192,7 +192,7 @@ pub trait UnitaryBuilder {
     ) -> Result<(Register, Register), CircuitError>;
 
     /// Merge the Registers in `rs` into a single Register.
-    fn merge(&mut self, rs: Vec<Register>) -> Register {
+    fn merge(&mut self, rs: Vec<Register>) -> Result<Register,CircuitError> {
         self.merge_with_op(rs, None)
     }
 
@@ -311,9 +311,8 @@ pub trait UnitaryBuilder {
         &mut self,
         rs: Vec<Register>,
         named_operator: Option<(String, UnitaryOp)>,
-    ) -> Register;
+    ) -> Result<Register,CircuitError>;
 
-    // TODO test this thing
     /// Merge a set of qubits into a given qubit at a set of indices
     fn merge_with_indices(
         &mut self,
@@ -333,7 +332,6 @@ pub trait UnitaryBuilder {
         }
     }
 
-    // TODO test this thing
     /// Merge a set of qubits into a given qubit at a set of indices
     fn merge_with(
         &mut self,
@@ -378,7 +376,7 @@ pub trait UnitaryBuilder {
             }
             acc
         });
-        Ok(self.merge(qs))
+        self.merge(qs)
     }
 
     /// Measure all Register states and probabilities, does not edit state (thus Unitary). Returns
@@ -533,27 +531,44 @@ impl OpBuilder {
         } else {
             (&mut self.temp_zero_qubits, &mut self.temp_one_qubits)
         };
-        let mut acquired_qubits = op_vec.split_off(n as usize);
+
+        let n = n as usize;
+        let mut acquired_qubits = if n < op_vec.len() {
+            op_vec.split_off(n)
+        } else if op_vec.len() > 0 {
+            op_vec.split_off(op_vec.len() - 1)
+        } else {
+            vec![]
+        };
 
         // If we didn't get enough, take from temps with the wrong bit.
-        if acquired_qubits.len() < n as usize {
-            let remaining = n - acquired_qubits.len() as u64;
-            let additional_registers = other_vec.split_off(remaining as usize);
-            let r = self.merge(additional_registers);
-            let r = self.not(r);
-            acquired_qubits.push(r);
+        if acquired_qubits.len() < n {
+            let remaining = n - acquired_qubits.len();
+            let additional_registers = if remaining < other_vec.len() {
+                other_vec.split_off(remaining)
+            } else if op_vec.len() > 0 {
+                other_vec.split_off(other_vec.len() - 1)
+            } else {
+                vec![]
+            };
+            if additional_registers.len() > 0 {
+                let r = self.merge(additional_registers).unwrap();
+                let r = self.not(r);
+                let rs = self.split_all(r);
+                acquired_qubits.extend(rs.into_iter());
+            }
         }
 
         // If there still aren't enough, start allocating more (and apply NOT if needed).
-        if acquired_qubits.len() < n as usize {
-            let remaining = n - acquired_qubits.len() as u64;
+        if acquired_qubits.len() < n {
+            let remaining = (n - acquired_qubits.len()) as u64;
             let r = self.register(remaining).unwrap();
             let r = if value { self.not(r) } else { r };
             acquired_qubits.push(r);
         };
 
         // Make the temp Register.
-        self.merge(acquired_qubits)
+        self.merge(acquired_qubits).unwrap()
     }
 
     /// Return a temporary Register which is supposed to have a given value `|0n>` or `|1n>`
@@ -585,7 +600,7 @@ impl OpBuilder {
             angle,
         );
         let modifier = Some(modifier);
-        let r = Register::merge_with_modifier(id, vec![r], modifier);
+        let r = Register::merge_with_modifier(id, vec![r], modifier).unwrap();
         Register::make_measurement_handle(self.get_op_id(), r)
     }
 
@@ -617,11 +632,11 @@ impl UnitaryBuilder for OpBuilder {
                 .into_iter()
                 .map(|r| self.mat(name, r, mat.clone()).unwrap())
                 .collect();
-            Ok(self.merge_with_op(rs, None))
+            self.merge_with_op(rs, None)
         } else {
             let op = self.make_mat_op(&r, mat)?;
             let name = String::from(name);
-            Ok(self.merge_with_op(vec![r], Some((name, op))))
+            self.merge_with_op(vec![r], Some((name, op)))
         }
     }
 
@@ -642,11 +657,11 @@ impl UnitaryBuilder for OpBuilder {
                         .unwrap()
                 })
                 .collect();
-            Ok(self.merge_with_op(rs, None))
+            self.merge_with_op(rs, None)
         } else {
             let op = self.make_sparse_mat_op(&r, mat, natural_order)?;
             let name = String::from(name);
-            Ok(self.merge_with_op(vec![r], Some((name, op))))
+            self.merge_with_op(vec![r], Some((name, op)))
         }
     }
 
@@ -659,7 +674,7 @@ impl UnitaryBuilder for OpBuilder {
         let op = self.make_function_op(&r_in, &r_out, f)?;
         let in_indices = r_in.indices.clone();
         let name = String::from("f");
-        let r = self.merge_with_op(vec![r_in, r_out], Some((name, op)));
+        let r = self.merge_with_op(vec![r_in, r_out], Some((name, op)))?;
         self.split_absolute(r, &in_indices)
     }
 
@@ -717,7 +732,7 @@ impl UnitaryBuilder for OpBuilder {
         &mut self,
         rs: Vec<Register>,
         named_operator: Option<(String, UnitaryOp)>,
-    ) -> Register {
+    ) -> Result<Register, CircuitError> {
         let modifier = named_operator.map(|(name, op)| StateModifier::new_unitary(name, op));
         Register::merge_with_modifier(self.get_op_id(), rs, modifier)
     }
@@ -730,7 +745,7 @@ impl UnitaryBuilder for OpBuilder {
             r.indices.clone(),
         );
         let modifier = Some(modifier);
-        let r = Register::merge_with_modifier(id, vec![r], modifier);
+        let r = Register::merge_with_modifier(id, vec![r], modifier).unwrap();
         (r, id)
     }
 
@@ -748,7 +763,7 @@ impl UnitaryBuilder for OpBuilder {
                 let mut b = Self::new();
                 let r = b.register(req_qubits)?;
                 let rs = f(&mut b, r, measurements)?;
-                let r = b.merge(rs);
+                let r = b.merge(rs)?;
                 Ok(get_owned_opfns(r))
             },
         );
@@ -758,7 +773,7 @@ impl UnitaryBuilder for OpBuilder {
             handles,
             f,
         ));
-        let r = Register::merge_with_modifier(self.get_op_id(), rs, modifier);
+        let r = Register::merge_with_modifier(self.get_op_id(), rs, modifier).unwrap();
         let deps = handles.iter().map(|m| m.clone_register()).collect();
         let r = Register::add_deps(r, deps);
         let (rs, _) = self.split_absolute_many(r, &index_groups).unwrap();
@@ -821,13 +836,13 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
                 .into_iter()
                 .map(|r| self.mat(name, r, mat.clone()).unwrap())
                 .collect();
-            Ok(self.merge_with_op(rs, None))
+            self.merge_with_op(rs, None)
         } else {
             let op = self.make_mat_op(&r, mat)?;
             let cr = self.get_conditional_register();
             let cr_indices = cr.indices.clone();
             let name = format!("C({})", name);
-            let r = self.merge_with_op(vec![cr, r], Some((name, op)));
+            let r = self.merge_with_op(vec![cr, r], Some((name, op)))?;
             let (cr, r) = self.split_absolute(r, &cr_indices).unwrap();
 
             self.set_conditional_register(cr);
@@ -852,13 +867,13 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
                         .unwrap()
                 })
                 .collect();
-            Ok(self.merge_with_op(rs, None))
+            self.merge_with_op(rs, None)
         } else {
             let op = self.make_sparse_mat_op(&r, mat, natural_order)?;
             let cr = self.get_conditional_register();
             let cr_indices = cr.indices.clone();
             let name = format!("C({})", name);
-            let r = self.merge_with_op(vec![cr, r], Some((name, op)));
+            let r = self.merge_with_op(vec![cr, r], Some((name, op)))?;
             let (cr, r) = self.split_absolute(r, &cr_indices).unwrap();
 
             self.set_conditional_register(cr);
@@ -872,7 +887,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         let cr_indices = cr.indices.clone();
         let ra_indices = ra.indices.clone();
         let name = String::from("C(swap)");
-        let r = self.merge_with_op(vec![cr, ra, rb], Some((name, op)));
+        let r = self.merge_with_op(vec![cr, ra, rb], Some((name, op)))?;
         let (cr, r) = self.split_absolute(r, &cr_indices).unwrap();
         let (ra, rb) = self.split_absolute(r, &ra_indices).unwrap();
 
@@ -892,7 +907,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         let cr_indices = cr.indices.clone();
         let in_indices = r_in.indices.clone();
         let name = String::from("C(f)");
-        let r = self.merge_with_op(vec![cr, r_in, r_out], Some((name, op)));
+        let r = self.merge_with_op(vec![cr, r_in, r_out], Some((name, op)))?;
         let (cr, r) = self.split_absolute(r, &cr_indices).unwrap();
         let (r_in, r_out) = self.split_absolute(r, &in_indices).unwrap();
 
@@ -1009,7 +1024,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         &mut self,
         rs: Vec<Register>,
         named_operator: Option<(String, UnitaryOp)>,
-    ) -> Register {
+    ) -> Result<Register, CircuitError> {
         self.parent_builder.merge_with_op(rs, named_operator)
     }
 
@@ -1038,8 +1053,8 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         );
         let rs = self.parent_builder.sidechannel_helper(rs, handles, f);
         let index_groups: Vec<_> = rs.iter().map(|r| r.indices.clone()).collect();
-        let r = self.merge(rs);
-        let r = self.merge(vec![cr, r]);
+        let r = self.merge(rs).unwrap();
+        let r = self.merge(vec![cr, r]).unwrap();
         let (cr, r) = self.split_absolute(r, &cindices_clone).unwrap();
         self.set_conditional_register(cr);
         let (rs, _) = self.split_absolute_many(r, &index_groups).unwrap();

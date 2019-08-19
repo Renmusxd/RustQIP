@@ -1,6 +1,8 @@
 use crate::errors::CircuitError;
 /// Common circuits for general usage.
-use crate::{Complex, OpBuilder, Register, UnitaryBuilder};
+use crate::{OpBuilder, Register, UnitaryBuilder};
+use std::ops::Range;
+use std::iter::Iterator;
 
 /// Extract a set of indices, provide them to a function, then reinsert them in the correct order.
 pub fn work_on<F>(
@@ -51,7 +53,7 @@ where
 ///   let rb = b.not(rb);
 ///   Ok((ra, rb))
 /// })?;
-/// let r = b.merge(vec![ra, rb]);
+/// let r = b.merge(vec![ra, rb])?;
 ///
 /// # Ok(())
 /// # }
@@ -158,6 +160,97 @@ macro_rules! register_expr {
     };
 }
 
+/// Helper struct for macro iteration with usize, ranges, or vecs
+#[derive(Debug)]
+pub struct QubitIndices {
+    indices: Vec<usize>
+}
+
+impl QubitIndices {
+    /// Get indices from struct.
+    pub fn get_indices(self) -> Vec<usize> {
+        self.indices
+    }
+}
+
+impl From<Range<usize>> for QubitIndices {
+    fn from(indices: Range<usize>) -> Self {
+        let indices: Vec<_> = indices.collect();
+        indices.into()
+    }
+}
+impl From<Range<u64>> for QubitIndices {
+    fn from(indices: Range<u64>) -> Self {
+        let indices: Vec<_> = indices.map(|indx| indx as usize).collect();
+        indices.into()
+    }
+}
+impl From<Range<u32>> for QubitIndices {
+    fn from(indices: Range<u32>) -> Self {
+        let indices: Vec<_> = indices.map(|indx| indx as usize).collect();
+        indices.into()
+    }
+}
+impl From<Range<i64>> for QubitIndices {
+    fn from(indices: Range<i64>) -> Self {
+        let indices: Vec<_> = indices.map(|indx| indx as usize).collect();
+        indices.into()
+    }
+}
+impl From<Range<i32>> for QubitIndices {
+    fn from(indices: Range<i32>) -> Self {
+        let indices: Vec<_> = indices.map(|indx| indx as usize).collect();
+        indices.into()
+    }
+}
+impl From<&Range<usize>> for QubitIndices {
+    fn from(indices: &Range<usize>) -> Self {
+        (indices.start .. indices.end).into()
+    }
+}
+impl From<&Range<u64>> for QubitIndices {
+    fn from(indices: &Range<u64>) -> Self {
+        (indices.start .. indices.end).into()
+    }
+}
+impl From<&Range<u32>> for QubitIndices {
+    fn from(indices: &Range<u32>) -> Self {
+        (indices.start .. indices.end).into()
+    }
+}
+impl From<&Range<i64>> for QubitIndices {
+    fn from(indices: &Range<i64>) -> Self {
+        (indices.start .. indices.end).into()
+    }
+}
+impl From<&Range<i32>> for QubitIndices {
+    fn from(indices: &Range<i32>) -> Self {
+        (indices.start .. indices.end).into()
+    }
+}
+
+impl<T: Into<usize>> From<Vec<T>> for QubitIndices {
+    fn from(indices: Vec<T>) -> Self {
+        let indices: Vec<usize> = indices.into_iter().map(|indx| indx.into()).collect();
+        Self {
+            indices
+        }
+    }
+}
+
+impl From<usize> for QubitIndices {
+    fn from(item: usize) -> Self {
+        Self {
+            indices: vec![item]
+        }
+    }
+}
+impl From<&usize> for QubitIndices {
+    fn from(item: &usize) -> Self {
+        (*item).into()
+    }
+}
+
 /// A helper macro for applying functions to specific qubits in registers.
 ///
 /// The macro takes an expression which yields `&mut dyn UnitaryBuilder`, a list of registers, then
@@ -185,11 +278,13 @@ macro_rules! register_expr {
 ///     Ok(vec![ra, rb])
 /// };
 ///
+/// // Gamma |ra>|rb[2]>
+/// // Gamma |ra[0]>|rb>
 /// let (ra, rb) = program!(&mut b, ra, rb;
 ///     gamma ra, rb[2];
 ///     gamma ra[0], rb;
 /// );
-/// let r = b.merge(vec![ra, rb]);
+/// let r = b.merge(vec![ra, rb])?;
 ///
 /// # Ok(())
 /// # }
@@ -212,10 +307,40 @@ macro_rules! register_expr {
 ///     Ok(vec![ra, rb])
 /// };
 ///
+/// // Gamma |ra[0] ra[2]>|rb[2]>
+/// // Gamma |ra>|rb[0] rb[2]>
 /// let (ra, rb) = program!(&mut b, ra, rb;
 ///     gamma |ra[0], ra[2],| rb[2];
+///     gamma ra, |rb[0], rb[2],|;
 /// );
-/// let r = b.merge(vec![ra, rb]);
+/// let r = b.merge(vec![ra, rb])?;
+///
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Example with inline ranges:
+/// ```
+/// use qip::*;
+/// # fn main() -> Result<(), CircuitError> {
+///
+/// let n = 3;
+/// let mut b = OpBuilder::new();
+/// let ra = b.register(n)?;
+/// let rb = b.register(n)?;
+///
+/// let gamma = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+///     let rb = rs.pop().unwrap();
+///     let ra = rs.pop().unwrap();
+///     let (ra, rb) = b.cnot(ra, rb);
+///     Ok(vec![ra, rb])
+/// };
+///
+/// // Gamma |ra[0] ra[1]>|ra[2]>
+/// let (ra, rb) = program!(&mut b, ra, rb;
+///     gamma ra[0..2], ra[2];
+/// );
+/// let r = b.merge(vec![ra, rb])?;
 ///
 /// # Ok(())
 /// # }
@@ -233,28 +358,28 @@ macro_rules! program {
         let tmp_indices = $name.indices.clone();
         let tmp_name: Vec<Option<Register>> = $builder.split_all($name).into_iter().map(|q| Some(q)).collect();
         let $name = $reg_vec.len();
-        $reg_vec.push((tmp_name, tmp_indices));
+        $reg_vec.push((tmp_name, tmp_indices, stringify!($name)));
     };
     (@splitter($builder:expr, $reg_vec:ident) $name:ident, $($tail:tt)*) => {
-        program!(@splitter($builder, $reg_vec) $name; $($tail)*)
-        program!(@splitter($builder, $reg_vec) $($tail)*)
+        program!(@splitter($builder, $reg_vec) $name; $($tail)*);
+        program!(@splitter($builder, $reg_vec) $($tail)*);
     };
 
     (@joiner($builder:expr, $reg_vec:ident) $name:ident; $($tail:tt)*) => {
         let $name: Vec<Register> = $reg_vec.pop().unwrap().0.into_iter().map(|q| q.unwrap()).collect();
-        let $name: Register = $builder.merge($name)
+        let $name: Register = $builder.merge($name)?;
     };
     (@joiner($builder:expr, $reg_vec:ident) $name:ident, $($tail:tt)*) => {
-        program!(@joiner($builder, $reg_vec) $name; $($tail)*)
-        program!(@joiner($builder, $reg_vec) $($tail)*)
+        program!(@joiner($builder, $reg_vec) $name; $($tail)*);
+        program!(@joiner($builder, $reg_vec) $($tail)*);
     };
 
     // like program_acc for parenthesis
     // no indices
     // closing with semicolon (no indices)
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident, $group_vec:ident) $name:ident;| $($tail:tt)*) => {
+    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident, $group_vec:ident) $name:ident,|; $($tail:tt)*) => {
         let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name].0.len()).collect();
-        program!(@program_acc($builder, $reg_vec, $func, $args, $group_vec) $name tmp_all_indices;| $($tail)*)
+        program!(@program_acc($builder, $reg_vec, $func, $args, $group_vec) $name tmp_all_indices,|; $($tail)*)
     };
     // closing with comma (no indices)
     (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident, $group_vec:ident) $name:ident,| $($tail:tt)*) => {
@@ -269,43 +394,30 @@ macro_rules! program {
     //opening (must be with comma) (no indices)
     (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) |$name:ident, $($tail:tt)*) => {
         let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name].0.len()).collect();
-        program!(@program_acc($builder, $reg_vec, $func, $args, $group_vec) |$name tmp_all_indices, $($tail)*)
+        program!(@program_acc($builder, $reg_vec, $func, $args) |$name tmp_all_indices, $($tail)*)
     };
     // with indices
     // closing with semicolon
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident, $group_vec:ident) $name:ident $indices:expr;| $($tail:tt)*) => {
-        let mut tmp_acc: Vec<Register> = vec![];
-        for indx in &$indices {
-            tmp_acc.push($reg_vec[$name].0[*indx].take().unwrap());
-        }
-        let tmp_r = $builder.merge(tmp_acc);
-        $group_vec.push(tmp_r);
-        let tmp_r = $builder.merge($group_vec);
+    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident, $group_vec:ident) $name:ident $indices:expr,|; $($tail:tt)*) => {
+        program!(@extract_to_args($builder, $reg_vec, $group_vec) $name $indices);
+
+        let tmp_r = $builder.merge($group_vec)?;
         $args.push(tmp_r);
 
         program!(@program_execute($builder, $reg_vec, $func, $args))
     };
     // closing with comma
     (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident, $group_vec:ident) $name:ident $indices:expr,| $($tail:tt)*) => {
-        let mut tmp_acc: Vec<Register> = vec![];
-        for indx in &$indices {
-            tmp_acc.push($reg_vec[$name].0[*indx].take().unwrap());
-        }
-        let tmp_r = $builder.merge(tmp_acc);
-        $group_vec.push(tmp_r);
-        let tmp_r = $builder.merge($group_vec);
+        program!(@extract_to_args($builder, $reg_vec, $group_vec) $name $indices);
+
+        let tmp_r = $builder.merge($group_vec)?;
         $args.push(tmp_r);
 
         program!(@program_acc($builder, $reg_vec, $func, $args) $($tail)*)
     };
     // accumulating
     (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident, $group_vec:ident) $name:ident $indices:expr, $($tail:tt)*) => {
-        let mut tmp_acc: Vec<Register> = vec![];
-        for indx in &$indices {
-            tmp_acc.push($reg_vec[$name].0[*indx].take().unwrap());
-        }
-        let tmp_r = $builder.merge(tmp_acc);
-        $group_vec.push(tmp_r);
+        program!(@extract_to_args($builder, $reg_vec, $group_vec) $name $indices);
         program!(@program_acc($builder, $reg_vec, $func, $args, $group_vec) $($tail)*)
     };
     //opening (must be with comma)
@@ -326,23 +438,25 @@ macro_rules! program {
     };
     // Extract the indices from each register and add to the vector of args to be passed to func.
     (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) $name:ident $indices:expr, $($tail:tt)*) => {
-        let mut tmp_acc: Vec<Register> = vec![];
-        for indx in &$indices {
-            tmp_acc.push($reg_vec[$name].0[*indx].take().unwrap());
-        }
-        let tmp_r = $builder.merge(tmp_acc);
-        $args.push(tmp_r);
-
+        program!(@extract_to_args($builder, $reg_vec, $args) $name $indices);
         program!(@program_acc($builder, $reg_vec, $func, $args) $($tail)*)
     };
     (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) $name:ident $indices:expr;) => {
-        let mut tmp_acc: Vec < Register > = vec ! [];
-        for indx in & $ indices {
-        tmp_acc.push( $ reg_vec[ $ name].0[ * indx].take().unwrap());
-        }
-        let tmp_r = $ builder.merge(tmp_acc);
-        $args.push(tmp_r);
+        program!(@extract_to_args($builder, $reg_vec, $args) $name $indices);
         program!(@program_execute($builder, $reg_vec, $func, $args))
+    };
+    (@extract_to_args($builder:expr, $reg_vec:ident, $args:ident) $name:ident $indices:expr) => {
+        let mut tmp_acc: Vec<Register> = vec![];
+        for indx in &$indices {
+             let tmp_indx_iter: QubitIndices = indx.into();
+             for indx in tmp_indx_iter.get_indices() {
+                 tmp_acc.push($reg_vec[$name].0[indx].take().unwrap());
+             }
+        }
+        if tmp_acc.len() > 0 {
+            let tmp_r = $builder.merge(tmp_acc)?;
+            $args.push(tmp_r);
+        }
     };
 
     (@program_execute($builder:expr, $reg_vec:ident, $func:expr, $args:ident)) => {
@@ -357,7 +471,7 @@ macro_rules! program {
             let tmp_indices = tmp_register.indices.clone();
             let tmp_registers = $builder.split_all(tmp_register);
             for (tmp_register, tmp_index) in tmp_registers.into_iter().zip(tmp_indices.into_iter()) {
-                for (tmp_reg_holes, tmp_reg_hole_indices) in $reg_vec.iter_mut() {
+                for (tmp_reg_holes, tmp_reg_hole_indices, _) in $reg_vec.iter_mut() {
                     let found = tmp_reg_hole_indices.iter()
                         .position(|hole_indx| *hole_indx == tmp_index);
                     if let Some(found) = found {
@@ -366,6 +480,17 @@ macro_rules! program {
                     }
                 }
             }
+        }
+        // Now check for abandoned qubits
+        for (tmp_regs, tmp_indices, tmp_name) in $reg_vec.iter_mut() {
+            tmp_regs.iter().zip(tmp_indices.iter()).enumerate().try_for_each(|(indx, (opt_reg, reg_indx))| {
+                if opt_reg.is_none() {
+                    let func_name = stringify!($func);
+                    CircuitError::make_err(format!("Could not retrieve {}[{}] (absolute index {}). It was not returned from call to {}.", tmp_name, indx, reg_indx, func_name))
+                } else {
+                    Ok(())
+                }
+            })?;
         }
     };
 
@@ -392,7 +517,7 @@ macro_rules! program {
     ($builder:expr, $($tail:tt)*) => {
         {
             // First reassign each name to a vec index
-            let mut register_vec: Vec<(Vec<Option<Register>>, Vec<u64>)> = vec![];
+            let mut register_vec: Vec<(Vec<Option<Register>>, Vec<u64>, &str)> = vec![];
             program!(@splitter($builder, register_vec) $($tail)*);
 
             program!(@skip_to_program($builder, register_vec) $($tail)*);
@@ -418,8 +543,8 @@ pub fn epr_pair(b: &mut OpBuilder, n: u64) -> (Register, Register) {
     all_rs.extend(b.split_all(rs));
 
     let back_rs = all_rs.split_off(n as usize);
-    let ra = b.merge(all_rs);
-    let rb = b.merge(back_rs);
+    let ra = b.merge(all_rs).unwrap();
+    let rb = b.merge(back_rs).unwrap();
 
     (ra, rb)
 }
@@ -435,7 +560,8 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let r = b.register(3)?;
         let r_indices = r.indices.clone();
-        let r = work_on(&mut b, r, &[0], |b, qs| Ok(qs))?;
+        let r = work_on(&mut b, r, &[0], |_b, qs| Ok(qs))?;
+        run_debug(&r)?;
 
         assert_eq!(r_indices, r.indices);
         Ok(())
@@ -449,8 +575,9 @@ mod common_circuit_tests {
         let r = b.register(n)?;
         let r = register_expr!(&mut b, r[0]; |b, r| {
             let r = b.not(r);
-            Ok((r))
+            Ok(r)
         })?;
+        run_debug(&r)?;
 
         // Compare to expected value
         let macro_circuit = make_circuit_matrix::<f64>(n, &r, true);
@@ -459,6 +586,7 @@ mod common_circuit_tests {
         let (t_r, r) = b.split(r, &[0])?;
         let t_r = b.not(t_r);
         let r = b.merge_with_indices(r, vec![t_r], &[0])?;
+        run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
         Ok(())
@@ -475,7 +603,8 @@ mod common_circuit_tests {
             let rb = b.not(rb);
             Ok((ra, rb))
         })?;
-        let r = b.merge(vec![ra, rb]);
+        let r = b.merge(vec![ra, rb])?;
+        run_debug(&r)?;
 
         // Compare to expected value
         let macro_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
@@ -485,7 +614,8 @@ mod common_circuit_tests {
         let (t_rb, rb) = b.split(rb, &[1])?;
         let t_rb = b.not(t_rb);
         let rb = b.merge_with_indices(rb, vec![t_rb], &[1])?;
-        let r = b.merge(vec![ra, rb]);
+        let r = b.merge(vec![ra, rb])?;
+        run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
         Ok(())
@@ -502,7 +632,8 @@ mod common_circuit_tests {
             let rb = b.not(rb);
             Ok((ra, rb))
         })?;
-        let r = b.merge(vec![ra, rb]);
+        let r = b.merge(vec![ra, rb])?;
+        run_debug(&r)?;
 
         // Compare to expected value
         let macro_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
@@ -510,7 +641,8 @@ mod common_circuit_tests {
         let ra = b.register(n)?;
         let rb = b.register(n)?;
         let rb = b.not(rb);
-        let r = b.merge(vec![ra, rb]);
+        let r = b.merge(vec![ra, rb])?;
+        run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
         Ok(())
@@ -535,9 +667,9 @@ mod common_circuit_tests {
             cnot ra, rb[2];
             cnot ra[0], rb;
         );
-        let r = b.merge(vec![ra, rb]);
+        let r = b.merge(vec![ra, rb])?;
 
-        run_debug(&r);
+        run_debug(&r)?;
 
         // Compare to expected value
         let macro_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
@@ -550,8 +682,8 @@ mod common_circuit_tests {
         let (r, ra) = b.split(ra, &[0])?;
         let (r, rb) = b.cnot(r, rb);
         let ra = b.merge_with_indices(ra, vec![r], &[0])?;
-        let r = b.merge(vec![ra, rb]);
-        run_debug(&r);
+        let r = b.merge(vec![ra, rb])?;
+        run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
         Ok(())
@@ -576,7 +708,7 @@ mod common_circuit_tests {
             cnot r[0], r[1];
         );
 
-        run_debug(&r);
+        run_debug(&r)?;
 
         // Compare to expected value
         let macro_circuit = make_circuit_matrix::<f64>(n, &r, true);
@@ -585,8 +717,8 @@ mod common_circuit_tests {
         let (r1, r2) = b.split(r, &[0])?;
         let (r2, r3) = b.split(r2, &[0])?;
         let (r1, r2) = b.cnot(r1, r2);
-        let r = b.merge(vec![r1, r2, r3]);
-        run_debug(&r);
+        let r = b.merge(vec![r1, r2, r3])?;
+        run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
         Ok(())
@@ -610,9 +742,9 @@ mod common_circuit_tests {
         let (ra, rb) = program!(&mut b, ra, rb;
             cnot |ra[0], ra[2],| rb[2];
         );
-        let r = b.merge(vec![ra, rb]);
+        let r = b.merge(vec![ra, rb])?;
 
-        run_debug(&r);
+        run_debug(&r)?;
 
         // Compare to expected value
         let macro_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
@@ -625,9 +757,42 @@ mod common_circuit_tests {
         let ra_sides = b.split_all(ra_side);
         let ra = b.merge_with_indices(ra_mid, ra_sides, &[0, 2])?;
         let rb = b.merge_with_indices(rb, vec![r], &[2])?;
-        let r = b.merge(vec![ra, rb]);
-        run_debug(&r);
+        let r = b.merge(vec![ra, rb])?;
+        run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
+        assert_eq!(macro_circuit, basic_circuit);
+        Ok(())
+    }
+
+    #[test]
+    fn test_program_macro_inline_range() -> Result<(), CircuitError> {
+        let n = 3;
+
+        let mut b = OpBuilder::new();
+        let r = b.register(n)?;
+
+        let cnot = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+            let rb = rs.pop().unwrap();
+            let ra = rs.pop().unwrap();
+            let (ra, rb) = b.cnot(ra, rb);
+            Ok(vec![ra, rb])
+        };
+
+        let r = program!(&mut b, r;
+            cnot r[0..2], r[2];
+        );
+
+        run_debug(&r)?;
+
+        // Compare to expected value
+        let macro_circuit = make_circuit_matrix::<f64>(n, &r, true);
+        let mut b = OpBuilder::new();
+        let r = b.register(n)?;
+        let (r1, r2) = b.split(r, &[2])?;
+        let (r2, r1) = b.cnot(r2, r1);
+        let r = b.merge(vec![r1, r2])?;
+        run_debug(&r)?;
+        let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
         Ok(())
     }
