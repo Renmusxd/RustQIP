@@ -82,7 +82,7 @@ fn and_temp(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Reg
         } else {
             let (ra, rb, rc) = program!(b, ra, rb, rc;
                 flip ra, |rb, rc,|;
-                flip ra[0 .. ra.n()-2], rc;
+                flip ra[0 .. ((ra.n() - 2) as usize)], rc;
             );
             Ok(vec![ra, rb, rc])
         }

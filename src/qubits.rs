@@ -21,12 +21,12 @@ pub struct Register {
     /// The set of indices (qubits) represented by this Register.
     pub indices: Vec<u64>,
     /// The parent(s) of this Register (prior in time in the quantum circuit).
-    pub parent: Option<Parent>,
+    pub(crate) parent: Option<Parent>,
     /// Additional dependencies for this Register (such as if it relies on the classical
     /// measurements of other Register).
-    pub deps: Option<Vec<Rc<Register>>>,
+    pub(crate) deps: Option<Vec<Rc<Register>>>,
     /// The unique ID of this Register.
-    pub id: u64,
+    pub(crate) id: u64,
 }
 
 impl Register {
@@ -57,8 +57,7 @@ impl Register {
         modifier: Option<StateModifier>,
     ) -> Result<Register, CircuitError> {
         if registers.len() == 0 {
-            panic!("Merging zero indices.");
-//            CircuitError::make_str_err("Cannot merge zero registers.")
+            CircuitError::make_str_err("Cannot merge zero registers.")
         } else {
             let all_indices = registers
                 .iter()

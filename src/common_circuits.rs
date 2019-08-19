@@ -251,6 +251,34 @@ impl From<&usize> for QubitIndices {
     }
 }
 
+/// A struct which wraps the metadata for a Register, this is so that expressions which reference
+/// the register can still be used inside the program! macro.
+#[derive(Debug)]
+pub struct RegisterDataWrapper {
+    /// Indices of the register
+    pub indices: Vec<u64>,
+    /// Number of qubits in the register
+    pub n: u64,
+    /// Index of the register as arg to program!
+    pub(crate) index: usize,
+}
+
+impl RegisterDataWrapper {
+    /// Make a new RegisterDataWrapper for a register (with given index)
+    pub fn new(r: &Register, index: usize) -> Self {
+        Self {
+            indices: r.indices.clone(),
+            n: r.n(),
+            index
+        }
+    }
+
+    /// Number of qubits in the register
+    pub fn n(&self) -> u64 {
+        self.n
+    }
+}
+
 /// A helper macro for applying functions to specific qubits in registers.
 ///
 /// The macro takes an expression which yields `&mut dyn UnitaryBuilder`, a list of registers, then
@@ -345,6 +373,32 @@ impl From<&usize> for QubitIndices {
 /// # Ok(())
 /// # }
 /// ```
+///
+/// Example with inline control:
+/// ```
+/// use qip::*;
+/// # fn main() -> Result<(), CircuitError> {
+///
+/// let n = 3;
+/// let mut b = OpBuilder::new();
+/// let ra = b.register(n)?;
+/// let rb = b.register(n)?;
+///
+/// let gamma = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+///     let ra = rs.pop().unwrap();
+///     let ra = b.not(ra);
+///     Ok(vec![ra])
+/// };
+///
+/// // |ra[0] ra[1]> control Gamma |rb[2]>
+/// let (ra, rb) = program!(&mut b, ra, rb;
+///     control gamma ra[0..2], rb[2];
+/// );
+/// let r = b.merge(vec![ra, rb])?;
+///
+/// # Ok(())
+/// # }
+/// ```
 #[macro_export]
 macro_rules! program {
     (@name_tuple ($($body:tt)*) <- $name:ident; $($tail:tt)*) => {
@@ -356,8 +410,9 @@ macro_rules! program {
 
     (@splitter($builder:expr, $reg_vec:ident) $name:ident; $($tail:tt)*) => {
         let tmp_indices = $name.indices.clone();
+        let tmp_register_wrapper = RegisterDataWrapper::new(&$name, $reg_vec.len());
         let tmp_name: Vec<Option<Register>> = $builder.split_all($name).into_iter().map(|q| Some(q)).collect();
-        let $name = $reg_vec.len();
+        let $name = tmp_register_wrapper;
         $reg_vec.push((tmp_name, tmp_indices, stringify!($name)));
     };
     (@splitter($builder:expr, $reg_vec:ident) $name:ident, $($tail:tt)*) => {
@@ -374,83 +429,84 @@ macro_rules! program {
         program!(@joiner($builder, $reg_vec) $($tail)*);
     };
 
-    // like program_acc for parenthesis
+    // like args_acc for groups
     // no indices
     // closing with semicolon (no indices)
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident, $group_vec:ident) $name:ident,|; $($tail:tt)*) => {
-        let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name].0.len()).collect();
-        program!(@program_acc($builder, $reg_vec, $func, $args, $group_vec) $name tmp_all_indices,|; $($tail)*)
+    (@args_acc($builder:expr, $reg_vec:ident, $args:ident, $group_vec:ident) $name:ident,|; $($tail:tt)*) => {
+        let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name.index].0.len()).collect();
+        program!(@args_acc($builder, $reg_vec, $args, $group_vec) $name tmp_all_indices,|; $($tail)*)
     };
     // closing with comma (no indices)
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident, $group_vec:ident) $name:ident,| $($tail:tt)*) => {
-        let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name].0.len()).collect();
-        program!(@program_acc($builder, $reg_vec, $func, $args, $group_vec) $name tmp_all_indices,| $($tail)*)
+    (@args_acc($builder:expr, $reg_vec:ident, $args:ident, $group_vec:ident) $name:ident,| $($tail:tt)*) => {
+        let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name.index].0.len()).collect();
+        program!(@args_acc($builder, $reg_vec, $args, $group_vec) $name tmp_all_indices,| $($tail)*)
     };
     // accumulating (no indices)
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident, $group_vec:ident) $name:ident, $($tail:tt)*) => {
-        let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name].0.len()).collect();
-        program!(@program_acc($builder, $reg_vec, $func, $args, $group_vec) $name tmp_all_indices, $($tail)*)
+    (@args_acc($builder:expr, $reg_vec:ident, $args:ident, $group_vec:ident) $name:ident, $($tail:tt)*) => {
+        let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name.index].0.len()).collect();
+        program!(@args_acc($builder, $reg_vec, $args, $group_vec) $name tmp_all_indices, $($tail)*)
     };
     //opening (must be with comma) (no indices)
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) |$name:ident, $($tail:tt)*) => {
-        let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name].0.len()).collect();
-        program!(@program_acc($builder, $reg_vec, $func, $args) |$name tmp_all_indices, $($tail)*)
+    (@args_acc($builder:expr, $reg_vec:ident, $args:ident) |$name:ident, $($tail:tt)*) => {
+        let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name.index].0.len()).collect();
+        program!(@args_acc($builder, $reg_vec, $args) |$name tmp_all_indices, $($tail)*)
     };
     // with indices
     // closing with semicolon
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident, $group_vec:ident) $name:ident $indices:expr,|; $($tail:tt)*) => {
+    (@args_acc($builder:expr, $reg_vec:ident, $args:ident, $group_vec:ident) $name:ident $indices:expr,|; $($tail:tt)*) => {
         program!(@extract_to_args($builder, $reg_vec, $group_vec) $name $indices);
 
         let tmp_r = $builder.merge($group_vec)?;
         $args.push(tmp_r);
-
-        program!(@program_execute($builder, $reg_vec, $func, $args))
     };
     // closing with comma
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident, $group_vec:ident) $name:ident $indices:expr,| $($tail:tt)*) => {
+    (@args_acc($builder:expr, $reg_vec:ident, $args:ident, $group_vec:ident) $name:ident $indices:expr,| $($tail:tt)*) => {
         program!(@extract_to_args($builder, $reg_vec, $group_vec) $name $indices);
 
         let tmp_r = $builder.merge($group_vec)?;
         $args.push(tmp_r);
 
-        program!(@program_acc($builder, $reg_vec, $func, $args) $($tail)*)
+        program!(@args_acc($builder, $reg_vec, $args) $($tail)*)
     };
     // accumulating
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident, $group_vec:ident) $name:ident $indices:expr, $($tail:tt)*) => {
+    (@args_acc($builder:expr, $reg_vec:ident, $args:ident, $group_vec:ident) $name:ident $indices:expr, $($tail:tt)*) => {
         program!(@extract_to_args($builder, $reg_vec, $group_vec) $name $indices);
-        program!(@program_acc($builder, $reg_vec, $func, $args, $group_vec) $($tail)*)
+        program!(@args_acc($builder, $reg_vec, $args, $group_vec) $($tail)*)
     };
     //opening (must be with comma)
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) |$name:ident $indices:expr, $($tail:tt)*) => {
+    (@args_acc($builder:expr, $reg_vec:ident, $args:ident) |$name:ident $indices:expr, $($tail:tt)*) => {
         let mut tmp_grouped_args: Vec<Register> = vec![];
-        program!(@program_acc($builder, $reg_vec, $func, $args, tmp_grouped_args) $name $indices, $($tail)*)
+        program!(@args_acc($builder, $reg_vec, $args, tmp_grouped_args) $name $indices, $($tail)*)
     };
-
-
-    // @program_acc for cases where no indices are provided
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) $name:ident; $($tail:tt)*) => {
-        let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name].0.len()).collect();
-        program!(@program_acc($builder, $reg_vec, $func, $args) $name tmp_all_indices; $($tail)*)
+    // @args_acc for cases where no indices are provided
+    (@args_acc($builder:expr, $reg_vec:ident, $args:ident) $name:ident; $($tail:tt)*) => {
+        let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name.index].0.len()).collect();
+        program!(@args_acc($builder, $reg_vec, $args) $name tmp_all_indices; $($tail)*)
     };
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) $name:ident, $($tail:tt)*) => {
-        let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name].0.len()).collect();
-        program!(@program_acc($builder, $reg_vec, $func, $args) $name tmp_all_indices, $($tail)*)
+    (@args_acc($builder:expr, $reg_vec:ident, $args:ident) $name:ident, $($tail:tt)*) => {
+        let tmp_all_indices: Vec<_> = (0 .. $reg_vec[$name.index].0.len()).collect();
+        program!(@args_acc($builder, $reg_vec, $args) $name tmp_all_indices, $($tail)*)
     };
     // Extract the indices from each register and add to the vector of args to be passed to func.
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) $name:ident $indices:expr, $($tail:tt)*) => {
+    (@args_acc($builder:expr, $reg_vec:ident, $args:ident) $name:ident $indices:expr, $($tail:tt)*) => {
         program!(@extract_to_args($builder, $reg_vec, $args) $name $indices);
-        program!(@program_acc($builder, $reg_vec, $func, $args) $($tail)*)
+        program!(@args_acc($builder, $reg_vec, $args) $($tail)*)
     };
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) $name:ident $indices:expr;) => {
+    (@args_acc($builder:expr, $reg_vec:ident, $args:ident) $name:ident $indices:expr;) => {
         program!(@extract_to_args($builder, $reg_vec, $args) $name $indices);
-        program!(@program_execute($builder, $reg_vec, $func, $args))
     };
+    (@args_acc($builder:expr, $reg_vec:ident, $args:ident) $name:ident $indices:expr; $($tail:tt)*) => {
+        program!(@args_acc($builder, $reg_vec, $args) $name $indices;);
+    };
+
     (@extract_to_args($builder:expr, $reg_vec:ident, $args:ident) $name:ident $indices:expr) => {
         let mut tmp_acc: Vec<Register> = vec![];
         for indx in &$indices {
              let tmp_indx_iter: QubitIndices = indx.into();
              for indx in tmp_indx_iter.get_indices() {
-                 tmp_acc.push($reg_vec[$name].0[indx].take().unwrap());
+                 let tmp_reg = $reg_vec[$name.index].0[indx].take();
+                 let tmp_reg = tmp_reg.ok_or_else(|| CircuitError::new(format!("Failed to fetch {}[{}]. May have already been used on this line.", $reg_vec[$name.index].2, indx)))?;
+                 tmp_acc.push(tmp_reg);
              }
         }
         if tmp_acc.len() > 0 {
@@ -459,15 +515,14 @@ macro_rules! program {
         }
     };
 
-    (@program_execute($builder:expr, $reg_vec:ident, $func:expr, $args:ident)) => {
-        let tmp_results: Vec<Register> = $func($builder, $args)?;
+    (@replace_registers($builder:expr, $reg_vec:ident, $to_replace:ident)) => {
         // This is not efficient, but the best I can do without fancy custom structs or, more
         // importantly, the ability to make identifiers in macros.
         // Luckily it's O(n^2) where n can't be too big because the actual circuit simulation is
         // O(2^n).
         // for each register in output, for each qubit in the register, find the correct spot in the
         // input register arrays where it originally came from.
-        for tmp_register in tmp_results.into_iter() {
+        for tmp_register in $to_replace.into_iter() {
             let tmp_indices = tmp_register.indices.clone();
             let tmp_registers = $builder.split_all(tmp_register);
             for (tmp_register, tmp_index) in tmp_registers.into_iter().zip(tmp_indices.into_iter()) {
@@ -494,15 +549,76 @@ macro_rules! program {
         }
     };
 
-    (@program_acc($builder:expr, $reg_vec:ident, $func:expr, $args:ident) $name:ident $indices:expr; $($tail:tt)*) => {
-        program!(@program_acc($builder, $reg_vec, $func, $args) $name $indices;);
-        program!(@program($builder, $reg_vec) $($tail)*);
+    // "End of program list" group
+    (@skip_to_next_program($builder:expr, $reg_vec:ident) $name:ident;) => {};
+    (@skip_to_next_program($builder:expr, $reg_vec:ident) $name:ident $indices:expr;) => {};
+    (@skip_to_next_program($builder:expr, $reg_vec:ident) $name:ident,|;) => {};
+    (@skip_to_next_program($builder:expr, $reg_vec:ident) $name:ident $indices:expr,|;) => {};
+
+    // "Start of register group" group
+    (@skip_to_next_program($builder:expr, $reg_vec:ident) |$name:ident, $($tail:tt)*) => {
+        program!(@skip_to_next_program($builder, $reg_vec) $($tail)*)
+    };
+    (@skip_to_next_program($builder:expr, $reg_vec:ident) |$name:ident $indices:expr, $($tail:tt)*) => {
+        program!(@skip_to_next_program($builder, $reg_vec) $($tail)*)
     };
 
+    // The ",|;" group must be above the ",| (tail)" group
+    (@skip_to_next_program($builder:expr, $reg_vec:ident) $name:ident,|; $($tail:tt)*) => {
+        program!(@program($builder, $reg_vec) $($tail)*)
+    };
+    (@skip_to_next_program($builder:expr, $reg_vec:ident) $name:ident $indices:expr,|; $($tail:tt)*) => {
+        program!(@program($builder, $reg_vec) $($tail)*)
+    };
+
+    // ",| (tail)" group
+    (@skip_to_next_program($builder:expr, $reg_vec:ident) $name:ident,| $($tail:tt)*) => {
+        program!(@skip_to_next_program($builder, $reg_vec) $($tail)*)
+    };
+    (@skip_to_next_program($builder:expr, $reg_vec:ident) $name:ident $indices:expr,| $($tail:tt)*) => {
+        program!(@skip_to_next_program($builder, $reg_vec) $($tail)*)
+    };
+
+    // Execute next program
+    (@skip_to_next_program($builder:expr, $reg_vec:ident) $name:ident; $($tail:tt)*) => {
+        program!(@program($builder, $reg_vec) $($tail)*)
+    };
+    (@skip_to_next_program($builder:expr, $reg_vec:ident) $name:ident $indices:expr; $($tail:tt)*) => {
+        program!(@program($builder, $reg_vec) $($tail)*)
+    };
+    // Trivial skips.
+    (@skip_to_next_program($builder:expr, $reg_vec:ident) $name:ident, $($tail:tt)*) => {
+        program!(@skip_to_next_program($builder, $reg_vec) $($tail)*)
+    };
+    (@skip_to_next_program($builder:expr, $reg_vec:ident) $name:ident $indices:expr, $($tail:tt)*) => {
+        program!(@skip_to_next_program($builder, $reg_vec) $($tail)*)
+    };
+
+    // Start parsing a program of the form "control function [register <indices>, ...];"
+    (@program($builder:expr, $reg_vec:ident) control $func:ident $($tail:tt)*) => {
+        // Get all args
+        let mut tmp_acc_vec: Vec<Register> = vec![];
+        program!(@args_acc($builder, $reg_vec, tmp_acc_vec) $($tail)*);
+        let tmp_cr = tmp_acc_vec.remove(0);
+        let mut tmp_cb = $builder.with_condition(tmp_cr);
+
+        // Now all the args are in acc_vec
+        let mut tmp_results: Vec<Register> = $func(&mut tmp_cb, tmp_acc_vec)?;
+        let tmp_cr = tmp_cb.release_register();
+        tmp_results.push(tmp_cr);
+        program!(@replace_registers($builder, $reg_vec, tmp_results));
+        program!(@skip_to_next_program($builder, $reg_vec) $($tail)*);
+    };
     // Start parsing a program of the form "function [register <indices>, ...];"
     (@program($builder:expr, $reg_vec:ident) $func:ident $($tail:tt)*) => {
+        // Get all args
         let mut acc_vec: Vec<Register> = vec![];
-        program!(@program_acc($builder, $reg_vec, $func, acc_vec) $($tail)*)
+        program!(@args_acc($builder, $reg_vec, acc_vec) $($tail)*);
+
+        // Now all the args are in acc_vec
+        let tmp_results: Vec<Register> = $func($builder, acc_vec)?;
+        program!(@replace_registers($builder, $reg_vec, tmp_results));
+        program!(@skip_to_next_program($builder, $reg_vec) $($tail)*);
     };
 
     // Skip past the register list and start running programs.
@@ -739,9 +855,14 @@ mod common_circuit_tests {
             Ok(vec![ra, rb])
         };
 
+//        trace_macros!(true);
+
         let (ra, rb) = program!(&mut b, ra, rb;
             cnot |ra[0], ra[2],| rb[2];
         );
+
+//        trace_macros!(false);
+
         let r = b.merge(vec![ra, rb])?;
 
         run_debug(&r)?;
@@ -780,6 +901,38 @@ mod common_circuit_tests {
 
         let r = program!(&mut b, r;
             cnot r[0..2], r[2];
+        );
+
+        run_debug(&r)?;
+
+        // Compare to expected value
+        let macro_circuit = make_circuit_matrix::<f64>(n, &r, true);
+        let mut b = OpBuilder::new();
+        let r = b.register(n)?;
+        let (r1, r2) = b.split(r, &[2])?;
+        let (r2, r1) = b.cnot(r2, r1);
+        let r = b.merge(vec![r1, r2])?;
+        run_debug(&r)?;
+        let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
+        assert_eq!(macro_circuit, basic_circuit);
+        Ok(())
+    }
+
+    #[test]
+    fn test_program_macro_inline_control() -> Result<(), CircuitError> {
+        let n = 3;
+
+        let mut b = OpBuilder::new();
+        let r = b.register(n)?;
+
+        let not = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+            let ra = rs.pop().unwrap();
+            let ra = b.not(ra);
+            Ok(vec![ra])
+        };
+
+        let r = program!(&mut b, r;
+            control not r[0..2], r[2];
         );
 
         run_debug(&r)?;
