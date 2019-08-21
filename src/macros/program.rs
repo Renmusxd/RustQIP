@@ -35,7 +35,7 @@ use std::iter::Iterator;
 /// let (ra, rb) = program!(&mut b, ra, rb;
 ///     gamma ra, rb[2];
 ///     gamma ra[0], rb;
-/// );
+/// )?;
 /// let r = b.merge(vec![ra, rb])?;
 ///
 /// # Ok(())
@@ -64,7 +64,7 @@ use std::iter::Iterator;
 /// let (ra, rb) = program!(&mut b, ra, rb;
 ///     gamma |ra[0], ra[2],| rb[2];
 ///     gamma ra, |rb[0], rb[2],|;
-/// );
+/// )?;
 /// let r = b.merge(vec![ra, rb])?;
 ///
 /// # Ok(())
@@ -91,7 +91,7 @@ use std::iter::Iterator;
 /// // Gamma |ra[0] ra[1]>|ra[2]>
 /// let (ra, rb) = program!(&mut b, ra, rb;
 ///     gamma ra[0..2], ra[2];
-/// );
+/// )?;
 /// let r = b.merge(vec![ra, rb])?;
 ///
 /// # Ok(())
@@ -117,7 +117,7 @@ use std::iter::Iterator;
 /// // |ra[0] ra[1]> control Gamma |rb[2]>
 /// let (ra, rb) = program!(&mut b, ra, rb;
 ///     control gamma ra[0..2], rb[2];
-/// );
+/// )?;
 /// let r = b.merge(vec![ra, rb])?;
 ///
 /// # Ok(())
@@ -388,14 +388,17 @@ macro_rules! program {
     // (builder, register_1, ...; programs; ...)
     ($builder:expr, $($tail:tt)*) => {
         {
-            // First reassign each name to a vec index
-            let mut register_vec: Vec<(Vec<Option<Register>>, Vec<u64>, &str)> = vec![];
-            program!(@splitter($builder, register_vec) $($tail)*);
+            let tmp_f = |b: &mut dyn UnitaryBuilder| {
+                // First reassign each name to a vec index
+                let mut register_vec: Vec<(Vec<Option<Register>>, Vec<u64>, &str)> = vec![];
+                program!(@splitter(b, register_vec) $($tail)*);
 
-            program!(@skip_to_program($builder, register_vec) $($tail)*);
+                program!(@skip_to_program(b, register_vec) $($tail)*);
 
-            program!(@joiner($builder, register_vec) $($tail)*);
-            program!(@name_tuple () <- $($tail)*)
+                program!(@joiner(b, register_vec) $($tail)*);
+                Ok(program!(@name_tuple () <- $($tail)*))
+            };
+            tmp_f($builder)
         }
     };
 }
@@ -598,7 +601,7 @@ mod common_circuit_tests {
         let (ra, rb) = program!(&mut b, ra, rb;
             cnot ra, rb[2];
             cnot ra[0], rb;
-        );
+        )?;
         let r = b.merge(vec![ra, rb])?;
 
         run_debug(&r)?;
@@ -638,7 +641,7 @@ mod common_circuit_tests {
 
         let r = program!(&mut b, r;
             cnot r[0], r[1];
-        );
+        )?;
 
         run_debug(&r)?;
 
@@ -671,13 +674,9 @@ mod common_circuit_tests {
             Ok(vec![ra, rb])
         };
 
-//        trace_macros!(true);
-
         let (ra, rb) = program!(&mut b, ra, rb;
             cnot |ra[0], ra[2],| rb[2];
-        );
-
-//        trace_macros!(false);
+        )?;
 
         let r = b.merge(vec![ra, rb])?;
 
@@ -717,7 +716,7 @@ mod common_circuit_tests {
 
         let r = program!(&mut b, r;
             cnot r[0..2], r[2];
-        );
+        )?;
 
         run_debug(&r)?;
 
@@ -749,7 +748,7 @@ mod common_circuit_tests {
 
         let r = program!(&mut b, r;
             control not r[0..2], r[2];
-        );
+        )?;
 
         run_debug(&r)?;
 
@@ -781,7 +780,7 @@ mod common_circuit_tests {
 
         let r = program!(&mut b, r;
             control(00) not r[0..2], r[2];
-        );
+        )?;
 
         run_debug(&r)?;
 
