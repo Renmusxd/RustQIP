@@ -56,7 +56,7 @@ impl Register {
         registers: Vec<Register>,
         modifier: Option<StateModifier>,
     ) -> Result<Register, CircuitError> {
-        if registers.len() == 0 {
+        if registers.is_empty() {
             CircuitError::make_str_err("Cannot merge zero registers.")
         } else {
             let all_indices = registers
@@ -96,7 +96,7 @@ impl Register {
             CircuitError::make_str_err("Must provide indices to split.")
         } else {
             let selected_indices: Vec<u64> = indices
-                .into_iter()
+                .iter()
                 .map(|i| r.indices[(*i) as usize])
                 .collect();
             Self::split_absolute(ida, idb, r, &selected_indices)

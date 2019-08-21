@@ -1,8 +1,6 @@
 use crate::errors::CircuitError;
 /// Common circuits for general usage.
 use crate::{OpBuilder, Register, UnitaryBuilder};
-use std::ops::{Range, RangeInclusive};
-use std::iter::Iterator;
 
 /// Extract a set of indices, provide them to a function, then reinsert them in the correct order.
 pub fn work_on<F>(

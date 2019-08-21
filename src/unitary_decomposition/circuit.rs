@@ -58,10 +58,10 @@ fn convert_decomp_ops_to_circuit(
                 (rs, row)
             }
             DecompOp::Rotation {
-                from_bits: _,
                 to_bits,
                 bit_index,
                 theta,
+                ..
             } => {
                 let new_mask = *to_bits;
                 let rs = negate_difference(b, rs, mask, new_mask);
@@ -75,9 +75,9 @@ fn convert_decomp_ops_to_circuit(
                 (rs, new_mask)
             }
             DecompOp::Negate {
-                row_a: _,
                 row_b,
                 bit_index,
+                ..
             } => {
                 let new_mask = *row_b;
                 let rs = negate_difference(b, rs, mask, new_mask);

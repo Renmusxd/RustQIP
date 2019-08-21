@@ -1,6 +1,5 @@
 /// Common circuits for general usage.
-use crate::errors::CircuitError;
-use crate::{OpBuilder, Register, UnitaryBuilder};
+use crate::Register;
 use std::ops::{Range, RangeInclusive};
 use std::iter::Iterator;
 
@@ -579,7 +578,7 @@ impl RegisterDataWrapper {
 mod common_circuit_tests {
     use super::*;
     use crate::pipeline::make_circuit_matrix;
-    use crate::run_debug;
+    use crate::{run_debug, CircuitError, OpBuilder, UnitaryBuilder, Register};
 
     #[test]
     fn test_program_macro() -> Result<(), CircuitError> {

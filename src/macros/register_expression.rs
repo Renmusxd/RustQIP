@@ -1,5 +1,3 @@
-use crate::{UnitaryBuilder, CircuitError, Register};
-
 /// A helper macro for applying functions to specific qubits in registers.
 ///
 /// Macro takes a &builder, a comma seperated list of qubits and optionally expressions which can be
@@ -137,7 +135,7 @@ macro_rules! register_expr {
 mod common_circuit_tests {
     use super::*;
     use crate::pipeline::make_circuit_matrix;
-    use crate::{run_debug, OpBuilder};
+    use crate::{run_debug, OpBuilder, UnitaryBuilder, CircuitError, Register};
 
     #[test]
     fn test_work_on_macro() -> Result<(), CircuitError> {

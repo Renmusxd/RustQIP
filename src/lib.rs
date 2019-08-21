@@ -78,8 +78,6 @@ pub use self::qubits::Register;
 pub use self::types::Precision;
 pub use num::Complex;
 
-/// Common circuits for boolean logic.
-pub mod boolean_circuits;
 /// Opbuilder and such
 pub mod builders;
 /// Common circuits for general usage.

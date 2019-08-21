@@ -218,7 +218,7 @@ pub trait UnitaryBuilder {
             CircuitError::make_str_err("Indices must leave at least one index.")
         } else {
             let selected_indices: Vec<u64> = indices
-                .into_iter()
+                .iter()
                 .map(|i| r.indices[(*i) as usize])
                 .collect();
             self.split_absolute(r, &selected_indices)
@@ -239,7 +239,7 @@ pub trait UnitaryBuilder {
         index_groups: &[Vec<u64>],
     ) -> Result<(Vec<Register>, Option<Register>), CircuitError> {
         index_groups
-            .into_iter()
+            .iter()
             .try_fold((vec![], Some(r)), |(mut rs, r), indices| {
                 if let Some(r) = r {
                     if indices.eq(&r.indices) {
@@ -367,12 +367,10 @@ pub trait UnitaryBuilder {
                         panic!("This shouldn't happen");
                     }
                 }
-            } else {
-                if let Some(into_r) = into_qs.pop() {
+            } else if let Some(into_r) = into_qs.pop() {
                     acc.push(into_r)
-                } else {
-                    panic!("This shouldn't happen");
-                }
+            } else {
+                panic!("This shouldn't happen");
             }
             acc
         });
@@ -535,7 +533,7 @@ impl OpBuilder {
         let n = n as usize;
         let mut acquired_qubits = if n < op_vec.len() {
             op_vec.split_off(n)
-        } else if op_vec.len() > 0 {
+        } else if !op_vec.is_empty() {
             op_vec.split_off(op_vec.len() - 1)
         } else {
             vec![]
@@ -546,12 +544,12 @@ impl OpBuilder {
             let remaining = n - acquired_qubits.len();
             let additional_registers = if remaining < other_vec.len() {
                 other_vec.split_off(remaining)
-            } else if op_vec.len() > 0 {
+            } else if !op_vec.is_empty() {
                 other_vec.split_off(other_vec.len() - 1)
             } else {
                 vec![]
             };
-            if additional_registers.len() > 0 {
+            if !additional_registers.is_empty() {
                 let r = self.merge(additional_registers).unwrap();
                 let r = self.not(r);
                 let rs = self.split_all(r);
