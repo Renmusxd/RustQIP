@@ -69,12 +69,7 @@
 //! # The Program Macro
 //! While the borrow checker included in rust is a wonderful tool for checking that our registers
 //! are behaving, it can be cumbersome. For that reason I also include a macro which provides an
-//! API similar to that which you would see in quantum computing textbooks:
-//!
-//! Here's an example of a small circuit where two groups of Registers are swapped conditioned on a
-//! third. This circuit is very small, only three operations plus a measurement, so the boilerplate
-//! can look quite large in compairison, but that setup provides the ability to construct circuits
-//! easily and safely when they do get larger.
+//! API similar to that which you would see in quantum computing textbooks
 //! ```
 //! use qip::*;
 //! # fn main() -> Result<(), CircuitError> {
