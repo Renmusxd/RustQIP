@@ -321,18 +321,7 @@ macro_rules! program {
 
     // Start parsing a program of the form "control function [register <indices>, ...];"
     (@program($builder:expr, $reg_vec:ident) control $func:ident $($tail:tt)*) => {
-        // Get all args
-        let mut tmp_acc_vec: Vec<Register> = vec![];
-        program!(@args_acc($builder, $reg_vec, tmp_acc_vec) $($tail)*);
-        let tmp_cr = tmp_acc_vec.remove(0);
-        let mut tmp_cb = $builder.with_condition(tmp_cr);
-
-        // Now all the args are in acc_vec
-        let mut tmp_results: Vec<Register> = $func(&mut tmp_cb, tmp_acc_vec)?;
-        let tmp_cr = tmp_cb.release_register();
-        tmp_results.push(tmp_cr);
-        program!(@replace_registers($builder, $reg_vec, tmp_results));
-        program!(@skip_to_next_program($builder, $reg_vec) $($tail)*);
+        program!(@program($builder, $reg_vec) control(!0) $func $($tail)*)
     };
     // Start parsing a program of the form "control function [register <indices>, ...];"
     (@program($builder:expr, $reg_vec:ident) control($control:expr) $func:ident $($tail:tt)*) => {
@@ -342,15 +331,15 @@ macro_rules! program {
         let tmp_cr = tmp_acc_vec.remove(0);
 
         let tmp_crs = $builder.split_all(tmp_cr);
-        let (_, tmp_crs,_) = tmp_crs.into_iter().fold(($builder, vec![], $control), |(b, mut qubit_acc, mask_acc), qubit| {
+        let (tmp_crs,_) = tmp_crs.into_iter().fold((vec![], $control), |(mut qubit_acc, mask_acc), qubit| {
             let lowest = mask_acc & 1;
             let qubit = if lowest == 0 {
-                b.not(qubit)
+                $builder.not(qubit)
             } else {
                 qubit
             };
             qubit_acc.push(qubit);
-            (b, qubit_acc, mask_acc >> 1)
+            (qubit_acc, mask_acc >> 1)
         });
         let tmp_cr = $builder.merge(tmp_crs)?;
 
@@ -361,15 +350,15 @@ macro_rules! program {
         let tmp_cr = tmp_cb.release_register();
 
         let tmp_crs = $builder.split_all(tmp_cr);
-        let (_, tmp_crs,_) = tmp_crs.into_iter().fold(($builder, vec![], $control), |(b, mut qubit_acc, mask_acc), qubit| {
+        let (tmp_crs,_) = tmp_crs.into_iter().fold((vec![], $control), |(mut qubit_acc, mask_acc), qubit| {
             let lowest = mask_acc & 1;
             let qubit = if lowest == 0 {
-                b.not(qubit)
+                $builder.not(qubit)
             } else {
                 qubit
             };
             qubit_acc.push(qubit);
-            (b, qubit_acc, mask_acc >> 1)
+            (qubit_acc, mask_acc >> 1)
         });
         let tmp_cr = $builder.merge(tmp_crs)?;
 
@@ -411,7 +400,6 @@ macro_rules! program {
         }
     };
 }
-
 
 /// Helper struct for macro iteration with usize, ranges, or vecs
 #[derive(Debug)]
