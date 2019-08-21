@@ -66,6 +66,49 @@
 //! # }
 //! ```
 //!
+//! # The Program Macro
+//! While the borrow checker included in rust is a wonderful tool for checking that our registers
+//! are behaving, it can be cumbersome. For that reason I also include a macro which provides an
+//! API similar to that which you would see in quantum computing textbooks:
+//!
+//! # Example (CSWAP)
+//! Here's an example of a small circuit where two groups of Registers are swapped conditioned on a
+//! third. This circuit is very small, only three operations plus a measurement, so the boilerplate
+//! can look quite large in compairison, but that setup provides the ability to construct circuits
+//! easily and safely when they do get larger.
+//! ```
+//! use qip::*;
+//! # fn main() -> Result<(), CircuitError> {
+//!
+//! let n = 3;
+//! let mut b = OpBuilder::new();
+//! let ra = b.register(n)?;
+//! let rb = b.register(n)?;
+//!
+//! let gamma = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+//!     let rb = rs.pop().unwrap();
+//!     let ra = rs.pop().unwrap();
+//!     let (ra, rb) = b.cnot(ra, rb);
+//!     Ok(vec![ra, rb])
+//! };
+//!
+//! let (ra, rb) = program!(&mut b, ra, rb;
+//!     // Applies gamma to |ra[0] ra[1]>|ra[2]>
+//!     gamma ra[0..2], ra[2];
+//!     // Applies gamma to |ra[0] rb[0]>|ra[2]>
+//!     gamma |ra[0], rb[0],| ra[2];
+//!     // Applies gamma to |ra[0]>|rb[0] ra[2]>
+//!     gamma ra[0], |rb[0], ra[2],|;
+//!     // Applies gamma to |ra[0] ra[1]>|ra[2]> if rb == |111>
+//!     control gamma rb, ra[0..2], ra[2];
+//!     // Applies gamma to |ra[0] ra[1]>|ra[2]> if rb == |110> (meaning rb[0] == |0>)
+//!     control(0b110) gamma rb, ra[0..2], ra[2];
+//! );
+//! let r = b.merge(vec![ra, rb])?;
+//!
+//! # Ok(())
+//! # }
+//! ```
 
 pub use self::builders::*;
 pub use self::common_circuits::*;
