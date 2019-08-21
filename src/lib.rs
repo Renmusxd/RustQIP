@@ -70,6 +70,7 @@
 pub use self::builders::*;
 pub use self::common_circuits::*;
 pub use self::errors::*;
+pub use self::macros::*;
 pub use self::pipeline::{run_local, run_local_with_init, run_with_state, QuantumState};
 pub use self::pipeline_debug::run_debug;
 pub use self::qubit_chainer::{chain, chain_tuple, chain_vec};
@@ -82,10 +83,12 @@ pub mod boolean_circuits;
 /// Opbuilder and such
 pub mod builders;
 /// Common circuits for general usage.
-#[macro_use]
 pub mod common_circuits;
 /// Error values for the library.
 pub mod errors;
+/// Macros for general ease of use.
+#[macro_use]
+pub mod macros;
 /// Code for building pipelines.
 pub mod pipeline;
 /// Tools for displaying pipelines.

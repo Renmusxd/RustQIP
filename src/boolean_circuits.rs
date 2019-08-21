@@ -10,6 +10,21 @@ pub fn and(b: &mut OpBuilder, ra: Register) -> Result<(Register, Register), Circ
             let (ra, qb) = b.cnot(ra, qb);
             Ok((ra, qb))
         },
+        m if m == 3 => {
+            let qt = b.get_temp_register(1, false);
+            let m = m as usize;
+            let k = m >> 1;
+            let j = if m % 2 == 0 { k - 2 } else { k - 1 };
+            dbg!(m, k, j);
+            let (ra, qb, qt) = program!(b, ra, qb, qt;
+                and_temp ra[1 ..= 2], qt, ra[0];
+                and_temp |qt, ra[0],| qb;
+                and_temp ra[1 ..= 2], qt, ra[0];
+            );
+
+            b.return_temp_register(qt, false);
+            Ok((ra, qb))
+        },
         m => {
             let qt = b.get_temp_register(1, false);
 
@@ -18,13 +33,39 @@ pub fn and(b: &mut OpBuilder, ra: Register) -> Result<(Register, Register), Circ
             let j = if m % 2 == 0 { k - 2 } else { k - 1 };
             dbg!(m, k, j);
             let (ra, qb, qt) = program!(b, ra, qb, qt;
-                and_temp ra[k .. m-1], qt, ra[0 .. j];
-                and_temp |qt, ra[0 .. j],| qb, ra[k .. k+j-2];
-                and_temp ra[k .. m-1], qt, ra[0 .. j];
+                and_temp ra[k ..= m-1], qt, ra[0 ..= j];
+                and_temp |qt, ra[0 ..= j],| qb, ra[k ..= k+j-2];
+                and_temp ra[k ..= m-1], qt, ra[0 ..= j];
             );
 
             b.return_temp_register(qt, false);
             Ok((ra, qb))
+        }
+    }
+}
+
+fn and_temp(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Register>, CircuitError> {
+    if rs.len() == 2 {
+        let rb = rs.pop().ok_or(CircuitError::new("Error unwrapping rb".to_string()))?;
+        let ra = rs.pop().ok_or(CircuitError::new("Error unwrapping ra".to_string()))?;
+        let (ra, rb) = b.cnot(ra, rb);
+        Ok(vec![ra, rb])
+    } else {
+        let rc = rs.pop().ok_or(CircuitError::new("Error unwrapping rc".to_string()))?;
+        let rb = rs.pop().ok_or(CircuitError::new("Error unwrapping rb".to_string()))?;
+        let ra = rs.pop().ok_or(CircuitError::new("Error unwrapping ra".to_string()))?;
+
+        let m = ra.n();
+        if rc.n() + 2 != m {
+            CircuitError::make_err(format!("With m={} expected rc.n={}-2 but found {}", m, m, rc.n()))
+        } else if rb.n() != 1 {
+            CircuitError::make_err(format!("Expected rb.n=1 found {}", rb.n()))
+        } else {
+            let (ra, rb, rc) = program!(b, ra, rb, rc;
+                flip ra, |rb, rc,|;
+                flip ra[0 .. ((ra.n() - 2) as usize)], rc;
+            );
+            Ok(vec![ra, rb, rc])
         }
     }
 }
@@ -60,33 +101,6 @@ fn flip(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Registe
         }
     }?;
     Ok(vec![ra,rb])
-}
-
-
-fn and_temp(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Register>, CircuitError> {
-    if rs.len() == 2 {
-        let rb = rs.pop().ok_or(CircuitError::new("Error unwrapping rb".to_string()))?;
-        let ra = rs.pop().ok_or(CircuitError::new("Error unwrapping ra".to_string()))?;
-        let (ra, rb) = b.cnot(ra, rb);
-        Ok(vec![ra, rb])
-    } else {
-        let rc = rs.pop().ok_or(CircuitError::new("Error unwrapping rc".to_string()))?;
-        let rb = rs.pop().ok_or(CircuitError::new("Error unwrapping rb".to_string()))?;
-        let ra = rs.pop().ok_or(CircuitError::new("Error unwrapping ra".to_string()))?;
-
-        let m = ra.n();
-        if rc.n() + 2 != m {
-            CircuitError::make_err(format!("With m={} expected rc.n={} but found {}", m, m-2, rc.n()))
-        } else if rb.n() != 1 {
-            CircuitError::make_err(format!("Expected rb.n=1 found {}", rb.n()))
-        } else {
-            let (ra, rb, rc) = program!(b, ra, rb, rc;
-                flip ra, |rb, rc,|;
-                flip ra[0 .. ((ra.n() - 2) as usize)], rc;
-            );
-            Ok(vec![ra, rb, rc])
-        }
-    }
 }
 
 #[cfg(test)]
