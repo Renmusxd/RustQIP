@@ -95,10 +95,8 @@ impl Register {
         } else if indices.is_empty() {
             CircuitError::make_str_err("Must provide indices to split.")
         } else {
-            let selected_indices: Vec<u64> = indices
-                .iter()
-                .map(|i| r.indices[(*i) as usize])
-                .collect();
+            let selected_indices: Vec<u64> =
+                indices.iter().map(|i| r.indices[(*i) as usize]).collect();
             Self::split_absolute(ida, idb, r, &selected_indices)
         }
     }

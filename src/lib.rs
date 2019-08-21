@@ -97,7 +97,7 @@
 //!     control gamma rb, ra[0..2], ra[2];
 //!     // Applies gamma to |ra[0] ra[1]>|ra[2]> if rb == |110> (meaning rb[0] == |0>)
 //!     control(0b110) gamma rb, ra[0..2], ra[2];
-//! );
+//! )?;
 //! let r = b.merge(vec![ra, rb])?;
 //!
 //! # Ok(())

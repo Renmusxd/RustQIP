@@ -1,7 +1,7 @@
 /// Common circuits for general usage.
 use crate::Register;
-use std::ops::{Range, RangeInclusive};
 use std::iter::Iterator;
+use std::ops::{Range, RangeInclusive};
 
 /// A helper macro for applying functions to specific qubits in registers.
 ///
@@ -35,7 +35,7 @@ use std::iter::Iterator;
 /// let (ra, rb) = program!(&mut b, ra, rb;
 ///     gamma ra, rb[2];
 ///     gamma ra[0], rb;
-/// );
+/// )?;
 /// let r = b.merge(vec![ra, rb])?;
 ///
 /// # Ok(())
@@ -64,7 +64,7 @@ use std::iter::Iterator;
 /// let (ra, rb) = program!(&mut b, ra, rb;
 ///     gamma |ra[0], ra[2],| rb[2];
 ///     gamma ra, |rb[0], rb[2],|;
-/// );
+/// )?;
 /// let r = b.merge(vec![ra, rb])?;
 ///
 /// # Ok(())
@@ -91,7 +91,7 @@ use std::iter::Iterator;
 /// // Gamma |ra[0] ra[1]>|ra[2]>
 /// let (ra, rb) = program!(&mut b, ra, rb;
 ///     gamma ra[0..2], ra[2];
-/// );
+/// )?;
 /// let r = b.merge(vec![ra, rb])?;
 ///
 /// # Ok(())
@@ -117,7 +117,7 @@ use std::iter::Iterator;
 /// // |ra[0] ra[1]> control Gamma |rb[2]>
 /// let (ra, rb) = program!(&mut b, ra, rb;
 ///     control gamma ra[0..2], rb[2];
-/// );
+/// )?;
 /// let r = b.merge(vec![ra, rb])?;
 ///
 /// # Ok(())
@@ -388,14 +388,17 @@ macro_rules! program {
     // (builder, register_1, ...; programs; ...)
     ($builder:expr, $($tail:tt)*) => {
         {
-            // First reassign each name to a vec index
-            let mut register_vec: Vec<(Vec<Option<Register>>, Vec<u64>, &str)> = vec![];
-            program!(@splitter($builder, register_vec) $($tail)*);
+            let tmp_f = |b: &mut dyn UnitaryBuilder| {
+                // First reassign each name to a vec index
+                let mut register_vec: Vec<(Vec<Option<Register>>, Vec<u64>, &str)> = vec![];
+                program!(@splitter(b, register_vec) $($tail)*);
 
-            program!(@skip_to_program($builder, register_vec) $($tail)*);
+                program!(@skip_to_program(b, register_vec) $($tail)*);
 
-            program!(@joiner($builder, register_vec) $($tail)*);
-            program!(@name_tuple () <- $($tail)*)
+                program!(@joiner(b, register_vec) $($tail)*);
+                Ok(program!(@name_tuple () <- $($tail)*))
+            };
+            tmp_f($builder)
         }
     };
 }
@@ -403,7 +406,7 @@ macro_rules! program {
 /// Helper struct for macro iteration with usize, ranges, or vecs
 #[derive(Debug)]
 pub struct QubitIndices {
-    indices: Vec<usize>
+    indices: Vec<usize>,
 }
 
 impl QubitIndices {
@@ -445,27 +448,27 @@ impl From<Range<i32>> for QubitIndices {
 }
 impl From<&Range<usize>> for QubitIndices {
     fn from(indices: &Range<usize>) -> Self {
-        (indices.start .. indices.end).into()
+        (indices.start..indices.end).into()
     }
 }
 impl From<&Range<u64>> for QubitIndices {
     fn from(indices: &Range<u64>) -> Self {
-        (indices.start .. indices.end).into()
+        (indices.start..indices.end).into()
     }
 }
 impl From<&Range<u32>> for QubitIndices {
     fn from(indices: &Range<u32>) -> Self {
-        (indices.start .. indices.end).into()
+        (indices.start..indices.end).into()
     }
 }
 impl From<&Range<i64>> for QubitIndices {
     fn from(indices: &Range<i64>) -> Self {
-        (indices.start .. indices.end).into()
+        (indices.start..indices.end).into()
     }
 }
 impl From<&Range<i32>> for QubitIndices {
     fn from(indices: &Range<i32>) -> Self {
-        (indices.start .. indices.end).into()
+        (indices.start..indices.end).into()
     }
 }
 impl From<RangeInclusive<usize>> for QubitIndices {
@@ -500,43 +503,41 @@ impl From<RangeInclusive<i32>> for QubitIndices {
 }
 impl From<&RangeInclusive<usize>> for QubitIndices {
     fn from(indices: &RangeInclusive<usize>) -> Self {
-        (*indices.start() .. *indices.end()+1).into()
+        (*indices.start()..*indices.end() + 1).into()
     }
 }
 impl From<&RangeInclusive<u64>> for QubitIndices {
     fn from(indices: &RangeInclusive<u64>) -> Self {
-        (*indices.start() .. *indices.end()+1).into()
+        (*indices.start()..*indices.end() + 1).into()
     }
 }
 impl From<&RangeInclusive<u32>> for QubitIndices {
     fn from(indices: &RangeInclusive<u32>) -> Self {
-        (*indices.start() .. *indices.end()+1).into()
+        (*indices.start()..*indices.end() + 1).into()
     }
 }
 impl From<&RangeInclusive<i64>> for QubitIndices {
     fn from(indices: &RangeInclusive<i64>) -> Self {
-        (*indices.start() .. *indices.end()+1).into()
+        (*indices.start()..*indices.end() + 1).into()
     }
 }
 impl From<&RangeInclusive<i32>> for QubitIndices {
     fn from(indices: &RangeInclusive<i32>) -> Self {
-        (*indices.start() .. *indices.end()+1).into()
+        (*indices.start()..*indices.end() + 1).into()
     }
 }
 
 impl<T: Into<usize>> From<Vec<T>> for QubitIndices {
     fn from(indices: Vec<T>) -> Self {
         let indices: Vec<usize> = indices.into_iter().map(|indx| indx.into()).collect();
-        Self {
-            indices
-        }
+        Self { indices }
     }
 }
 
 impl From<usize> for QubitIndices {
     fn from(item: usize) -> Self {
         Self {
-            indices: vec![item]
+            indices: vec![item],
         }
     }
 }
@@ -564,7 +565,7 @@ impl RegisterDataWrapper {
         Self {
             indices: r.indices.clone(),
             n: r.n(),
-            index
+            index,
         }
     }
 
@@ -578,7 +579,7 @@ impl RegisterDataWrapper {
 mod common_circuit_tests {
     use super::*;
     use crate::pipeline::make_circuit_matrix;
-    use crate::{run_debug, CircuitError, OpBuilder, UnitaryBuilder, Register};
+    use crate::{run_debug, CircuitError, OpBuilder, Register, UnitaryBuilder};
 
     #[test]
     fn test_program_macro() -> Result<(), CircuitError> {
@@ -588,7 +589,9 @@ mod common_circuit_tests {
         let ra = b.register(n)?;
         let rb = b.register(n)?;
 
-        let cnot = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+        let cnot = |b: &mut dyn UnitaryBuilder,
+                    mut rs: Vec<Register>|
+         -> Result<Vec<Register>, CircuitError> {
             let rb = rs.pop().unwrap();
             let ra = rs.pop().unwrap();
             let (ra, rb) = b.cnot(ra, rb);
@@ -598,13 +601,13 @@ mod common_circuit_tests {
         let (ra, rb) = program!(&mut b, ra, rb;
             cnot ra, rb[2];
             cnot ra[0], rb;
-        );
+        )?;
         let r = b.merge(vec![ra, rb])?;
 
         run_debug(&r)?;
 
         // Compare to expected value
-        let macro_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
+        let macro_circuit = make_circuit_matrix::<f64>(2 * n, &r, true);
         let mut b = OpBuilder::new();
         let ra = b.register(n)?;
         let rb = b.register(n)?;
@@ -616,11 +619,10 @@ mod common_circuit_tests {
         let ra = b.merge_with_indices(ra, vec![r], &[0])?;
         let r = b.merge(vec![ra, rb])?;
         run_debug(&r)?;
-        let basic_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
+        let basic_circuit = make_circuit_matrix::<f64>(2 * n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
         Ok(())
     }
-
 
     #[test]
     fn test_program_macro_reuse() -> Result<(), CircuitError> {
@@ -629,7 +631,9 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let r = b.register(n)?;
 
-        let cnot = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+        let cnot = |b: &mut dyn UnitaryBuilder,
+                    mut rs: Vec<Register>|
+         -> Result<Vec<Register>, CircuitError> {
             let rb = rs.pop().unwrap();
             let ra = rs.pop().unwrap();
             let (ra, rb) = b.cnot(ra, rb);
@@ -638,7 +642,7 @@ mod common_circuit_tests {
 
         let r = program!(&mut b, r;
             cnot r[0], r[1];
-        );
+        )?;
 
         run_debug(&r)?;
 
@@ -664,27 +668,25 @@ mod common_circuit_tests {
         let ra = b.register(n)?;
         let rb = b.register(n)?;
 
-        let cnot = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+        let cnot = |b: &mut dyn UnitaryBuilder,
+                    mut rs: Vec<Register>|
+         -> Result<Vec<Register>, CircuitError> {
             let rb = rs.pop().unwrap();
             let ra = rs.pop().unwrap();
             let (ra, rb) = b.cnot(ra, rb);
             Ok(vec![ra, rb])
         };
 
-//        trace_macros!(true);
-
         let (ra, rb) = program!(&mut b, ra, rb;
             cnot |ra[0], ra[2],| rb[2];
-        );
-
-//        trace_macros!(false);
+        )?;
 
         let r = b.merge(vec![ra, rb])?;
 
         run_debug(&r)?;
 
         // Compare to expected value
-        let macro_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
+        let macro_circuit = make_circuit_matrix::<f64>(2 * n, &r, true);
         let mut b = OpBuilder::new();
         let ra = b.register(n)?;
         let rb = b.register(n)?;
@@ -696,7 +698,7 @@ mod common_circuit_tests {
         let rb = b.merge_with_indices(rb, vec![r], &[2])?;
         let r = b.merge(vec![ra, rb])?;
         run_debug(&r)?;
-        let basic_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
+        let basic_circuit = make_circuit_matrix::<f64>(2 * n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
         Ok(())
     }
@@ -708,7 +710,9 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let r = b.register(n)?;
 
-        let cnot = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+        let cnot = |b: &mut dyn UnitaryBuilder,
+                    mut rs: Vec<Register>|
+         -> Result<Vec<Register>, CircuitError> {
             let rb = rs.pop().unwrap();
             let ra = rs.pop().unwrap();
             let (ra, rb) = b.cnot(ra, rb);
@@ -717,7 +721,7 @@ mod common_circuit_tests {
 
         let r = program!(&mut b, r;
             cnot r[0..2], r[2];
-        );
+        )?;
 
         run_debug(&r)?;
 
@@ -741,7 +745,9 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let r = b.register(n)?;
 
-        let not = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+        let not = |b: &mut dyn UnitaryBuilder,
+                   mut rs: Vec<Register>|
+         -> Result<Vec<Register>, CircuitError> {
             let ra = rs.pop().unwrap();
             let ra = b.not(ra);
             Ok(vec![ra])
@@ -749,7 +755,7 @@ mod common_circuit_tests {
 
         let r = program!(&mut b, r;
             control not r[0..2], r[2];
-        );
+        )?;
 
         run_debug(&r)?;
 
@@ -773,7 +779,9 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let r = b.register(n)?;
 
-        let not = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+        let not = |b: &mut dyn UnitaryBuilder,
+                   mut rs: Vec<Register>|
+         -> Result<Vec<Register>, CircuitError> {
             let ra = rs.pop().unwrap();
             let ra = b.not(ra);
             Ok(vec![ra])
@@ -781,7 +789,7 @@ mod common_circuit_tests {
 
         let r = program!(&mut b, r;
             control(00) not r[0..2], r[2];
-        );
+        )?;
 
         run_debug(&r)?;
 

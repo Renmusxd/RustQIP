@@ -192,7 +192,7 @@ pub trait UnitaryBuilder {
     ) -> Result<(Register, Register), CircuitError>;
 
     /// Merge the Registers in `rs` into a single Register.
-    fn merge(&mut self, rs: Vec<Register>) -> Result<Register,CircuitError> {
+    fn merge(&mut self, rs: Vec<Register>) -> Result<Register, CircuitError> {
         self.merge_with_op(rs, None)
     }
 
@@ -217,10 +217,8 @@ pub trait UnitaryBuilder {
         } else if indices.len() == r.indices.len() {
             CircuitError::make_str_err("Indices must leave at least one index.")
         } else {
-            let selected_indices: Vec<u64> = indices
-                .iter()
-                .map(|i| r.indices[(*i) as usize])
-                .collect();
+            let selected_indices: Vec<u64> =
+                indices.iter().map(|i| r.indices[(*i) as usize]).collect();
             self.split_absolute(r, &selected_indices)
         }
     }
@@ -311,7 +309,7 @@ pub trait UnitaryBuilder {
         &mut self,
         rs: Vec<Register>,
         named_operator: Option<(String, UnitaryOp)>,
-    ) -> Result<Register,CircuitError>;
+    ) -> Result<Register, CircuitError>;
 
     /// Merge a set of qubits into a given qubit at a set of indices
     fn merge_with_indices(
@@ -368,7 +366,7 @@ pub trait UnitaryBuilder {
                     }
                 }
             } else if let Some(into_r) = into_qs.pop() {
-                    acc.push(into_r)
+                acc.push(into_r)
             } else {
                 panic!("This shouldn't happen");
             }
@@ -1067,8 +1065,8 @@ pub fn condition<F, RS, OS>(
     rs: RS,
     f: F,
 ) -> (Register, OS)
-    where
-        F: FnOnce(&mut dyn UnitaryBuilder, RS) -> OS,
+where
+    F: FnOnce(&mut dyn UnitaryBuilder, RS) -> OS,
 {
     let mut c = b.with_condition(cr);
     let rs = f(&mut c, rs);
@@ -1083,8 +1081,8 @@ pub fn try_condition<F, RS, OS>(
     rs: RS,
     f: F,
 ) -> Result<(Register, OS), CircuitError>
-    where
-        F: FnOnce(&mut dyn UnitaryBuilder, RS) -> Result<OS, CircuitError>,
+where
+    F: FnOnce(&mut dyn UnitaryBuilder, RS) -> Result<OS, CircuitError>,
 {
     let mut c = b.with_condition(cr);
     let rs = f(&mut c, rs)?;

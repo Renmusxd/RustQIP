@@ -75,9 +75,7 @@ fn convert_decomp_ops_to_circuit(
                 (rs, new_mask)
             }
             DecompOp::Negate {
-                row_b,
-                bit_index,
-                ..
+                row_b, bit_index, ..
             } => {
                 let new_mask = *row_b;
                 let rs = negate_difference(b, rs, mask, new_mask);

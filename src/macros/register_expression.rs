@@ -130,12 +130,11 @@ macro_rules! register_expr {
     };
 }
 
-
 #[cfg(test)]
 mod common_circuit_tests {
     use super::*;
     use crate::pipeline::make_circuit_matrix;
-    use crate::{run_debug, OpBuilder, UnitaryBuilder, CircuitError, Register};
+    use crate::{run_debug, CircuitError, OpBuilder, Register, UnitaryBuilder};
 
     #[test]
     fn test_work_on_macro() -> Result<(), CircuitError> {
@@ -177,7 +176,7 @@ mod common_circuit_tests {
         run_debug(&r)?;
 
         // Compare to expected value
-        let macro_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
+        let macro_circuit = make_circuit_matrix::<f64>(2 * n, &r, true);
         let mut b = OpBuilder::new();
         let ra = b.register(n)?;
         let rb = b.register(n)?;
@@ -186,7 +185,7 @@ mod common_circuit_tests {
         let rb = b.merge_with_indices(rb, vec![t_rb], &[1])?;
         let r = b.merge(vec![ra, rb])?;
         run_debug(&r)?;
-        let basic_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
+        let basic_circuit = make_circuit_matrix::<f64>(2 * n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
         Ok(())
     }
@@ -206,14 +205,14 @@ mod common_circuit_tests {
         run_debug(&r)?;
 
         // Compare to expected value
-        let macro_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
+        let macro_circuit = make_circuit_matrix::<f64>(2 * n, &r, true);
         let mut b = OpBuilder::new();
         let ra = b.register(n)?;
         let rb = b.register(n)?;
         let rb = b.not(rb);
         let r = b.merge(vec![ra, rb])?;
         run_debug(&r)?;
-        let basic_circuit = make_circuit_matrix::<f64>(2*n, &r, true);
+        let basic_circuit = make_circuit_matrix::<f64>(2 * n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
         Ok(())
     }

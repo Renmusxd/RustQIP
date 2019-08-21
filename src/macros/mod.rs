@@ -1,5 +1,6 @@
+/// Main mod with program and macros, all reexported.
 #[macro_use]
-mod program;
+pub mod program;
 mod register_expression;
 
 pub use program::*;
