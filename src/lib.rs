@@ -68,7 +68,7 @@
 //!
 //! # The Program Macro
 //! While the borrow checker included in rust is a wonderful tool for checking that our registers
-//! are behaving, it can be cumbersome. For that reason I also include a macro which provides an
+//! are behaving, it can be cumbersome. For that reason qip also includes a macro which provides an
 //! API similar to that which you would see in quantum computing textbooks
 //! ```
 //! use qip::*;
