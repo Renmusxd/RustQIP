@@ -403,6 +403,122 @@ macro_rules! program {
     };
 }
 
+/// Allows the wrapping of a function with signature:
+/// `Fn(&mut dyn UnitaryBuilder, Register, Register, ...) -> (Register, ...)` or
+/// `Fn(&mut dyn UnitaryBuilder, Register, Register, ...) -> Result<(Register, ...), CircuitError>`
+/// to make a new function with signature:
+/// `Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>`
+/// and is therefore compatible with `program!`.
+///
+/// # Example
+/// ```
+/// use qip::*;
+/// # fn main() -> Result<(), CircuitError> {
+///
+/// let n = 3;
+/// let mut b = OpBuilder::new();
+/// let ra = b.register(n)?;
+/// let rb = b.register(n)?;
+///
+/// fn gamma(b: &mut dyn UnitaryBuilder, ra: Register, rb: Register) -> (Register, Register) {
+///     let (ra, rb) = b.cnot(ra, rb);
+///     (ra, rb)
+/// }
+///
+/// wrap_fn!(wrapped_gamma, gamma, ra, rb);
+///
+/// // Gamma |ra>|rb[2]>
+/// // Gamma |ra[0]>|rb>
+/// let (ra, rb) = program!(&mut b, ra, rb;
+///     wrapped_gamma ra, rb[2];
+///     wrapped_gamma ra[0], rb;
+/// )?;
+/// let r = b.merge(vec![ra, rb])?;
+///
+/// # Ok(())
+/// # }
+/// ```
+/// # Example with Result
+/// ```
+/// use qip::*;
+/// # fn main() -> Result<(), CircuitError> {
+///
+/// let n = 3;
+/// let mut b = OpBuilder::new();
+/// let ra = b.register(n)?;
+/// let rb = b.register(n)?;
+///
+/// fn gamma(b: &mut dyn UnitaryBuilder, ra: Register, rb: Register) -> Result<(Register, Register), CircuitError> {
+///     let (ra, rb) = b.cnot(ra, rb);
+///     Ok((ra, rb))
+/// }
+///
+/// wrap_fn!(wrapped_gamma, gamma?, ra, rb);
+///
+/// // Gamma |ra>|rb[2]>
+/// // Gamma |ra[0]>|rb>
+/// let (ra, rb) = program!(&mut b, ra, rb;
+///     wrapped_gamma ra, rb[2];
+///     wrapped_gamma ra[0], rb;
+/// )?;
+/// let r = b.merge(vec![ra, rb])?;
+///
+/// # Ok(())
+/// # }
+/// ```
+#[macro_export]
+macro_rules! wrap_fn {
+    (@names ($($body:tt)*) <- $name:ident) => {
+        ($($body)* $name)
+    };
+    (@names ($($body:tt)*) <- $name:ident, $($tail:tt)*) => {
+        wrap_fn!(@names ($($body)* $name,) <- $($tail)*)
+    };
+    (@invoke($func:ident, $builder:expr) ($($body:tt)*) <- $name:ident) => {
+        $func($builder, $($body)* $name)
+    };
+    (@invoke($func:ident, $builder:expr) ($($body:tt)*) <- $name:ident, $($tail:tt)*) => {
+        wrap_fn!(@invoke($func, $builder) ($($body)* $name,) <- $($tail)*)
+    };
+    (@unwrap_regs($func:ident, $rs:ident) $name:ident) => {
+        let $name = $rs.pop().ok_or_else(|| CircuitError::new(format!("Error unwrapping {} for {}", stringify!($name), stringify!($func))))?;
+    };
+    (@unwrap_regs($func:ident, $rs:ident) $name:ident, $($tail:tt)*) => {
+        wrap_fn!(@unwrap_regs($func, $rs) $($tail)*);
+        let $name = $rs.pop().ok_or_else(|| CircuitError::new(format!("Error unwrapping {} for {}", stringify!($name), stringify!($func))))?;
+    };
+    (@wrap_regs($rs:ident) $name:ident) => {
+        $rs.push($name);
+    };
+    (@wrap_regs($rs:ident) $name:ident, $($tail:tt)*) => {
+        $rs.push($name);
+        wrap_fn!(@wrap_regs($rs) $($tail)*);
+    };
+    ($newfunc:ident, $func:ident, $($tail:tt)*) => {
+        fn $newfunc(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Register>, CircuitError> {
+            wrap_fn!(@unwrap_regs($func, rs) $($tail)*);
+
+            let wrap_fn!(@names () <- $($tail)*) = wrap_fn!(@invoke($func, b) () <- $($tail)*);
+
+            let mut rs: Vec<Register> = vec![];
+            wrap_fn!(@wrap_regs(rs) $($tail)*);
+            Ok(rs)
+        }
+    };
+    ($newfunc:ident, $func:ident?, $($tail:tt)*) => {
+        fn $newfunc(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Register>, CircuitError> {
+            wrap_fn!(@unwrap_regs($func, rs) $($tail)*);
+
+            let wrap_fn!(@names () <- $($tail)*) = wrap_fn!(@invoke($func, b) () <- $($tail)*) ?;
+
+            let mut rs: Vec<Register> = vec![];
+            wrap_fn!(@wrap_regs(rs) $($tail)*);
+            Ok(rs)
+        }
+    };
+}
+
+
 /// Helper struct for macro iteration with usize, ranges, or vecs
 #[derive(Debug)]
 pub struct QubitIndices {
@@ -802,6 +918,72 @@ mod common_circuit_tests {
         let (r2, r1) = b.cnot(r2, r1);
         let r2 = b.not(r2);
         let r = b.merge(vec![r1, r2])?;
+        run_debug(&r)?;
+        let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
+        assert_eq!(macro_circuit, basic_circuit);
+        Ok(())
+    }
+
+    fn simple_fn(b: &mut dyn UnitaryBuilder, ra: Register) -> Register {
+        b.not(ra)
+    }
+
+    #[test]
+    fn wrap_simple_fn() -> Result<(), CircuitError> {
+        let n = 1;
+        wrap_fn!(wrapped_simple_fn, simple_fn, ra);
+
+        let mut b = OpBuilder::new();
+        let r = b.register(n)?;
+
+        let r = program!(&mut b, r;
+            wrapped_simple_fn r;
+        )?;
+
+        run_debug(&r)?;
+        // Compare to expected value
+        let macro_circuit = make_circuit_matrix::<f64>(n, &r, true);
+        let mut b = OpBuilder::new();
+        let r = b.register(n)?;
+        let r = simple_fn(&mut b, r);
+        run_debug(&r)?;
+        let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
+        assert_eq!(macro_circuit, basic_circuit);
+        Ok(())
+    }
+
+
+    fn complex_fn(b: &mut dyn UnitaryBuilder, ra: Register, rb: Register, rc: Register) -> Result<(Register, Register, Register), CircuitError> {
+        let mut cb = b.with_condition(ra);
+        let (rb, rc) = cb.cnot(rb, rc);
+        let ra = cb.release_register();
+        Ok((ra, rb, rc))
+    }
+
+    #[test]
+    fn wrap_complex_fn() -> Result<(), CircuitError> {
+        let n = 1;
+        wrap_fn!(wrapped_complex_fn, complex_fn?, ra, rb, rc);
+
+        let mut b = OpBuilder::new();
+        let ra = b.register(n)?;
+        let rb = b.register(n)?;
+        let rc = b.register(n)?;
+
+        let (ra, rb, rc) = program!(&mut b, ra, rb, rc;
+            wrapped_complex_fn ra, rb, rc;
+        )?;
+        let r = b.merge(vec![ra,rb,rc])?;
+
+        run_debug(&r)?;
+        // Compare to expected value
+        let macro_circuit = make_circuit_matrix::<f64>(n, &r, true);
+        let mut b = OpBuilder::new();
+        let ra = b.register(n)?;
+        let rb = b.register(n)?;
+        let rc = b.register(n)?;
+        let (ra, rb, rc) = complex_fn(&mut b, ra, rb, rc)?;
+        let r = b.merge(vec![ra,rb,rc])?;
         run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
