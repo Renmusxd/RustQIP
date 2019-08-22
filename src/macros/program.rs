@@ -149,8 +149,8 @@ macro_rules! program {
         let $name: Register = $builder.merge($name)?;
     };
     (@joiner($builder:expr, $reg_vec:ident) $name:ident, $($tail:tt)*) => {
-        program!(@joiner($builder, $reg_vec) $name; $($tail)*);
         program!(@joiner($builder, $reg_vec) $($tail)*);
+        program!(@joiner($builder, $reg_vec) $name; $($tail)*);
     };
 
     // like args_acc for groups
@@ -453,13 +453,36 @@ macro_rules! program {
 ///     Ok((ra, rb))
 /// }
 ///
-/// wrap_fn!(wrapped_gamma, gamma?, ra, rb);
+/// wrap_fn!(wrapped_gamma, (gamma), ra, rb);
 ///
 /// // Gamma |ra>|rb[2]>
 /// // Gamma |ra[0]>|rb>
 /// let (ra, rb) = program!(&mut b, ra, rb;
 ///     wrapped_gamma ra, rb[2];
 ///     wrapped_gamma ra[0], rb;
+/// )?;
+/// let r = b.merge(vec![ra, rb])?;
+///
+/// # Ok(())
+/// # }
+/// ```
+///# Example with UnitaryBuilder function
+/// ```
+/// use qip::*;
+/// # fn main() -> Result<(), CircuitError> {
+///
+/// let n = 3;
+/// let mut b = OpBuilder::new();
+/// let ra = b.register(n)?;
+/// let rb = b.register(n)?;
+///
+/// wrap_fn!(cnot, UnitaryBuilder::cnot, ra, rb);
+///
+/// // cnot |ra>|rb[2]>
+/// // cnot |ra[0]>|rb>
+/// let (ra, rb) = program!(&mut b, ra, rb;
+///     cnot ra, rb[2];
+///     cnot ra[0], rb;
 /// )?;
 /// let r = b.merge(vec![ra, rb])?;
 ///
@@ -474,16 +497,16 @@ macro_rules! wrap_fn {
     (@names ($($body:tt)*) <- $name:ident, $($tail:tt)*) => {
         wrap_fn!(@names ($($body)* $name,) <- $($tail)*)
     };
-    (@invoke($func:ident, $builder:expr) ($($body:tt)*) <- $name:ident) => {
+    (@invoke($func:expr, $builder:expr) ($($body:tt)*) <- $name:ident) => {
         $func($builder, $($body)* $name)
     };
-    (@invoke($func:ident, $builder:expr) ($($body:tt)*) <- $name:ident, $($tail:tt)*) => {
+    (@invoke($func:expr, $builder:expr) ($($body:tt)*) <- $name:ident, $($tail:tt)*) => {
         wrap_fn!(@invoke($func, $builder) ($($body)* $name,) <- $($tail)*)
     };
-    (@unwrap_regs($func:ident, $rs:ident) $name:ident) => {
+    (@unwrap_regs($func:expr, $rs:ident) $name:ident) => {
         let $name = $rs.pop().ok_or_else(|| CircuitError::new(format!("Error unwrapping {} for {}", stringify!($name), stringify!($func))))?;
     };
-    (@unwrap_regs($func:ident, $rs:ident) $name:ident, $($tail:tt)*) => {
+    (@unwrap_regs($func:expr, $rs:ident) $name:ident, $($tail:tt)*) => {
         wrap_fn!(@unwrap_regs($func, $rs) $($tail)*);
         let $name = $rs.pop().ok_or_else(|| CircuitError::new(format!("Error unwrapping {} for {}", stringify!($name), stringify!($func))))?;
     };
@@ -494,26 +517,44 @@ macro_rules! wrap_fn {
         $rs.push($name);
         wrap_fn!(@wrap_regs($rs) $($tail)*);
     };
-    ($newfunc:ident, $func:ident, $($tail:tt)*) => {
-        fn $newfunc(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Register>, CircuitError> {
-            wrap_fn!(@unwrap_regs($func, rs) $($tail)*);
-
-            let wrap_fn!(@names () <- $($tail)*) = wrap_fn!(@invoke($func, b) () <- $($tail)*);
-
-            let mut rs: Vec<Register> = vec![];
-            wrap_fn!(@wrap_regs(rs) $($tail)*);
-            Ok(rs)
+    (@result_body($builder:expr, $func:expr, $rs:ident) $($tail:tt)*) => {
+        {
+            wrap_fn!(@unwrap_regs($func, $rs) $($tail)*);
+            let wrap_fn!(@names () <- $($tail)*) = wrap_fn!(@invoke($func, $builder) () <- $($tail)*) ?;
+            let mut $rs: Vec<Register> = vec![];
+            wrap_fn!(@wrap_regs($rs) $($tail)*);
+            Ok($rs)
         }
     };
-    ($newfunc:ident, $func:ident?, $($tail:tt)*) => {
+    (@raw_body($builder:expr, $func:expr, $rs:ident) $($tail:tt)*) => {
+        {
+            wrap_fn!(@unwrap_regs($func, $rs) $($tail)*);
+            let wrap_fn!(@names () <- $($tail)*) = wrap_fn!(@invoke($func, $builder) () <- $($tail)*);
+            let mut $rs: Vec<Register> = vec![];
+            wrap_fn!(@wrap_regs($rs) $($tail)*);
+            Ok($rs)
+        }
+    };
+    (pub $newfunc:ident, ($func:expr), $($tail:tt)*) => {
+        /// Wrapped version of function
+        pub fn $newfunc(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Register>, CircuitError> {
+            wrap_fn!(@result_body(b, $func, rs) $($tail)*)
+        }
+    };
+    (pub $newfunc:ident, $func:expr, $($tail:tt)*) => {
+        /// Wrapped version of function
+        pub fn $newfunc(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Register>, CircuitError> {
+            wrap_fn!(@raw_body(b, $func, rs) $($tail)*)
+        }
+    };
+    ($newfunc:ident, ($func:expr), $($tail:tt)*) => {
         fn $newfunc(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Register>, CircuitError> {
-            wrap_fn!(@unwrap_regs($func, rs) $($tail)*);
-
-            let wrap_fn!(@names () <- $($tail)*) = wrap_fn!(@invoke($func, b) () <- $($tail)*) ?;
-
-            let mut rs: Vec<Register> = vec![];
-            wrap_fn!(@wrap_regs(rs) $($tail)*);
-            Ok(rs)
+            wrap_fn!(@result_body(b, $func, rs) $($tail)*)
+        }
+    };
+    ($newfunc:ident, $func:expr, $($tail:tt)*) => {
+        fn $newfunc(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Register>, CircuitError> {
+            wrap_fn!(@raw_body(b, $func, rs) $($tail)*)
         }
     };
 }
@@ -963,7 +1004,7 @@ mod common_circuit_tests {
     #[test]
     fn wrap_complex_fn() -> Result<(), CircuitError> {
         let n = 1;
-        wrap_fn!(wrapped_complex_fn, complex_fn?, ra, rb, rc);
+        wrap_fn!(wrapped_complex_fn, (complex_fn), ra, rb, rc);
 
         let mut b = OpBuilder::new();
         let ra = b.register(n)?;
@@ -984,6 +1025,34 @@ mod common_circuit_tests {
         let rc = b.register(n)?;
         let (ra, rb, rc) = complex_fn(&mut b, ra, rb, rc)?;
         let r = b.merge(vec![ra,rb,rc])?;
+        run_debug(&r)?;
+        let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
+        assert_eq!(macro_circuit, basic_circuit);
+        Ok(())
+    }
+
+    #[test]
+    fn wrap_unitary_fn() -> Result<(), CircuitError> {
+        let n = 1;
+        wrap_fn!(wrapped_cnot, UnitaryBuilder::cnot, ra, rb);
+
+        let mut b = OpBuilder::new();
+        let ra = b.register(n)?;
+        let rb = b.register(n)?;
+
+        let (ra, rb) = program!(&mut b, ra, rb;
+            wrapped_cnot ra, rb;
+        )?;
+        let r = b.merge(vec![ra,rb])?;
+
+        run_debug(&r)?;
+        // Compare to expected value
+        let macro_circuit = make_circuit_matrix::<f64>(n, &r, true);
+        let mut b = OpBuilder::new();
+        let ra = b.register(n)?;
+        let rb = b.register(n)?;
+        let (ra, rb) = b.cnot(ra, rb);
+        let r = b.merge(vec![ra,rb])?;
         run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
