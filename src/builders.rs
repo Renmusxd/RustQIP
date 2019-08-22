@@ -31,6 +31,9 @@ pub trait UnitaryBuilder {
     /// Build a builder which uses `r` as a condition.
     fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder;
 
+    /// Make a builder who prefixes all names of ops.
+    fn with_name_scope(&mut self, name: &str) -> ScopedNameBuilder;
+
     /// Build a generic matrix op, apply to `r`, if `r` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
     /// size for the number of indices in `r` (mat.len() == 2^(2n)).
@@ -154,26 +157,52 @@ pub trait UnitaryBuilder {
     /// function `f(x) = (indx, theta)`
     fn apply_function(
         &mut self,
+        name: &str,
         r_in: Register,
         r_out: Register,
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<(Register, Register), CircuitError>;
 
     /// A controlled x, using `cr` as control and `r` as input.
-    fn cx(&mut self, cr: Register, r: Register) -> (Register, Register);
+    fn cx(&mut self, cr: Register, r: Register) -> (Register, Register) {
+        let mut b = self.with_condition(cr);
+        let r = b.x(r);
+        let cr = b.release_register();
+        (cr, r)
+    }
     /// A controlled y, using `cr` as control and `r` as input.
-    fn cy(&mut self, cr: Register, r: Register) -> (Register, Register);
+    fn cy(&mut self, cr: Register, r: Register) -> (Register, Register) {
+        let mut b = self.with_condition(cr);
+        let r = b.y(r);
+        let cr = b.release_register();
+        (cr, r)
+    }
     /// A controlled z, using `cr` as control and `r` as input.
-    fn cz(&mut self, cr: Register, r: Register) -> (Register, Register);
+    fn cz(&mut self, cr: Register, r: Register) -> (Register, Register) {
+        let mut b = self.with_condition(cr);
+        let r = b.z(r);
+        let cr = b.release_register();
+        (cr, r)
+    }
     /// A controlled not, using `cr` as control and `r` as input.
-    fn cnot(&mut self, cr: Register, r: Register) -> (Register, Register);
+    fn cnot(&mut self, cr: Register, r: Register) -> (Register, Register) {
+        let mut b = self.with_condition(cr);
+        let r = b.not(r);
+        let cr = b.release_register();
+        (cr, r)
+    }
     /// Swap `ra` and `rb` controlled by `cr`.
     fn cswap(
         &mut self,
         cr: Register,
         ra: Register,
         rb: Register,
-    ) -> Result<(Register, Register, Register), CircuitError>;
+    ) -> Result<(Register, Register, Register), CircuitError> {
+        let mut b = self.with_condition(cr);
+        let (ra, rb) = b.swap(ra, rb)?;
+        let cr = b.release_register();
+        Ok((cr, ra, rb))
+    }
     /// Apply a unitary matrix to the register. If mat is 2x2 then can broadcast to all qubits.
     fn cmat(
         &mut self,
@@ -181,7 +210,12 @@ pub trait UnitaryBuilder {
         cr: Register,
         r: Register,
         mat: Vec<Complex<f64>>,
-    ) -> Result<(Register, Register), CircuitError>;
+    ) -> Result<(Register, Register), CircuitError> {
+        let mut b = self.with_condition(cr);
+        let r = b.mat(name, r, mat)?;
+        let cr = b.release_register();
+        Ok((cr, r))
+    }
     /// Apply a orthonormal matrix to the register. If mat is 2x2 then can broadcast to all qubits.
     fn crealmat(
         &mut self,
@@ -189,7 +223,12 @@ pub trait UnitaryBuilder {
         cr: Register,
         r: Register,
         mat: &[f64],
-    ) -> Result<(Register, Register), CircuitError>;
+    ) -> Result<(Register, Register), CircuitError> {
+        let mut b = self.with_condition(cr);
+        let r = b.real_mat(name, r, mat)?;
+        let cr = b.release_register();
+        Ok((cr, r))
+    }
 
     /// Merge the Registers in `rs` into a single Register.
     fn merge(&mut self, rs: Vec<Register>) -> Result<Register, CircuitError> {
@@ -443,7 +482,7 @@ pub fn apply_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
     r_out: Register,
     f: F,
 ) -> Result<(Register, Register), CircuitError> {
-    b.apply_function(r_in, r_out, Box::new(f))
+    b.apply_function("f", r_in, r_out, Box::new(f))
 }
 
 /// Helper function for Boxing static functions and building sparse mats using the given
@@ -454,7 +493,7 @@ pub fn apply_sparse_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
     r_out: Register,
     f: F,
 ) -> Result<(Register, Register), CircuitError> {
-    b.apply_function(r_in, r_out, Box::new(f))
+    b.apply_function("f", r_in, r_out, Box::new(f))
 }
 
 /// A basic builder for unitary and non-unitary ops.
@@ -615,6 +654,10 @@ impl UnitaryBuilder for OpBuilder {
         }
     }
 
+    fn with_name_scope(&mut self, name: &str) -> ScopedNameBuilder {
+        unimplemented!()
+    }
+
     fn mat(
         &mut self,
         name: &str,
@@ -663,57 +706,15 @@ impl UnitaryBuilder for OpBuilder {
 
     fn apply_function(
         &mut self,
+        name: &str,
         r_in: Register,
         r_out: Register,
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<(Register, Register), CircuitError> {
         let op = self.make_function_op(&r_in, &r_out, f)?;
         let in_indices = r_in.indices.clone();
-        let name = String::from("f");
-        let r = self.merge_with_op(vec![r_in, r_out], Some((name, op)))?;
+        let r = self.merge_with_op(vec![r_in, r_out], Some((name.to_string(), op)))?;
         self.split_absolute(r, &in_indices)
-    }
-
-    fn cx(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(self, cr, rb, |b, r| b.x(r))
-    }
-    fn cy(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(self, cr, rb, |b, r| b.y(r))
-    }
-    fn cz(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(self, cr, rb, |b, r| b.z(r))
-    }
-    fn cnot(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(self, cr, rb, |b, r| b.not(r))
-    }
-    fn cswap(
-        &mut self,
-        cr: Register,
-        ra: Register,
-        rb: Register,
-    ) -> Result<(Register, Register, Register), CircuitError> {
-        let (cr, (ra, rb)) = try_condition(self, cr, (ra, rb), |b, (ra, rb)| b.swap(ra, rb))?;
-        Ok((cr, ra, rb))
-    }
-    fn cmat(
-        &mut self,
-        name: &str,
-        cr: Register,
-        r: Register,
-        mat: Vec<Complex<f64>>,
-    ) -> Result<(Register, Register), CircuitError> {
-        let (cr, r) = try_condition(self, cr, r, |b, r| b.mat(name, r, mat))?;
-        Ok((cr, r))
-    }
-    fn crealmat(
-        &mut self,
-        name: &str,
-        cr: Register,
-        r: Register,
-        mat: &[f64],
-    ) -> Result<(Register, Register), CircuitError> {
-        let (cr, r) = try_condition(self, cr, r, |b, r| b.real_mat(name, r, mat))?;
-        Ok((cr, r))
     }
 
     fn split_absolute(
@@ -819,6 +820,10 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         }
     }
 
+    fn with_name_scope(&mut self, name: &str) -> ScopedNameBuilder {
+        unimplemented!()
+    }
+
     fn mat(
         &mut self,
         name: &str,
@@ -893,6 +898,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
 
     fn apply_function(
         &mut self,
+        name: &str,
         r_in: Register,
         r_out: Register,
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
@@ -902,55 +908,13 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
 
         let cr_indices = cr.indices.clone();
         let in_indices = r_in.indices.clone();
-        let name = String::from("C(f)");
+        let name = format!("C({})", name);
         let r = self.merge_with_op(vec![cr, r_in, r_out], Some((name, op)))?;
         let (cr, r) = self.split_absolute(r, &cr_indices).unwrap();
         let (r_in, r_out) = self.split_absolute(r, &in_indices).unwrap();
 
         self.set_conditional_register(cr);
         Ok((r_in, r_out))
-    }
-
-    fn cx(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(self, cr, rb, |b, r| b.x(r))
-    }
-    fn cy(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(self, cr, rb, |b, r| b.y(r))
-    }
-    fn cz(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(self, cr, rb, |b, r| b.z(r))
-    }
-    fn cnot(&mut self, cr: Register, rb: Register) -> (Register, Register) {
-        condition(self, cr, rb, |b, r| b.not(r))
-    }
-    fn cswap(
-        &mut self,
-        cr: Register,
-        ra: Register,
-        rb: Register,
-    ) -> Result<(Register, Register, Register), CircuitError> {
-        let (cr, (ra, rb)) = try_condition(self, cr, (ra, rb), |b, (ra, rb)| b.swap(ra, rb))?;
-        Ok((cr, ra, rb))
-    }
-    fn cmat(
-        &mut self,
-        name: &str,
-        cr: Register,
-        r: Register,
-        mat: Vec<Complex<f64>>,
-    ) -> Result<(Register, Register), CircuitError> {
-        let (cr, r) = try_condition(self, cr, r, |b, r| b.mat(name, r, mat))?;
-        Ok((cr, r))
-    }
-    fn crealmat(
-        &mut self,
-        name: &str,
-        cr: Register,
-        r: Register,
-        mat: &[f64],
-    ) -> Result<(Register, Register), CircuitError> {
-        let (cr, r) = try_condition(self, cr, r, |b, r| b.real_mat(name, r, mat))?;
-        Ok((cr, r))
     }
 
     fn split_absolute(
@@ -1058,6 +1022,79 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
     }
 }
 
+/// A unitary builder with a built in name scoping mechanism.
+pub struct ScopedNameBuilder<'a> {
+    name: String,
+    parent_builder: &'a mut dyn UnitaryBuilder
+}
+
+impl<'a> ScopedNameBuilder<'a> {
+    fn new(builder: &'a mut dyn UnitaryBuilder, name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            parent_builder: builder
+        }
+    }
+
+    fn rename(&self, name: &str) -> String {
+        format!("{}/{}", self.name, name)
+    }
+}
+
+impl<'a> fmt::Debug for ScopedNameBuilder<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ScopedNameBuilder('{}')",
+            self.name
+        )
+    }
+}
+
+impl<'a> UnitaryBuilder for ScopedNameBuilder<'a> {
+    fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder {
+        ConditionalContextBuilder {
+            parent_builder: self,
+            conditioned_register: Some(r),
+        }
+    }
+
+    fn with_name_scope(&mut self, name: &str) -> ScopedNameBuilder {
+        ScopedNameBuilder::new(self, name)
+    }
+
+    fn mat(&mut self, name: &str, r: Register, mat: Vec<Complex<f64>>) -> Result<Register, CircuitError> {
+        let name = self.rename(name);
+        self.parent_builder.mat(&name, r, mat)
+    }
+
+    fn sparse_mat(&mut self, name: &str, r: Register, mat: Vec<Vec<(u64, Complex<f64>)>>, natural_order: bool) -> Result<Register, CircuitError> {
+        let name = self.rename(name);
+        self.parent_builder.sparse_mat(&name, r, mat, natural_order)
+    }
+
+    fn apply_function(&mut self, name: &str, r_in: Register, r_out: Register, f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,) -> Result<(Register, Register), CircuitError> {
+        let name = self.rename(name);
+        self.parent_builder.apply_function(&name, r_in, r_out, f)
+    }
+
+    fn split_absolute(&mut self, r: Register, selected_indices: &[u64]) -> Result<(Register, Register), CircuitError> {
+        self.parent_builder.split_absolute(r, selected_indices)
+    }
+
+    fn merge_with_op(&mut self, rs: Vec<Register>, named_operator: Option<(String, UnitaryOp)>) -> Result<Register, CircuitError> {
+        self.parent_builder.merge_with_op(rs, named_operator)
+    }
+
+    fn stochastic_measure(&mut self, r: Register) -> (Register, u64) {
+        self.parent_builder.stochastic_measure(r)
+    }
+
+    fn sidechannel_helper(&mut self, rs: Vec<Register>, handles: &[MeasurementHandle], f: Box<SideChannelHelperFn>) -> Vec<Register> {
+        self.parent_builder.sidechannel_helper(rs, handles, f)
+    }
+}
+
 /// Condition a circuit defined by `f` using `cr`.
 pub fn condition<F, RS, OS>(
     b: &mut dyn UnitaryBuilder,
@@ -1089,3 +1126,4 @@ where
     let r = c.release_register();
     Ok((r, rs))
 }
+

@@ -44,16 +44,12 @@ fn carry(
     rb: Register,
     rcp: Register,
 ) -> Result<(Register, Register, Register, Register), CircuitError> {
-    dbg!(&rc, &ra, &rb, &rcp);
-
     let (rc, ra, rb, rcp) = program!(b, rc, ra, rb, rcp;
         control x |ra, rb,| rcp;
         control x ra, rb;
         control x |rc, rb,| rcp;
         control x ra, rb;
     )?;
-    dbg!(&rc, &ra, &rb, &rcp);
-
     Ok((rc, ra, rb, rcp))
 }
 wrap_fn!(carry_op, (carry), rc, ra, rb, rcp);
@@ -66,14 +62,12 @@ fn inv_carry(
     rb: Register,
     rcp: Register,
 ) -> Result<(Register, Register, Register, Register), CircuitError> {
-    dbg!(&rc, &ra, &rb, &rcp);
     let (rc, ra, rb, rcp) = program!(b, rc, ra, rb, rcp;
         control x ra, rb;
         control x |rc, rb,| rcp;
         control x ra, rb;
         control x |ra, rb,| rcp;
     )?;
-
     Ok((rc, ra, rb, rcp))
 }
 wrap_fn!(inv_carry_op, (inv_carry), rc, ra, rb, rcp);
