@@ -149,8 +149,8 @@ macro_rules! program {
         let $name: Register = $builder.merge($name)?;
     };
     (@joiner($builder:expr, $reg_vec:ident) $name:ident, $($tail:tt)*) => {
-        program!(@joiner($builder, $reg_vec) $name; $($tail)*);
         program!(@joiner($builder, $reg_vec) $($tail)*);
+        program!(@joiner($builder, $reg_vec) $name; $($tail)*);
     };
 
     // like args_acc for groups
@@ -795,6 +795,43 @@ mod common_circuit_tests {
         let r = b.merge(vec![r1, r2])?;
         run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
+        assert_eq!(macro_circuit, basic_circuit);
+        Ok(())
+    }
+
+    #[test]
+    fn test_program_macro_repeated() -> Result<(), CircuitError> {
+        let mut b = OpBuilder::new();
+        let ra = b.qubit();
+        let rb = b.qubit();
+
+        let not = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+            let ra = rs.pop().unwrap();
+            let ra = b.not(ra);
+            Ok(vec![ra])
+        };
+
+        let (ra, rb) = program!(&mut b, ra, rb;
+            control not ra, rb;
+        )?;
+
+        let (ra, rb) = program!(&mut b, ra, rb;
+            control not ra, rb;
+        )?;
+        let r = b.merge(vec![ra, rb])?;
+
+        run_debug(&r)?;
+
+        // Compare to expected value
+        let macro_circuit = make_circuit_matrix::<f64>(2, &r, true);
+        let mut b = OpBuilder::new();
+        let ra = b.qubit();
+        let rb = b.qubit();
+        let (ra, rb) = b.cnot(ra, rb);
+        let (ra, rb) = b.cnot(ra, rb);
+        let r = b.merge(vec![ra, rb])?;
+        run_debug(&r)?;
+        let basic_circuit = make_circuit_matrix::<f64>(2, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
         Ok(())
     }
