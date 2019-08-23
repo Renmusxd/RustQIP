@@ -31,6 +31,25 @@ pub trait UnitaryBuilder {
     /// Build a builder which uses `r` as a condition.
     fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder;
 
+    /// Add a name scope.
+    fn push_name_scope(&mut self, name: &str);
+
+    /// Remove and return a name scope.
+    fn pop_name_scope(&mut self) -> Option<String>;
+
+    /// Get list of names in above scopes.
+    fn get_name_list(&self) -> &[String];
+
+    /// Get the full name with scope
+    fn get_full_name(&self, name: &str) -> String {
+        let names = self.get_name_list();
+        if names.is_empty() {
+            name.to_string()
+        } else {
+            format!("{}/{}", names.join("/"), name)
+        }
+    }
+
     /// Build a generic matrix op, apply to `r`, if `r` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
     /// size for the number of indices in `r` (mat.len() == 2^(2n)).
@@ -500,6 +519,7 @@ pub struct OpBuilder {
     op_id: u64,
     temp_zero_qubits: Vec<Register>,
     temp_one_qubits: Vec<Register>,
+    names: Vec<String>
 }
 
 impl OpBuilder {
@@ -651,6 +671,18 @@ impl UnitaryBuilder for OpBuilder {
         }
     }
 
+    fn push_name_scope(&mut self, name: &str) {
+        self.names.push(name.to_string())
+    }
+
+    fn pop_name_scope(&mut self) -> Option<String> {
+        self.names.pop()
+    }
+
+    fn get_name_list<'a>(&'a self) -> &'a [String] {
+        self.names.as_slice()
+    }
+
     fn mat(
         &mut self,
         name: &str,
@@ -667,7 +699,7 @@ impl UnitaryBuilder for OpBuilder {
             self.merge_with_op(rs, None)
         } else {
             let op = self.make_mat_op(&r, mat)?;
-            let name = String::from(name);
+            let name = self.get_full_name(name);
             self.merge_with_op(vec![r], Some((name, op)))
         }
     }
@@ -692,7 +724,7 @@ impl UnitaryBuilder for OpBuilder {
             self.merge_with_op(rs, None)
         } else {
             let op = self.make_sparse_mat_op(&r, mat, natural_order)?;
-            let name = String::from(name);
+            let name = self.get_full_name(name);
             self.merge_with_op(vec![r], Some((name, op)))
         }
     }
@@ -706,7 +738,8 @@ impl UnitaryBuilder for OpBuilder {
     ) -> Result<(Register, Register), CircuitError> {
         let op = self.make_function_op(&r_in, &r_out, f)?;
         let in_indices = r_in.indices.clone();
-        let r = self.merge_with_op(vec![r_in, r_out], Some((name.to_string(), op)))?;
+        let name = self.get_full_name(name);
+        let r = self.merge_with_op(vec![r_in, r_out], Some((name, op)))?;
         self.split_absolute(r, &in_indices)
     }
 
@@ -813,6 +846,18 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         }
     }
 
+    fn push_name_scope(&mut self, name: &str) {
+        self.parent_builder.push_name_scope(name)
+    }
+
+    fn pop_name_scope(&mut self) -> Option<String> {
+        self.parent_builder.pop_name_scope()
+    }
+
+    fn get_name_list(&self) -> &[String] {
+        self.parent_builder.get_name_list()
+    }
+
     fn mat(
         &mut self,
         name: &str,
@@ -832,6 +877,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
             let cr = self.get_conditional_register();
             let cr_indices = cr.indices.clone();
             let name = format!("C({})", name);
+            let name = self.parent_builder.get_full_name(&name);
             let r = self.merge_with_op(vec![cr, r], Some((name, op)))?;
             let (cr, r) = self.split_absolute(r, &cr_indices).unwrap();
 
@@ -863,6 +909,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
             let cr = self.get_conditional_register();
             let cr_indices = cr.indices.clone();
             let name = format!("C({})", name);
+            let name = self.parent_builder.get_full_name(&name);
             let r = self.merge_with_op(vec![cr, r], Some((name, op)))?;
             let (cr, r) = self.split_absolute(r, &cr_indices).unwrap();
 
@@ -876,7 +923,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         let cr = self.get_conditional_register();
         let cr_indices = cr.indices.clone();
         let ra_indices = ra.indices.clone();
-        let name = String::from("C(swap)");
+        let name = self.parent_builder.get_full_name("C(swap)");
         let r = self.merge_with_op(vec![cr, ra, rb], Some((name, op)))?;
         let (cr, r) = self.split_absolute(r, &cr_indices).unwrap();
         let (ra, rb) = self.split_absolute(r, &ra_indices).unwrap();
@@ -898,6 +945,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         let cr_indices = cr.indices.clone();
         let in_indices = r_in.indices.clone();
         let name = format!("C({})", name);
+        let name = self.parent_builder.get_full_name(&name);
         let r = self.merge_with_op(vec![cr, r_in, r_out], Some((name, op)))?;
         let (cr, r) = self.split_absolute(r, &cr_indices).unwrap();
         let (r_in, r_out) = self.split_absolute(r, &in_indices).unwrap();

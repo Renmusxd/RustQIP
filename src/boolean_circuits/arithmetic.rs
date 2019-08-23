@@ -8,7 +8,9 @@ pub fn add(
     ra: Register,
     rb: Register,
 ) -> Result<(Register, Register, Register), CircuitError> {
-    match (rc.n(), ra.n(), rb.n()) {
+    dbg!(&rc, &ra, &rb);
+    b.push_name_scope("add");
+    let result = match (rc.n(), ra.n(), rb.n()) {
         (1, 1, 2) => {
             let (rc, ra, rb) = program!(b, rc, ra, rb;
                 carry_op rc, ra, rb[0], rb[1];
@@ -30,7 +32,9 @@ pub fn add(
             "Expected rc[n] ra[n] and rb[n+1], but got ({},{},{})",
             nc, na, nb
         )),
-    }
+    };
+    b.pop_name_scope();
+    result
 }
 wrap_fn!(add_op, (add), ra, rb, rc);
 
@@ -40,8 +44,10 @@ fn sum(
     ra: Register,
     rb: Register,
 ) -> (Register, Register, Register) {
+    b.push_name_scope("sum");
     let (ra, rb) = b.cx(ra, rb);
     let (rc, rb) = b.cx(rc, rb);
+    b.pop_name_scope();
     (rc, ra, rb)
 }
 wrap_fn!(sum_op, sum, rc, ra, rb);
@@ -53,12 +59,14 @@ fn carry(
     rb: Register,
     rcp: Register,
 ) -> Result<(Register, Register, Register, Register), CircuitError> {
+    b.push_name_scope("carry");
     let (rc, ra, rb, rcp) = program!(b, rc, ra, rb, rcp;
         control x |ra, rb,| rcp;
         control x ra, rb;
         control x |rc, rb,| rcp;
         control x ra, rb;
     )?;
+    b.pop_name_scope();
     Ok((rc, ra, rb, rcp))
 }
 wrap_fn!(carry_op, (carry), rc, ra, rb, rcp);
@@ -70,12 +78,14 @@ fn inv_carry(
     rb: Register,
     rcp: Register,
 ) -> Result<(Register, Register, Register, Register), CircuitError> {
+    b.push_name_scope("inv_carry");
     let (rc, ra, rb, rcp) = program!(b, rc, ra, rb, rcp;
         control x ra, rb;
         control x |rc, rb,| rcp;
         control x ra, rb;
         control x |ra, rb,| rcp;
     )?;
+    b.pop_name_scope();
     Ok((rc, ra, rb, rcp))
 }
 wrap_fn!(inv_carry_op, (inv_carry), rc, ra, rb, rcp);
@@ -256,19 +266,19 @@ mod arithmetic_tests {
         mapping.into_iter().enumerate().for_each(|(indx, mapping)| {
             println!("{:07b}\t{:07b}", indx, mapping);
             let indx = indx as u64;
-            let c = extract_bits(indx, &[5, 6]);
-            let a = extract_bits(indx, &[3, 4]);
-            let b = extract_bits(indx, &[0, 1, 2]);
+            let c = extract_bits(indx, &[6, 5]);
+            let a = extract_bits(indx, &[4, 3]);
+            let b = extract_bits(indx, &[2, 1, 0]);
 
-            let q_c = extract_bits(mapping, &[5, 6]);
-            let q_a = extract_bits(mapping, &[3, 4]);
-            let q_b = extract_bits(mapping, &[0, 1, 2]);
+            let q_c = extract_bits(mapping, &[6, 5]);
+            let q_a = extract_bits(mapping, &[4, 3]);
+            let q_b = extract_bits(mapping, &[2, 1, 0]);
 
-            dbg!(c, a, b, q_c, q_a, q_b, (a + c + b) % (1 << 8));
+            dbg!(c, a, b, q_c, q_a, q_b, (a + c + b) % 8);
 
             assert_eq!(q_c, c);
             assert_eq!(q_a, a);
-            assert_eq!(q_b, (a + c + b) % (1 << 7));
+            assert_eq!(q_b, (a + c + b) % 8);
         });
         Ok(())
     }
