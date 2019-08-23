@@ -559,7 +559,6 @@ macro_rules! wrap_fn {
     };
 }
 
-
 /// Helper struct for macro iteration with usize, ranges, or vecs
 #[derive(Debug)]
 pub struct QubitIndices {
@@ -971,7 +970,9 @@ mod common_circuit_tests {
         let ra = b.qubit();
         let rb = b.qubit();
 
-        let not = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+        let not = |b: &mut dyn UnitaryBuilder,
+                   mut rs: Vec<Register>|
+         -> Result<Vec<Register>, CircuitError> {
             let ra = rs.pop().unwrap();
             let ra = b.not(ra);
             Ok(vec![ra])
@@ -1030,8 +1031,12 @@ mod common_circuit_tests {
         Ok(())
     }
 
-
-    fn complex_fn(b: &mut dyn UnitaryBuilder, ra: Register, rb: Register, rc: Register) -> Result<(Register, Register, Register), CircuitError> {
+    fn complex_fn(
+        b: &mut dyn UnitaryBuilder,
+        ra: Register,
+        rb: Register,
+        rc: Register,
+    ) -> Result<(Register, Register, Register), CircuitError> {
         let mut cb = b.with_condition(ra);
         let (rb, rc) = cb.cnot(rb, rc);
         let ra = cb.release_register();
@@ -1051,7 +1056,7 @@ mod common_circuit_tests {
         let (ra, rb, rc) = program!(&mut b, ra, rb, rc;
             wrapped_complex_fn ra, rb, rc;
         )?;
-        let r = b.merge(vec![ra,rb,rc])?;
+        let r = b.merge(vec![ra, rb, rc])?;
 
         run_debug(&r)?;
         // Compare to expected value
@@ -1061,7 +1066,7 @@ mod common_circuit_tests {
         let rb = b.register(n)?;
         let rc = b.register(n)?;
         let (ra, rb, rc) = complex_fn(&mut b, ra, rb, rc)?;
-        let r = b.merge(vec![ra,rb,rc])?;
+        let r = b.merge(vec![ra, rb, rc])?;
         run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);

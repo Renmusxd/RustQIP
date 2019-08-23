@@ -31,9 +31,6 @@ pub trait UnitaryBuilder {
     /// Build a builder which uses `r` as a condition.
     fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder;
 
-    /// Make a builder who prefixes all names of ops.
-    fn with_name_scope(&mut self, name: &str) -> ScopedNameBuilder;
-
     /// Build a generic matrix op, apply to `r`, if `r` is multiple indices and
     /// mat is 2x2, apply to each index, otherwise returns an error if the matrix is not the correct
     /// size for the number of indices in `r` (mat.len() == 2^(2n)).
@@ -654,10 +651,6 @@ impl UnitaryBuilder for OpBuilder {
         }
     }
 
-    fn with_name_scope(&mut self, name: &str) -> ScopedNameBuilder {
-        unimplemented!()
-    }
-
     fn mat(
         &mut self,
         name: &str,
@@ -818,10 +811,6 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
             parent_builder: self,
             conditioned_register: Some(r),
         }
-    }
-
-    fn with_name_scope(&mut self, name: &str) -> ScopedNameBuilder {
-        unimplemented!()
     }
 
     fn mat(
@@ -1022,79 +1011,6 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
     }
 }
 
-/// A unitary builder with a built in name scoping mechanism.
-pub struct ScopedNameBuilder<'a> {
-    name: String,
-    parent_builder: &'a mut dyn UnitaryBuilder
-}
-
-impl<'a> ScopedNameBuilder<'a> {
-    fn new(builder: &'a mut dyn UnitaryBuilder, name: &str) -> Self {
-        Self {
-            name: name.to_string(),
-            parent_builder: builder
-        }
-    }
-
-    fn rename(&self, name: &str) -> String {
-        format!("{}/{}", self.name, name)
-    }
-}
-
-impl<'a> fmt::Debug for ScopedNameBuilder<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "ScopedNameBuilder('{}')",
-            self.name
-        )
-    }
-}
-
-impl<'a> UnitaryBuilder for ScopedNameBuilder<'a> {
-    fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder {
-        ConditionalContextBuilder {
-            parent_builder: self,
-            conditioned_register: Some(r),
-        }
-    }
-
-    fn with_name_scope(&mut self, name: &str) -> ScopedNameBuilder {
-        ScopedNameBuilder::new(self, name)
-    }
-
-    fn mat(&mut self, name: &str, r: Register, mat: Vec<Complex<f64>>) -> Result<Register, CircuitError> {
-        let name = self.rename(name);
-        self.parent_builder.mat(&name, r, mat)
-    }
-
-    fn sparse_mat(&mut self, name: &str, r: Register, mat: Vec<Vec<(u64, Complex<f64>)>>, natural_order: bool) -> Result<Register, CircuitError> {
-        let name = self.rename(name);
-        self.parent_builder.sparse_mat(&name, r, mat, natural_order)
-    }
-
-    fn apply_function(&mut self, name: &str, r_in: Register, r_out: Register, f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,) -> Result<(Register, Register), CircuitError> {
-        let name = self.rename(name);
-        self.parent_builder.apply_function(&name, r_in, r_out, f)
-    }
-
-    fn split_absolute(&mut self, r: Register, selected_indices: &[u64]) -> Result<(Register, Register), CircuitError> {
-        self.parent_builder.split_absolute(r, selected_indices)
-    }
-
-    fn merge_with_op(&mut self, rs: Vec<Register>, named_operator: Option<(String, UnitaryOp)>) -> Result<Register, CircuitError> {
-        self.parent_builder.merge_with_op(rs, named_operator)
-    }
-
-    fn stochastic_measure(&mut self, r: Register) -> (Register, u64) {
-        self.parent_builder.stochastic_measure(r)
-    }
-
-    fn sidechannel_helper(&mut self, rs: Vec<Register>, handles: &[MeasurementHandle], f: Box<SideChannelHelperFn>) -> Vec<Register> {
-        self.parent_builder.sidechannel_helper(rs, handles, f)
-    }
-}
-
 /// Condition a circuit defined by `f` using `cr`.
 pub fn condition<F, RS, OS>(
     b: &mut dyn UnitaryBuilder,
@@ -1126,4 +1042,3 @@ where
     let r = c.release_register();
     Ok((r, rs))
 }
-

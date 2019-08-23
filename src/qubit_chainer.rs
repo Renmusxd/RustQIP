@@ -200,7 +200,9 @@ impl<'a, B: UnitaryBuilder> DoubleRegisterChain<'a, B> {
         self,
         f: impl Fn(u64) -> (u64, f64) + Send + Sync + 'static,
     ) -> Result<Self, CircuitError> {
-        let (ra, rb) = self.builder.apply_function("f", self.ra, self.rb, Box::new(f))?;
+        let (ra, rb) = self
+            .builder
+            .apply_function("f", self.ra, self.rb, Box::new(f))?;
         Ok(Self::new(self.builder, ra, rb))
     }
     /// Apply a function op which has been already boxed.

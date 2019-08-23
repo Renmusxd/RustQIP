@@ -11,4 +11,3 @@ wrap_fn!(pub not, UnitaryBuilder::not, r);
 wrap_fn!(pub swap, (UnitaryBuilder::swap), ra, rb);
 
 wrap_fn!(pub h, UnitaryBuilder::hadamard, r);
-
