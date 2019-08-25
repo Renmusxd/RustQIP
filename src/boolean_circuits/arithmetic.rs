@@ -1,7 +1,12 @@
+/// A collection of circuits from chapter 6.4 of "Quantum Computing: A gentle introduction"
+/// by Eleanor Rieffle and Wolfgang Polak.
+
 use crate::macros::common_ops::x;
 use crate::*;
 
 /// Add together ra and rb using rc as carry, result is in rb.
+/// This works when the highest order bit of rb and rc are both |0>. Undefined behavior otherwise.
+/// ra and rc have m qubits, rb has m+1 qubits.
 pub fn add(
     b: &mut dyn UnitaryBuilder,
     rc: Register,
@@ -270,15 +275,15 @@ mod arithmetic_tests {
             let a = extract_bits(indx, &[4, 3]);
             let b = extract_bits(indx, &[2, 1, 0]);
 
-            let q_c = extract_bits(mapping, &[6, 5]);
-            let q_a = extract_bits(mapping, &[4, 3]);
-            let q_b = extract_bits(mapping, &[2, 1, 0]);
+            if (b & (1 << 3)) == 0 && (c & (1 << 1) == 0) {
+                let q_c = extract_bits(mapping, &[6, 5]);
+                let q_a = extract_bits(mapping, &[4, 3]);
+                let q_b = extract_bits(mapping, &[2, 1, 0]);
 
-            dbg!(c, a, b, q_c, q_a, q_b, (a + c + b) % 8);
-
-            assert_eq!(q_c, c);
-            assert_eq!(q_a, a);
-            assert_eq!(q_b, (a + c + b) % 8);
+                assert_eq!(q_c, c);
+                assert_eq!(q_a, a);
+                assert_eq!(q_b, (a + c + b) % 8);
+            }
         });
         Ok(())
     }
