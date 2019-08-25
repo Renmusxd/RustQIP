@@ -1,6 +1,5 @@
 /// A collection of circuits from chapter 6.4 of "Quantum Computing: A gentle introduction"
 /// by Eleanor Rieffle and Wolfgang Polak.
-
 use crate::macros::common_ops::x;
 use crate::*;
 
@@ -27,7 +26,7 @@ pub fn add(
             let n = nc;
             let (rc, ra, rb) = program!(b, rc, ra, rb;
                 carry_op rc[0], ra[0], rb[0], rc[1];
-                add_op rc[1..=n-1], ra[1..=n-1], rb[1..=n];
+                add_op rc[1..n], ra[1..n], rb[1..=n];
                 inv_carry_op rc[0], ra[0], rb[0], rc[1];
                 sum_op rc[0], ra[0], rb[0];
             )?;

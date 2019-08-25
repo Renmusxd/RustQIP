@@ -519,7 +519,7 @@ pub struct OpBuilder {
     op_id: u64,
     temp_zero_qubits: Vec<Register>,
     temp_one_qubits: Vec<Register>,
-    names: Vec<String>
+    names: Vec<String>,
 }
 
 impl OpBuilder {
@@ -679,7 +679,7 @@ impl UnitaryBuilder for OpBuilder {
         self.names.pop()
     }
 
-    fn get_name_list<'a>(&'a self) -> &'a [String] {
+    fn get_name_list(&self) -> &[String] {
         self.names.as_slice()
     }
 

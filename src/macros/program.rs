@@ -135,7 +135,7 @@ macro_rules! program {
     (@splitter($builder:expr, $reg_vec:ident) $name:ident; $($tail:tt)*) => {
         let tmp_indices = $name.indices.clone();
         let tmp_register_wrapper = RegisterDataWrapper::new(&$name, $reg_vec.len());
-        let tmp_name: Vec<Option<Register>> = $builder.split_all($name).into_iter().map(|q| Some(q)).collect();
+        let tmp_name: Vec<Option<Register>> = $builder.split_all($name).into_iter().map(Some).collect();
         let $name = tmp_register_wrapper;
         $reg_vec.push((tmp_name, tmp_indices, stringify!($name)));
     };
@@ -659,27 +659,32 @@ impl From<RangeInclusive<i32>> for QubitIndices {
 }
 impl From<&RangeInclusive<usize>> for QubitIndices {
     fn from(indices: &RangeInclusive<usize>) -> Self {
-        (*indices.start()..*indices.end() + 1).into()
+        let indices: Vec<_> = indices.clone().collect();
+        indices.into()
     }
 }
 impl From<&RangeInclusive<u64>> for QubitIndices {
     fn from(indices: &RangeInclusive<u64>) -> Self {
-        (*indices.start()..*indices.end() + 1).into()
+        let indices: Vec<_> = indices.clone().map(|indx| indx as usize).collect();
+        indices.into()
     }
 }
 impl From<&RangeInclusive<u32>> for QubitIndices {
     fn from(indices: &RangeInclusive<u32>) -> Self {
-        (*indices.start()..*indices.end() + 1).into()
+        let indices: Vec<_> = indices.clone().map(|indx| indx as usize).collect();
+        indices.into()
     }
 }
 impl From<&RangeInclusive<i64>> for QubitIndices {
     fn from(indices: &RangeInclusive<i64>) -> Self {
-        (*indices.start()..*indices.end() + 1).into()
+        let indices: Vec<_> = indices.clone().map(|indx| indx as usize).collect();
+        indices.into()
     }
 }
 impl From<&RangeInclusive<i32>> for QubitIndices {
     fn from(indices: &RangeInclusive<i32>) -> Self {
-        (*indices.start()..*indices.end() + 1).into()
+        let indices: Vec<_> = indices.clone().map(|indx| indx as usize).collect();
+        indices.into()
     }
 }
 
