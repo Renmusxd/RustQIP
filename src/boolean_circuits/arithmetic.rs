@@ -40,7 +40,7 @@ pub fn add(
     b.pop_name_scope();
     result
 }
-wrap_fn!(add_op, (add), ra, rb, rc);
+wrap_fn!(pub add_op, (add), ra, rb, rc);
 
 fn sum(
     b: &mut dyn UnitaryBuilder,

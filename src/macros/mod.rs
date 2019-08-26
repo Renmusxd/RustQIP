@@ -5,6 +5,10 @@ pub mod program;
 /// Common ops for programs, not automatically exported because their names easily conflict with
 /// existing variables.
 pub mod common_ops;
+/// Tools for inverting functions on qubits.
+#[macro_use]
+pub mod inverter;
 mod register_expression;
 
 pub use program::*;
+pub use inverter::*;

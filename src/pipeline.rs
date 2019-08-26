@@ -69,8 +69,10 @@ impl fmt::Debug for StateModifierType {
 /// A named state modifier.
 #[derive(Debug)]
 pub struct StateModifier {
-    name: String,
-    modifier: StateModifierType,
+    /// Name of modifier.
+    pub name: String,
+    /// Mechanism of modifier.
+    pub modifier: StateModifierType,
 }
 
 impl StateModifier {
