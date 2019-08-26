@@ -10,5 +10,5 @@ pub mod common_ops;
 pub mod inverter;
 mod register_expression;
 
-pub use program::*;
 pub use inverter::*;
+pub use program::*;

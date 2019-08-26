@@ -22,9 +22,7 @@ pub(crate) fn gray_code(n: u64) -> Vec<u64> {
 }
 
 /// Transpose a sparse matrix.
-pub fn transpose_sparse<T: Sync + Send>(
-    sparse_mat: Vec<Vec<(u64, T)>>,
-) -> Vec<Vec<(u64, T)>> {
+pub fn transpose_sparse<T: Sync + Send>(sparse_mat: Vec<Vec<(u64, T)>>) -> Vec<Vec<(u64, T)>> {
     let sparse_len = sparse_mat.len();
     let flat_mat: Vec<_> = sparse_mat
         .into_par_iter()
