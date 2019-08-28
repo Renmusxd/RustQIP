@@ -12,7 +12,6 @@ pub fn add(
     ra: Register,
     rb: Register,
 ) -> Result<(Register, Register, Register), CircuitError> {
-    dbg!(&rc, &ra, &rb);
     b.push_name_scope("add");
     let result = match (rc.n(), ra.n(), rb.n()) {
         (1, 1, 2) => {
@@ -40,7 +39,7 @@ pub fn add(
     b.pop_name_scope();
     result
 }
-wrap_fn!(pub add_op, (add), ra, rb, rc);
+wrap_and_invert!(pub add_op, pub add_inv, (add), ra, rb, rc);
 
 fn sum(
     b: &mut dyn UnitaryBuilder,
@@ -94,20 +93,68 @@ fn inv_carry(
 }
 wrap_fn!(inv_carry_op, (inv_carry), rc, ra, rb, rcp);
 
+/// Addition of ra and rb modulo rm. Conditions are:
+/// 0 <= a
+/// a,b < M
+pub fn add_mod(
+    b: &mut OpBuilder,
+    ra: Register,
+    rb: Register,
+    rm: Register,
+) -> Result<(Register, Register, Register), CircuitError> {
+    if ra.n() != rm.n() {
+        CircuitError::make_err(format!(
+            "Expected rm.n == ra.n == {}, found rm.n={}.",
+            ra.n(),
+            rm.n()
+        ))
+    } else if rb.n() != ra.n() + 1 {
+        CircuitError::make_err(format!(
+            "Expected rb.n == ra.n + 1== {}, found rm.n={}.",
+            ra.n() + 1,
+            rb.n()
+        ))
+    } else {
+        b.push_name_scope("add_mod");
+        let n = ra.n();
+
+        let rt = b.get_temp_register(1, false);
+        let rc = b.get_temp_register(n, false);
+
+        let (ra, rb, rm, rt, rc) = program!(b, ra, rb, rm, rt, rc;
+            add_op rc, ra, rb;
+            add_inv rc, rm, rb;
+            control x rb[n], rt;
+            control add_op rt, rc, rm, rb;
+            add_inv rc, ra, rb;
+            control(0) x rb[n], rt;
+            add_op rc, ra, rb;
+        )?;
+        b.return_temp_register(rt, false);
+        b.return_temp_register(rc, false);
+        b.pop_name_scope();
+        Ok((ra, rb, rm))
+    }
+}
+
 #[cfg(test)]
 mod arithmetic_tests {
     use super::*;
-    use crate::pipeline::{make_circuit_matrix, InitialState};
-    use crate::utils::extract_bits;
-    use num::{One, Zero};
+    use crate::pipeline::{
+        get_opfns_and_frontier, get_required_state_size_from_frontier,
+        InitialState,
+    };
+    use crate::utils::{extract_bits, flip_bits};
+    use num::One;
 
-    fn get_mapping<P: Precision>(r: &Register) -> Result<Vec<u64>, CircuitError> {
-        let indices: Vec<u64> = (0..r.n()).collect();
-        let v = (0..1 << r.n())
+    fn get_mapping_from_indices(r: &Register, indices: &[u64]) -> Result<Vec<u64>, CircuitError> {
+        let v = (0..1 << indices.len())
             .into_iter()
             .try_fold(vec![], |mut acc, indx| {
+                let mut indices = indices.to_vec();
+                indices.reverse();
                 let (state, _) =
-                    run_local_with_init::<f64>(&r, &[(indices.clone(), InitialState::Index(indx))])
+                    run_local_with_init::<f64>(&r, &[(indices, InitialState::Index(indx as u64))])
                         .unwrap();
                 let pos = state
                     .get_state(false)
@@ -115,13 +162,20 @@ mod arithmetic_tests {
                     .position(|v| v == Complex::one());
                 match pos {
                     Some(pos) => {
-                        acc.push(pos as u64);
+                        let (rs, _) = get_opfns_and_frontier(&r);
+                        let n = get_required_state_size_from_frontier(&rs);
+                        acc.push(flip_bits(n as usize, pos as u64));
                         Ok(acc)
                     }
                     None => CircuitError::make_err(format!("Error any mapping for {}", indx)),
                 }
             })?;
         Ok(v)
+    }
+
+    fn get_mapping<P: Precision>(r: &Register) -> Result<Vec<u64>, CircuitError> {
+        let indices: Vec<_> = (0..r.n()).collect();
+        get_mapping_from_indices(r, &indices)
     }
 
     #[test]
@@ -141,15 +195,15 @@ mod arithmetic_tests {
         mapping.into_iter().enumerate().for_each(|(indx, mapping)| {
             println!("{:04b}\t{:04b}", indx, mapping);
             let indx = indx as u64;
-            let c = 0 != indx & (1 << 3);
-            let a = 0 != indx & (1 << 2);
-            let b = 0 != indx & (1 << 1);
-            let cp = 0 != indx & 1;
+            let c = 0 != indx & 1;
+            let a = 0 != indx & (1 << 1);
+            let b = 0 != indx & (1 << 2);
+            let cp = 0 != indx & (1 << 3);
 
-            let q_c = 0 != mapping & (1 << 3);
-            let q_a = 0 != mapping & (1 << 2);
-            let q_b = 0 != mapping & (1 << 1);
-            let q_cp = 0 != mapping & 1;
+            let q_c = 0 != mapping & 1;
+            let q_a = 0 != mapping & (1 << 1);
+            let q_b = 0 != mapping & (1 << 2);
+            let q_cp = 0 != mapping & (1 << 3);
 
             let c_func = |a: bool, b: bool, c: bool| -> bool { (a & b) ^ (c & (a ^ b)) };
             assert_eq!(q_c, c);
@@ -200,13 +254,13 @@ mod arithmetic_tests {
         mapping.into_iter().enumerate().for_each(|(indx, mapping)| {
             println!("{:04b}\t{:04b}", indx, mapping);
             let indx = indx as u64;
-            let c = 0 != indx & (1 << 2);
+            let c = 0 != indx & 1;
             let a = 0 != indx & (1 << 1);
-            let b = 0 != indx & 1;
+            let b = 0 != indx & (1 << 2);
 
-            let q_c = 0 != mapping & (1 << 2);
+            let q_c = 0 != mapping & 1;
             let q_a = 0 != mapping & (1 << 1);
-            let q_b = 0 != mapping & 1;
+            let q_b = 0 != mapping & (1 << 2);
 
             assert_eq!(q_c, c);
             assert_eq!(q_a, a);
@@ -231,13 +285,13 @@ mod arithmetic_tests {
         mapping.into_iter().enumerate().for_each(|(indx, mapping)| {
             println!("{:04b}\t{:04b}", indx, mapping);
             let indx = indx as u64;
-            let c = 0 != indx & (1 << 3);
-            let a = 0 != indx & (1 << 2);
-            let b = ((indx & (1 << 1)) >> 1) | ((indx & 1) << 1);
+            let c = 0 != indx & 1;
+            let a = 0 != indx & (1 << 1);
+            let b = extract_bits(indx, &[2, 3]);
 
-            let q_c = 0 != mapping & (1 << 3);
-            let q_a = 0 != mapping & (1 << 2);
-            let q_b = ((mapping & (1 << 1)) >> 1) | ((mapping & 1) << 1);
+            let q_c = 0 != mapping & 1;
+            let q_a = 0 != mapping & (1 << 1);
+            let q_b = extract_bits(mapping, &[2, 3]);
 
             let num = |x: bool| {
                 if x {
@@ -270,18 +324,86 @@ mod arithmetic_tests {
         mapping.into_iter().enumerate().for_each(|(indx, mapping)| {
             println!("{:07b}\t{:07b}", indx, mapping);
             let indx = indx as u64;
-            let c = extract_bits(indx, &[6, 5]);
-            let a = extract_bits(indx, &[4, 3]);
-            let b = extract_bits(indx, &[2, 1, 0]);
+            let c = extract_bits(indx, &[0, 1]);
+            let a = extract_bits(indx, &[2, 3]);
+            let b = extract_bits(indx, &[4, 5, 6]);
 
             if (b & (1 << 3)) == 0 && (c & (1 << 1) == 0) {
-                let q_c = extract_bits(mapping, &[6, 5]);
-                let q_a = extract_bits(mapping, &[4, 3]);
-                let q_b = extract_bits(mapping, &[2, 1, 0]);
+                let q_c = extract_bits(mapping, &[0, 1]);
+                let q_a = extract_bits(mapping, &[2, 3]);
+                let q_b = extract_bits(mapping, &[4, 5, 6]);
 
                 assert_eq!(q_c, c);
                 assert_eq!(q_a, a);
                 assert_eq!(q_b, (a + c + b) % 8);
+            }
+        });
+        Ok(())
+    }
+
+    #[test]
+    fn test_mod_add() -> Result<(), CircuitError> {
+        let mut b = OpBuilder::new();
+        let ra = b.register(1)?;
+        let rb = b.register(2)?;
+        let rm = b.register(1)?;
+
+        let (ra, rb, rm) = add_mod(&mut b, ra, rb, rm)?;
+
+        let r = b.merge(vec![ra, rb, rm])?;
+        run_debug(&r)?;
+        let mapping = get_mapping::<f64>(&r)?;
+        mapping.into_iter().enumerate().for_each(|(indx, mapping)| {
+            println!("{:06b}\t{:06b}", indx, mapping);
+            let indx = indx as u64;
+            let a = extract_bits(indx, &[0]);
+            let b = extract_bits(indx, &[1, 2]);
+            let m = extract_bits(indx, &[3]);
+
+            if b < m {
+                let q_a = extract_bits(mapping, &[0]);
+                let q_b = extract_bits(mapping, &[1, 2]);
+                let q_m = extract_bits(mapping, &[3]);
+
+                dbg!(a, b, m, q_a, q_b, q_m, (a + b) % m);
+
+                assert_eq!(q_a, a);
+                assert_eq!(q_b, (a + b) % m);
+                assert_eq!(q_m, m);
+            }
+        });
+        Ok(())
+    }
+
+    #[test]
+    fn test_mod_add_larger() -> Result<(), CircuitError> {
+        let mut b = OpBuilder::new();
+        let ra = b.register(2)?;
+        let rb = b.register(3)?;
+        let rm = b.register(2)?;
+
+        let (ra, rb, rm) = add_mod(&mut b, ra, rb, rm)?;
+
+        let r = b.merge(vec![ra, rb, rm])?;
+        run_debug(&r)?;
+        let mapping = get_mapping::<f64>(&r)?;
+        mapping.into_iter().enumerate().for_each(|(indx, mapping)| {
+            println!("{:010b}\t{:010b}", indx, mapping);
+            let indx = indx as u64;
+            let a = extract_bits(indx, &[0, 1]);
+            let b = extract_bits(indx, &[2, 3, 4]);
+            let m = extract_bits(indx, &[5, 6]);
+
+            if a < m && b < m {
+                let q_a = extract_bits(mapping, &[0, 1]);
+                let q_b = extract_bits(mapping, &[2, 3, 4]);
+                let q_m = extract_bits(mapping, &[5, 6]);
+
+                dbg!(a, b, m, q_a, q_b, q_m, (a + b) % m);
+
+                assert_eq!(q_a, a);
+                assert_eq!(q_b, (a + b) % m);
+                assert_eq!(q_m, m);
             }
         });
         Ok(())

@@ -32,6 +32,8 @@ pub enum StateModifierType {
     StochasticMeasureState(u64, Vec<u64>, f64),
     /// Subsections of the circuit which depend on measured values.
     SideChannelModifiers(Vec<MeasurementHandle>, Box<SideChannelModifierFn>),
+    /// Debugging op
+    Debug(Vec<Vec<u64>>, Box<dyn Fn(Vec<Vec<f64>>) -> ()>),
 }
 
 impl fmt::Debug for StateModifierType {
@@ -62,6 +64,7 @@ impl fmt::Debug for StateModifierType {
             StateModifierType::SideChannelModifiers(handle, _) => {
                 write!(f, "SideChannelModifiers[{:?}]", handle)
             }
+            StateModifierType::Debug(indices, _) => write!(f, "Debug[{:?}]", indices),
         }
     }
 }
@@ -133,6 +136,18 @@ impl StateModifier {
         StateModifier {
             name,
             modifier: StateModifierType::SideChannelModifiers(handles.to_vec(), f),
+        }
+    }
+
+    /// Create a new debug state modifier (which doesn't modify the state).
+    pub fn new_debug(
+        name: String,
+        indices: Vec<Vec<u64>>,
+        f: Box<dyn Fn(Vec<Vec<f64>>) -> ()>,
+    ) -> StateModifier {
+        StateModifier {
+            name,
+            modifier: StateModifierType::Debug(indices, f),
         }
     }
 }
@@ -593,6 +608,15 @@ fn fold_modify_state<P: Precision, QS: QuantumState<P>>(
                 .collect();
             let modifiers = f(&measured_values)?;
             modifiers.iter().try_fold((s, mr), fold_modify_state)
+        }
+        StateModifierType::Debug(index_groups, f) => {
+            let result = index_groups
+                .iter()
+                .map(|indices| s.stochastic_measure(indices, 0.0))
+                .map(|vp| vp.into_iter().map(|p| p.to_f64().unwrap()).collect())
+                .collect();
+            f(result);
+            Ok((s, mr))
         }
     }
 }

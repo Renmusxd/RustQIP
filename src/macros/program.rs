@@ -708,6 +708,58 @@ impl From<&usize> for QubitIndices {
     }
 }
 
+impl From<u64> for QubitIndices {
+    fn from(item: u64) -> Self {
+        Self {
+            indices: vec![item as usize],
+        }
+    }
+}
+impl From<&u64> for QubitIndices {
+    fn from(item: &u64) -> Self {
+        (*item).into()
+    }
+}
+
+impl From<u32> for QubitIndices {
+    fn from(item: u32) -> Self {
+        Self {
+            indices: vec![item as usize],
+        }
+    }
+}
+impl From<&u32> for QubitIndices {
+    fn from(item: &u32) -> Self {
+        (*item).into()
+    }
+}
+
+impl From<i64> for QubitIndices {
+    fn from(item: i64) -> Self {
+        Self {
+            indices: vec![item as usize],
+        }
+    }
+}
+impl From<&i64> for QubitIndices {
+    fn from(item: &i64) -> Self {
+        (*item).into()
+    }
+}
+
+impl From<i32> for QubitIndices {
+    fn from(item: i32) -> Self {
+        Self {
+            indices: vec![item as usize],
+        }
+    }
+}
+impl From<&i32> for QubitIndices {
+    fn from(item: &i32) -> Self {
+        (*item).into()
+    }
+}
+
 /// A struct which wraps the metadata for a Register, this is so that expressions which reference
 /// the register can still be used inside the program! macro.
 #[derive(Debug)]

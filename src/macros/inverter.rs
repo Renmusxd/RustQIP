@@ -74,6 +74,7 @@ macro_rules! wrap_and_invert {
 #[macro_export]
 macro_rules! invert_fn {
     (pub $newinvert:ident, $func:expr) => {
+        /// Invert the given function.
         pub fn $newinvert(
             b: &mut dyn UnitaryBuilder,
             rs: Vec<Register>,
@@ -122,6 +123,7 @@ pub fn inverter<
                     let inv_op = remap_indices(invert_op(op), &flat_indices);
                     (name, inv_op)
                 }
+                StateModifierType::Debug(_, _) => unimplemented!(),
                 StateModifierType::SideChannelModifiers(_, _) => unimplemented!(),
                 StateModifierType::MeasureState(_, _, _) => unimplemented!(),
                 StateModifierType::StochasticMeasureState(_, _, _) => unimplemented!(),
@@ -315,7 +317,7 @@ mod inverter_test {
         let rb = b.register(3)?;
         let rs = add_op(&mut b, vec![rc, ra, rb])?;
         let rs = inv_add(&mut b, rs)?;
-        let r = b.merge(rs)?;
+        let _r = b.merge(rs)?;
         Ok(())
     }
 
@@ -327,7 +329,7 @@ mod inverter_test {
         let ra = b.register(2)?;
         let rb = b.register(3)?;
         let rs = inv_add(&mut b, vec![rc, ra, rb])?;
-        let r = b.merge(rs)?;
+        let _r = b.merge(rs)?;
         Ok(())
     }
 }

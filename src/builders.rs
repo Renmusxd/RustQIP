@@ -489,6 +489,27 @@ pub trait UnitaryBuilder {
         handles: &[MeasurementHandle],
         f: Box<SideChannelHelperFn>,
     ) -> Vec<Register>;
+
+    /// Debug a register using a function `f` run during circuit execution on the state of `r`
+    fn debug(
+        &mut self,
+        r: Register,
+        f: Box<dyn Fn(Vec<f64>) -> ()>,
+    ) -> Result<Register, CircuitError> {
+        let vf = Box::new(move |mut states: Vec<Vec<f64>>| {
+            let state = states.pop().unwrap();
+            f(state);
+        });
+        let mut rs = self.debug_registers(vec![r], vf)?;
+        Ok(rs.pop().unwrap())
+    }
+
+    /// Debug a vec of registers using a function `f` run during circuit execution on each state of `r`
+    fn debug_registers(
+        &mut self,
+        rs: Vec<Register>,
+        f: Box<dyn Fn(Vec<Vec<f64>>) -> ()>,
+    ) -> Result<Vec<Register>, CircuitError>;
 }
 
 /// Helper function for Boxing static functions and applying using the given UnitaryBuilder.
@@ -802,6 +823,19 @@ impl UnitaryBuilder for OpBuilder {
         let (rs, _) = self.split_absolute_many(r, &index_groups).unwrap();
         rs
     }
+
+    fn debug_registers(
+        &mut self,
+        rs: Vec<Register>,
+        f: Box<dyn Fn(Vec<Vec<f64>>) -> ()>,
+    ) -> Result<Vec<Register>, CircuitError> {
+        let indices: Vec<Vec<u64>> = rs.iter().map(|r| r.indices.clone()).collect();
+        let modifier = StateModifier::new_debug("Debug".to_string(), indices.clone(), f);
+        let r = Register::merge_with_modifier(self.get_op_id(), rs, Some(modifier))?;
+        let (rs, remaining) = self.split_absolute_many(r, &indices)?;
+        assert_eq!(remaining, None);
+        Ok(rs)
+    }
 }
 
 /// An op builder which depends on the value of a given Register (COPs)
@@ -1056,6 +1090,14 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         self.set_conditional_register(cr);
         let (rs, _) = self.split_absolute_many(r, &index_groups).unwrap();
         rs
+    }
+
+    fn debug_registers(
+        &mut self,
+        rs: Vec<Register>,
+        f: Box<dyn Fn(Vec<Vec<f64>>) -> ()>,
+    ) -> Result<Vec<Register>, CircuitError> {
+        self.parent_builder.debug_registers(rs, f)
     }
 }
 
