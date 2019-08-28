@@ -26,7 +26,7 @@ pub fn add(
             let (rc, ra, rb) = program!(b, rc, ra, rb;
                 carry_op rc[0], ra[0], rb[0], rc[1];
                 add_op rc[1..n], ra[1..n], rb[1..=n];
-                inv_carry_op rc[0], ra[0], rb[0], rc[1];
+                carry_inv rc[0], ra[0], rb[0], rc[1];
                 sum_op rc[0], ra[0], rb[0];
             )?;
             Ok((rc, ra, rb))
@@ -72,26 +72,7 @@ fn carry(
     b.pop_name_scope();
     Ok((rc, ra, rb, rcp))
 }
-wrap_fn!(carry_op, (carry), rc, ra, rb, rcp);
-
-fn inv_carry(
-    b: &mut dyn UnitaryBuilder,
-    rc: Register,
-    ra: Register,
-    rb: Register,
-    rcp: Register,
-) -> Result<(Register, Register, Register, Register), CircuitError> {
-    b.push_name_scope("inv_carry");
-    let (rc, ra, rb, rcp) = program!(b, rc, ra, rb, rcp;
-        control x ra, rb;
-        control x |rc, rb,| rcp;
-        control x ra, rb;
-        control x |ra, rb,| rcp;
-    )?;
-    b.pop_name_scope();
-    Ok((rc, ra, rb, rcp))
-}
-wrap_fn!(inv_carry_op, (inv_carry), rc, ra, rb, rcp);
+wrap_and_invert!(carry_op, carry_inv, (carry), rc, ra, rb, rcp);
 
 /// Addition of ra and rb modulo rm. Conditions are:
 /// 0 <= a
@@ -222,8 +203,11 @@ mod arithmetic_tests {
         let rb = b.qubit();
         let rcp = b.qubit();
 
-        let (rc, ra, rb, rcp) = carry(&mut b, rc, ra, rb, rcp)?;
-        let (rc, ra, rb, rcp) = inv_carry(&mut b, rc, ra, rb, rcp)?;
+        let (rc, ra, rb, rcp) = program!(&mut b, rc, ra, rb, rcp;
+            carry_op rc, ra, rb, rcp;
+            carry_inv rc, ra, rb, rcp;
+        )?;
+
         let r = b.merge(vec![rc, ra, rb, rcp])?;
         run_debug(&r)?;
         let inv_mapping = get_mapping::<f64>(&r)?;
