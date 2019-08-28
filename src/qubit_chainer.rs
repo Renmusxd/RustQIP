@@ -6,7 +6,7 @@ use crate::errors::CircuitError;
 /// ```
 /// use qip::*;
 /// let mut b = OpBuilder::default();
-/// let r = b.r(1);  // Make the Register, apply x, y, z and release.
+/// let r = b.qubit();  // Make the Register, apply x, y, z and release.
 /// let r = chain(&mut b, r).x().y().z().r();
 /// ```
 use crate::{Register, UnitaryBuilder};

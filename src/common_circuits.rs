@@ -30,8 +30,8 @@ where
 pub fn epr_pair(b: &mut OpBuilder, n: u64) -> (Register, Register) {
     let m = 2 * n;
 
-    let r = b.r(1);
-    let rs = b.r(m - 1);
+    let r = b.qubit();
+    let rs = b.register(m - 1).unwrap();
 
     let r = b.hadamard(r);
 

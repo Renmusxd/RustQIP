@@ -97,7 +97,7 @@ wrap_fn!(inv_carry_op, (inv_carry), rc, ra, rb, rcp);
 /// 0 <= a
 /// a,b < M
 pub fn add_mod(
-    b: &mut OpBuilder,
+    b: &mut dyn UnitaryBuilder,
     ra: Register,
     rb: Register,
     rm: Register,

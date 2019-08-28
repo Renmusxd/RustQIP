@@ -26,7 +26,54 @@ type SparseBuilderFn = dyn Fn(u64) -> Vec<(u64, Complex<f64>)>;
 
 /// A builder which support unitary operations
 pub trait UnitaryBuilder {
-    // Things like X, Y, Z, NOT, H, SWAP, ... go here
+
+    /// Create a single qubit register.
+    fn qubit(&mut self) -> Register;
+
+    /// Build a new Register with `n` indices
+    fn register(&mut self, n: u64) -> Result<Register, CircuitError> {
+        if n == 0 {
+            CircuitError::make_str_err("Register n must be greater than 0.")
+        } else {
+            let rs = (0 .. n).map(|_| self.qubit()).collect();
+            self.merge(rs)
+        }
+    }
+
+    /// Builds a vector of new Register
+    fn registers(&mut self, ns: &[u64]) -> Result<Vec<Register>, CircuitError> {
+        ns.iter()
+            .try_for_each(|n| {
+                if *n == 0 {
+                    CircuitError::make_str_err("Register n must be greater than 0.")
+                } else {
+                    Ok(())
+                }
+            })
+            .map(|_| ns.iter().map(|n| self.register(*n).unwrap()).collect())
+    }
+
+    /// Build a new register with `n` indices, return it plus a handle which can be
+    /// used for feeding in an initial state.
+    fn register_and_handle(
+        &mut self,
+        n: u64,
+    ) -> Result<(Register, RegisterHandle), CircuitError> {
+        let r = self.register(n)?;
+        let h = r.handle();
+        Ok((r, h))
+    }
+
+    /// Get a temporary Register with value `|0n>` or `|1n>`.
+    /// This value is not checked and may be subject to the noise of your circuit, since it can
+    /// recycle Registers which were returned with `return_temp_register`. If not enough Registers have been
+    /// returned, then new Registers may be allocated (and initialized with the correct value).
+    fn get_temp_register(&mut self, n: u64, value: bool) -> Register;
+
+    /// Return a temporary Register which is supposed to have a given value `|0n>` or `|1n>`
+    /// This value is not checked and may be subject to the noise of your circuit, in turn causing
+    /// noise to future calls to `get_temp_register`.
+    fn return_temp_register(&mut self, r: Register, value: bool);
 
     /// Build a builder which uses `r` as a condition.
     fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder;
@@ -549,8 +596,41 @@ impl OpBuilder {
         OpBuilder::default()
     }
 
-    /// Build a new Register with `n` indices
-    pub fn register(&mut self, n: u64) -> Result<Register, CircuitError> {
+    /// Add a measure op to the pipeline for `r` and return a reference which can
+    /// later be used to access the measured value from the results of `pipeline::run`.
+    pub fn measure(&mut self, r: Register) -> (Register, MeasurementHandle) {
+        self.measure_basis(r, 0.0)
+    }
+
+    /// Measure in the basis of `cos(phase)|0> + sin(phase)|1>`
+    pub fn measure_basis(&mut self, r: Register, angle: f64) -> (Register, MeasurementHandle) {
+        let id = self.get_op_id();
+        let modifier = StateModifier::new_measurement_basis(
+            String::from("measure"),
+            id,
+            r.indices.clone(),
+            angle,
+        );
+        let modifier = Some(modifier);
+        let r = Register::merge_with_modifier(id, vec![r], modifier).unwrap();
+        Register::make_measurement_handle(self.get_op_id(), r)
+    }
+
+    fn get_op_id(&mut self) -> u64 {
+        let tmp = self.op_id;
+        self.op_id += 1;
+        tmp
+    }
+}
+
+impl UnitaryBuilder for OpBuilder {
+    fn qubit(&mut self) -> Register {
+        let base_index = self.qubit_index;
+        self.qubit_index += 1;
+        Register::new(self.get_op_id(), vec![base_index]).unwrap()
+    }
+
+    fn register(&mut self, n: u64) -> Result<Register, CircuitError> {
         if n == 0 {
             CircuitError::make_str_err("Register n must be greater than 0.")
         } else {
@@ -560,45 +640,7 @@ impl OpBuilder {
         }
     }
 
-    /// Builds a vector of new Register
-    pub fn registers(&mut self, ns: &[u64]) -> Result<Vec<Register>, CircuitError> {
-        ns.iter()
-            .try_for_each(|n| {
-                if *n == 0 {
-                    CircuitError::make_str_err("Register n must be greater than 0.")
-                } else {
-                    Ok(())
-                }
-            })
-            .map(|_| ns.iter().map(|n| self.register(*n).unwrap()).collect())
-    }
-
-    /// If you just plan to call unwrap this is cleaner.
-    pub fn r(&mut self, n: u64) -> Register {
-        self.register(n).unwrap()
-    }
-
-    /// Create a single qubit register.
-    pub fn qubit(&mut self) -> Register {
-        self.r(1)
-    }
-
-    /// Build a new register with `n` indices, return it plus a handle which can be
-    /// used for feeding in an initial state.
-    pub fn register_and_handle(
-        &mut self,
-        n: u64,
-    ) -> Result<(Register, RegisterHandle), CircuitError> {
-        let r = self.register(n)?;
-        let h = r.handle();
-        Ok((r, h))
-    }
-
-    /// Get a temporary Register with value `|0n>` or `|1n>`.
-    /// This value is not checked and may be subject to the noise of your circuit, since it can
-    /// recycle Registers which were returned with `return_temp_register`. If not enough Registers have been
-    /// returned, then new Registers may be allocated (and initialized with the correct value).
-    pub fn get_temp_register(&mut self, n: u64, value: bool) -> Register {
+    fn get_temp_register(&mut self, n: u64, value: bool) -> Register {
         let (op_vec, other_vec) = if value {
             (&mut self.temp_one_qubits, &mut self.temp_zero_qubits)
         } else {
@@ -644,10 +686,7 @@ impl OpBuilder {
         self.merge(acquired_qubits).unwrap()
     }
 
-    /// Return a temporary Register which is supposed to have a given value `|0n>` or `|1n>`
-    /// This value is not checked and may be subject to the noise of your circuit, in turn causing
-    /// noise to future calls to `get_temp_register`.
-    pub fn return_temp_register(&mut self, r: Register, value: bool) {
+    fn return_temp_register(&mut self, r: Register, value: bool) {
         let rs = self.split_all(r);
         let op_vec = if value {
             &mut self.temp_one_qubits
@@ -657,34 +696,6 @@ impl OpBuilder {
         op_vec.extend(rs.into_iter());
     }
 
-    /// Add a measure op to the pipeline for `r` and return a reference which can
-    /// later be used to access the measured value from the results of `pipeline::run`.
-    pub fn measure(&mut self, r: Register) -> (Register, MeasurementHandle) {
-        self.measure_basis(r, 0.0)
-    }
-
-    /// Measure in the basis of `cos(phase)|0> + sin(phase)|1>`
-    pub fn measure_basis(&mut self, r: Register, angle: f64) -> (Register, MeasurementHandle) {
-        let id = self.get_op_id();
-        let modifier = StateModifier::new_measurement_basis(
-            String::from("measure"),
-            id,
-            r.indices.clone(),
-            angle,
-        );
-        let modifier = Some(modifier);
-        let r = Register::merge_with_modifier(id, vec![r], modifier).unwrap();
-        Register::make_measurement_handle(self.get_op_id(), r)
-    }
-
-    fn get_op_id(&mut self) -> u64 {
-        let tmp = self.op_id;
-        self.op_id += 1;
-        tmp
-    }
-}
-
-impl UnitaryBuilder for OpBuilder {
     fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder {
         ConditionalContextBuilder {
             parent_builder: self,
@@ -873,6 +884,22 @@ impl<'a> ConditionalContextBuilder<'a> {
 }
 
 impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
+    fn qubit(&mut self) -> Register {
+        self.parent_builder.qubit()
+    }
+
+    fn register(&mut self, n: u64) -> Result<Register, CircuitError> {
+        self.parent_builder.register(n)
+    }
+
+    fn get_temp_register(&mut self, n: u64, value: bool) -> Register {
+        self.parent_builder.get_temp_register(n, value)
+    }
+
+    fn return_temp_register(&mut self, r: Register, value: bool) {
+        self.parent_builder.return_temp_register(r, value)
+    }
+
     fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder {
         ConditionalContextBuilder {
             parent_builder: self,
