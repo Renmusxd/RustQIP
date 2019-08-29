@@ -119,6 +119,48 @@ pub fn add_mod(
 }
 wrap_fn!(pub add_mod_op, (add_mod), ra, rb, rm);
 
+/// Maps `|a>|b>|M>|p>` to `|a>|b>|M>|(p + ba) mod M>`
+/// With `a[n+1]`, `b[k]`, `M[n]`, and `p[n+1]`, and `a < M`.
+pub fn times_mod(b: &mut dyn UnitaryBuilder, ra: Register, rb: Register, rm: Register, rp: Register) -> Result<(Register, Register, Register, Register), CircuitError> {
+    let n = rm.n();
+    let k = rb.n();
+    if ra.n() != n+1 {
+        CircuitError::make_err(format!("Expected ra.n = rm.n + 1 = {}, but found {}", n+1, ra.n()))
+    } else if rp.n() != n+1 {
+        CircuitError::make_err(format!("Expected rp.n = rm.n + 1 = {}, but found {}", n+1, rp.n()))
+    } else {
+        let rt = b.get_temp_register(k, false);
+        let rc = b.get_temp_register(n, false);
+
+        let rs = (ra, rb, rm, rp, rt, rc);
+        let rs = (0 .. k).try_fold(rs, |rs, indx| {
+            let (ra, rb, rm, rp, rt, rc) = rs;
+            program!(b, ra, rb, rm, rp, rt, rc;
+                add_inv rc, rm, ra;
+                control x ra[n], rt[indx];
+                control add_op rt[indx], rc, rm, ra;
+                control add_mod_op rb[indx], ra[0 .. n], rp, rm;
+                rshift_op ra;
+            )
+        })?;
+        let rs = (0 .. k).rev().try_fold(rs, |rs, indx| {
+            let (ra, rb, rm, rp, rt, rc) = rs;
+            program!(b, ra, rb, rm, rp, rt, rc;
+                lshift_op ra;
+                control add_inv rt[indx], rc, rm, ra;
+                control x ra[n], rt[indx];
+                add_op rc, rm, ra;
+            )
+        })?;
+        let (ra, rb, rm, rp, rt, rc) = rs;
+
+        b.return_temp_register(rc, false);
+        b.return_temp_register(rt, false);
+
+        Ok((ra, rb, rm, rp))
+    }
+}
+
 /// Right shift the qubits in a register (or left shift by providing a negative number).
 pub fn rshift(b: &mut dyn UnitaryBuilder, r: Register) -> Register {
     let n = r.n();
@@ -476,6 +518,66 @@ mod arithmetic_tests {
 
             assert_eq!(mapping, expected_output);
         });
+        Ok(())
+    }
+
+    #[test]
+    fn test_mod_times() -> Result<(), CircuitError> {
+        let n = 2;
+        let k = 2;
+        let mut b = OpBuilder::new();
+        let (ra, ha) = b.register_and_handle(n+1)?;
+        let (rb, hb) = b.register_and_handle(k)?;
+        let (rm, hm) = b.register_and_handle(n)?;
+        let (rp, hp) = b.register_and_handle(n+1)?;
+
+        let (ra, rb, rm, rp) = times_mod(&mut b, ra, rb, rm, rp)?;
+
+        let (ra, ma) = b.measure(ra);
+        let (rb, mb) = b.measure(rb);
+        let (rm, mm) = b.measure(rm);
+        let (rp, mp) = b.measure(rp);
+
+        let r = b.merge(vec![ra, rb, rm, rp])?;
+        run_debug(&r)?;
+
+        // Start with some mod 3 calculations
+        let m_val = 3;
+        let p_val = 0;
+        (0 .. 1 << (n+1)).try_for_each(|a_val| {
+            (0..1 << k).try_for_each(|b_val| {
+                if a_val >= m_val {
+                    Ok(())
+                } else {
+                    let inits = [
+                        ha.make_init_from_index(a_val)?,
+                        hb.make_init_from_index(b_val)?,
+                        hm.make_init_from_index(m_val)?,
+                        hp.make_init_from_index(p_val)?
+                    ];
+                    let (state, measurements) = run_local_with_init::<f64>(&r, &inits)?;
+
+                    let state = state.get_state(false);
+                    let pos = state.into_iter().position(|v| v == Complex::one())
+                        .ok_or(CircuitError::new("Could not find 1.0 position.".to_string()))?;
+
+                    let (q_a, _) = measurements.get_measurement(&ma).unwrap();
+                    let (q_b, _) = measurements.get_measurement(&mb).unwrap();
+                    let (q_m, _) = measurements.get_measurement(&mm).unwrap();
+                    let (q_p, _) = measurements.get_measurement(&mp).unwrap();
+
+                    println!("Pos: {:b}", pos);
+                    dbg!(a_val, b_val, m_val, p_val, q_a, q_b, q_m, q_p, (p_val + a_val * b_val) % m_val);
+                    assert_eq!(q_a, a_val);
+                    assert_eq!(q_b, b_val);
+                    assert_eq!(q_m, m_val);
+                    assert_eq!(q_p, (p_val + a_val * b_val) % m_val);
+                    Ok(())
+                }
+            })
+        })?;
+
+        assert!(false);
         Ok(())
     }
 }

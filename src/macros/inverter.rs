@@ -3,6 +3,7 @@ use crate::state_ops::UnitaryOp;
 use crate::unitary_decomposition::utils::transpose_sparse;
 use crate::utils::get_flat_index;
 use crate::{CircuitError, Complex, OpBuilder, Register, UnitaryBuilder};
+use std::iter::repeat;
 
 /// Wrap a function to create a version compatible with `program!` as well as an inverse which is
 /// also compatible.
@@ -97,7 +98,7 @@ pub fn inverter<
     F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
 >(
     b: &mut dyn UnitaryBuilder,
-    rs: Vec<Register>,
+    mut rs: Vec<Register>,
     f: F,
 ) -> Result<Vec<Register>, CircuitError> {
     let original_indices: Vec<_> = rs.iter().map(|r| r.indices.clone()).collect();
@@ -110,11 +111,28 @@ pub fn inverter<
         })
         .collect();
     let flat_indices: Vec<_> = original_indices.iter().flatten().cloned().collect();
+
+    // Call the function and count any qubits allocated inside.
+    let before_n = inv_builder.get_qubit_count();
     let new_rs = f(&mut inv_builder, new_rs)?;
     let end_reg = inv_builder.merge(new_rs)?;
+    let after_n = inv_builder.get_qubit_count();
+
+    // Now make any temporary qubits that may be necessary. We can start them as false since the
+    // inv_builder had no starting trues and will therefore negate falses whenever needed, though
+    // this will be slightly inefficient compared to an optimal strategy of reusing trues if around.
+    let temps = after_n - before_n;
+    let temp_indices = if temps > 0 {
+        let temp_reg = b.get_temp_register(temps, false);
+        let temp_indices = temp_reg.indices.clone();
+        rs.push(temp_reg);
+        temp_indices
+    } else {
+        vec![]
+    };
 
     let reg = b.merge(rs)?;
-    let reg = get_owned_opfns(end_reg)
+    let reg: Register = get_owned_opfns(end_reg)
         .into_iter()
         .map(|modifier| {
             let name = format!("Invert({})", modifier.name);
@@ -156,6 +174,23 @@ pub fn inverter<
                 b.merge_with_op(vec![sel_reg], Some((name, op)))
             }
         })?;
+
+    // Any temps which were returned, add them to the returned bucket with the correct value.
+    let (zero_temps, one_temps) = inv_builder.get_temp_indices();
+    let temp_vecs = vec![(zero_temps, false), (one_temps, true)];
+    let reg = temp_vecs.into_iter().try_fold(reg, |reg, (temps, value)| {
+        if temps.is_empty() {
+            Ok(reg)
+        } else {
+            let temps: Vec<_> = temps.into_iter().map(|indx| {
+                temp_indices[(indx - before_n) as usize]
+            }).collect();
+            let (ts, reg) = b.split_absolute(reg, &temps)?;
+            b.return_temp_register(ts, value);
+            Ok(reg.unwrap())
+        }
+    })?;
+
     let (rs, _) = b.split_absolute_many(reg, &original_indices)?;
     Ok(rs)
 }

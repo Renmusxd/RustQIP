@@ -610,6 +610,18 @@ impl OpBuilder {
         Register::make_measurement_handle(self.get_op_id(), r)
     }
 
+    /// Get the current count of created qubits.
+    pub fn get_qubit_count(&self) -> u64 {
+        self.qubit_index
+    }
+
+    /// Get indices of zeros and ones temps currently in holding.
+    pub(crate) fn get_temp_indices(&self) -> (Vec<u64>, Vec<u64>) {
+        let zeros = self.temp_zero_qubits.iter().map(|r| &r.indices).flatten().cloned().collect();
+        let ones = self.temp_one_qubits.iter().map(|r| &r.indices).flatten().cloned().collect();
+        (zeros, ones)
+    }
+
     fn get_op_id(&mut self) -> u64 {
         let tmp = self.op_id;
         self.op_id += 1;
@@ -643,7 +655,7 @@ impl UnitaryBuilder for OpBuilder {
 
         let n = n as usize;
         let mut acquired_qubits = if n < op_vec.len() {
-            op_vec.split_off(n)
+            op_vec.split_off(op_vec.len() - n)
         } else if !op_vec.is_empty() {
             op_vec.split_off(op_vec.len() - 1)
         } else {
@@ -654,8 +666,8 @@ impl UnitaryBuilder for OpBuilder {
         if acquired_qubits.len() < n {
             let remaining = n - acquired_qubits.len();
             let additional_registers = if remaining < other_vec.len() {
-                other_vec.split_off(remaining)
-            } else if !op_vec.is_empty() {
+                other_vec.split_off(other_vec.len() - remaining)
+            } else if !other_vec.is_empty() {
                 other_vec.split_off(other_vec.len() - 1)
             } else {
                 vec![]
