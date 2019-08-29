@@ -147,12 +147,13 @@ pub fn inverter<
                     vecs.iter().flatten().cloned().collect()
                 }
             };
-            if indices.len() == reg.n() as usize {
-                b.merge_with_op(vec![reg], Some((name, op)))
-            } else {
-                let (sel_reg, reg) = b.split_absolute(reg, &indices)?;
+
+            let (sel_reg, reg) = b.split_absolute(reg, &indices)?;
+            if let Some(reg) = reg {
                 let sel_reg = b.merge_with_op(vec![sel_reg], Some((name, op)))?;
                 b.merge(vec![sel_reg, reg])
+            } else {
+                b.merge_with_op(vec![sel_reg], Some((name, op)))
             }
         })?;
     let (rs, _) = b.split_absolute_many(reg, &original_indices)?;

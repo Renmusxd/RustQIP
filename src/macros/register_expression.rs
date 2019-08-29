@@ -32,7 +32,7 @@
 macro_rules! register_expr {
     // Split the names into the selected indices, pushing the remaining to the acc vector.
     (@splitter($acc:ident) $builder:expr, $name:ident $indices:expr; $($tail:tt)*) => {
-        let $name: (Register, Register) = $builder.split($name, &$indices)?;
+        let $name: (Register, Option<Register>) = $builder.split($name, &$indices)?;
         $acc.push($name.1);
         let $name = $name.0;
     };
@@ -48,8 +48,12 @@ macro_rules! register_expr {
     // Join together all the names back to their original indices by pulling from the
     // remaining vector.
     (@joiner($remaining:ident) $builder:expr, $name:ident $indices:expr; $($tail:tt)*) => {
-        let tmp: Vec<Register> = $builder.split_all($name);
-        let $name: Register = $builder.merge_with_indices($remaining.pop().unwrap(), tmp, &$indices)?;
+        let $name: Register = if let Some(tmp_r) = $remaining.pop().unwrap() {
+            let tmp: Vec<Register> = $builder.split_all($name);
+            $builder.merge_with_indices(tmp_r, tmp, &$indices)?
+        } else {
+            $name
+        }
     };
     (@joiner($remaining:ident) $builder:expr, $name:ident $indices:expr, $($tail:tt)*) => {
         register_expr!(@joiner($remaining) $builder, $($tail)*);
@@ -115,7 +119,7 @@ macro_rules! register_expr {
             let run_register = |b: &mut dyn UnitaryBuilder, rs: register_expr!(@registers_for_names () <- $($tail)*)| -> Result<register_expr!(@registers_for_names () <- $($tail)*), CircuitError> {
                 let register_expr!(@name_tuple () <- $($tail)*) = rs;
                 // $name is now a tuple of split thing and original
-                let mut remaining_qubits = vec![];
+                let mut remaining_qubits: Vec<Option<Register>> = vec![];
                 register_expr!(@splitter(remaining_qubits) b, $($tail)*);
 
                 let args = register_expr!(@name_tuple () <- $($tail)*);
@@ -154,7 +158,7 @@ mod common_circuit_tests {
         let r = b.register(n)?;
         let (t_r, r) = b.split(r, &[0])?;
         let t_r = b.not(t_r);
-        let r = b.merge_with_indices(r, vec![t_r], &[0])?;
+        let r = b.merge_with_indices(r.unwrap(), vec![t_r], &[0])?;
         run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
@@ -182,7 +186,7 @@ mod common_circuit_tests {
         let rb = b.register(n)?;
         let (t_rb, rb) = b.split(rb, &[1])?;
         let t_rb = b.not(t_rb);
-        let rb = b.merge_with_indices(rb, vec![t_rb], &[1])?;
+        let rb = b.merge_with_indices(rb.unwrap(), vec![t_rb], &[1])?;
         let r = b.merge(vec![ra, rb])?;
         run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(2 * n, &r, true);

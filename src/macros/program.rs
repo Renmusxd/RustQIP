@@ -826,10 +826,10 @@ mod common_circuit_tests {
         let rb = b.register(n)?;
         let (r, rb) = b.split(rb, &[2])?;
         let (ra, r) = b.cnot(ra, r);
-        let rb = b.merge_with_indices(rb, vec![r], &[2])?;
+        let rb = b.merge_with_indices(rb.unwrap(), vec![r], &[2])?;
         let (r, ra) = b.split(ra, &[0])?;
         let (r, rb) = b.cnot(r, rb);
-        let ra = b.merge_with_indices(ra, vec![r], &[0])?;
+        let ra = b.merge_with_indices(ra.unwrap(), vec![r], &[0])?;
         let r = b.merge(vec![ra, rb])?;
         run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(2 * n, &r, true);
@@ -864,9 +864,9 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let r = b.register(n)?;
         let (r1, r2) = b.split(r, &[0])?;
-        let (r2, r3) = b.split(r2, &[0])?;
+        let (r2, r3) = b.split(r2.unwrap(), &[0])?;
         let (r1, r2) = b.cnot(r1, r2);
-        let r = b.merge(vec![r1, r2, r3])?;
+        let r = b.merge(vec![r1, r2, r3.unwrap()])?;
         run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
@@ -907,8 +907,8 @@ mod common_circuit_tests {
         let (ra_side, ra_mid) = b.split(ra, &[0, 2])?;
         let (ra_side, r) = b.cnot(ra_side, r);
         let ra_sides = b.split_all(ra_side);
-        let ra = b.merge_with_indices(ra_mid, ra_sides, &[0, 2])?;
-        let rb = b.merge_with_indices(rb, vec![r], &[2])?;
+        let ra = b.merge_with_indices(ra_mid.unwrap(), ra_sides, &[0, 2])?;
+        let rb = b.merge_with_indices(rb.unwrap(), vec![r], &[2])?;
         let r = b.merge(vec![ra, rb])?;
         run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(2 * n, &r, true);
@@ -943,7 +943,7 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let r = b.register(n)?;
         let (r1, r2) = b.split(r, &[2])?;
-        let (r2, r1) = b.cnot(r2, r1);
+        let (r2, r1) = b.cnot(r2.unwrap(), r1);
         let r = b.merge(vec![r1, r2])?;
         run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
@@ -977,7 +977,7 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let r = b.register(n)?;
         let (r1, r2) = b.split(r, &[2])?;
-        let (r2, r1) = b.cnot(r2, r1);
+        let (r2, r1) = b.cnot(r2.unwrap(), r1);
         let r = b.merge(vec![r1, r2])?;
         run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
@@ -1011,7 +1011,7 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let r = b.register(n)?;
         let (r1, r2) = b.split(r, &[2])?;
-        let r2 = b.not(r2);
+        let r2 = b.not(r2.unwrap());
         let (r2, r1) = b.cnot(r2, r1);
         let r2 = b.not(r2);
         let r = b.merge(vec![r1, r2])?;

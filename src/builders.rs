@@ -212,7 +212,8 @@ pub trait UnitaryBuilder {
 
         let name = String::from("swap");
         let r = self.merge_with_op(vec![ra, rb], Some((name, op)))?;
-        self.split_absolute(r, &ra_indices)
+        let (ra, rb) = self.split_absolute(r, &ra_indices)?;
+        Ok((ra, rb.unwrap()))
     }
 
     /// Make an operation from the boxed function `f`. This maps c|`r_in`>|`r_out`> to
@@ -303,7 +304,7 @@ pub trait UnitaryBuilder {
         &mut self,
         r: Register,
         indices: &[u64],
-    ) -> Result<(Register, Register), CircuitError> {
+    ) -> Result<(Register, Option<Register>), CircuitError> {
         for indx in indices {
             if *indx > r.n() {
                 let message = format!(
@@ -316,8 +317,6 @@ pub trait UnitaryBuilder {
         }
         if indices.is_empty() {
             CircuitError::make_str_err("Indices must contain at least one index.")
-        } else if indices.len() == r.indices.len() {
-            CircuitError::make_str_err("Indices must leave at least one index.")
         } else {
             let selected_indices: Vec<u64> =
                 indices.iter().map(|i| r.indices[(*i) as usize]).collect();
@@ -330,7 +329,7 @@ pub trait UnitaryBuilder {
         &mut self,
         r: Register,
         selected_indices: &[u64],
-    ) -> Result<(Register, Register), CircuitError>;
+    ) -> Result<(Register, Option<Register>), CircuitError>;
 
     /// Split the Register into many Registers, each with the given set of indices.
     fn split_absolute_many(
@@ -342,14 +341,9 @@ pub trait UnitaryBuilder {
             .iter()
             .try_fold((vec![], Some(r)), |(mut rs, r), indices| {
                 if let Some(r) = r {
-                    if indices.eq(&r.indices) {
-                        rs.push(r);
-                        Ok((rs, None))
-                    } else {
-                        let (hr, tr) = self.split_absolute(r, indices)?;
-                        rs.push(hr);
-                        Ok((rs, Some(tr)))
-                    }
+                    let (hr, tr) = self.split_absolute(r, indices)?;
+                    rs.push(hr);
+                    Ok((rs, tr))
                 } else {
                     Ok((rs, None))
                 }
@@ -772,14 +766,15 @@ impl UnitaryBuilder for OpBuilder {
         let in_indices = r_in.indices.clone();
         let name = self.get_full_name(name);
         let r = self.merge_with_op(vec![r_in, r_out], Some((name, op)))?;
-        self.split_absolute(r, &in_indices)
+        let (r_in, r_out) = self.split_absolute(r, &in_indices)?;
+        Ok((r_in, r_out.unwrap()))
     }
 
     fn split_absolute(
         &mut self,
         r: Register,
         selected_indices: &[u64],
-    ) -> Result<(Register, Register), CircuitError> {
+    ) -> Result<(Register, Option<Register>), CircuitError> {
         Register::split_absolute(self.get_op_id(), self.get_op_id(), r, selected_indices)
     }
 
@@ -940,10 +935,9 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
             let name = format!("C({})", name);
             let name = self.parent_builder.get_full_name(&name);
             let r = self.merge_with_op(vec![cr, r], Some((name, op)))?;
-            let (cr, r) = self.split_absolute(r, &cr_indices).unwrap();
-
+            let (cr, r) = self.split_absolute(r, &cr_indices)?;
             self.set_conditional_register(cr);
-            Ok(r)
+            Ok(r.unwrap())
         }
     }
 
@@ -972,10 +966,10 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
             let name = format!("C({})", name);
             let name = self.parent_builder.get_full_name(&name);
             let r = self.merge_with_op(vec![cr, r], Some((name, op)))?;
-            let (cr, r) = self.split_absolute(r, &cr_indices).unwrap();
+            let (cr, r) = self.split_absolute(r, &cr_indices)?;
 
             self.set_conditional_register(cr);
-            Ok(r)
+            Ok(r.unwrap())
         }
     }
 
@@ -986,11 +980,10 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         let ra_indices = ra.indices.clone();
         let name = self.parent_builder.get_full_name("C(swap)");
         let r = self.merge_with_op(vec![cr, ra, rb], Some((name, op)))?;
-        let (cr, r) = self.split_absolute(r, &cr_indices).unwrap();
-        let (ra, rb) = self.split_absolute(r, &ra_indices).unwrap();
-
+        let (cr, r) = self.split_absolute(r, &cr_indices)?;
+        let (ra, rb) = self.split_absolute(r.unwrap(), &ra_indices)?;
         self.set_conditional_register(cr);
-        Ok((ra, rb))
+        Ok((ra, rb.unwrap()))
     }
 
     fn apply_function(
@@ -1008,18 +1001,18 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         let name = format!("C({})", name);
         let name = self.parent_builder.get_full_name(&name);
         let r = self.merge_with_op(vec![cr, r_in, r_out], Some((name, op)))?;
-        let (cr, r) = self.split_absolute(r, &cr_indices).unwrap();
-        let (r_in, r_out) = self.split_absolute(r, &in_indices).unwrap();
+        let (cr, r) = self.split_absolute(r, &cr_indices)?;
+        let (r_in, r_out) = self.split_absolute(r.unwrap(), &in_indices)?;
 
         self.set_conditional_register(cr);
-        Ok((r_in, r_out))
+        Ok((r_in, r_out.unwrap()))
     }
 
     fn split_absolute(
         &mut self,
         r: Register,
         selected_indices: &[u64],
-    ) -> Result<(Register, Register), CircuitError> {
+    ) -> Result<(Register, Option<Register>), CircuitError> {
         self.parent_builder.split_absolute(r, selected_indices)
     }
 
@@ -1105,6 +1098,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
                   ms: &[u64]|
                   -> Result<Vec<Register>, CircuitError> {
                 let (cr, r) = b.split_absolute(r, &conditioned_indices)?;
+                let r = r.unwrap();
                 let mut b = b.with_condition(cr);
                 f(&mut b, r, ms)
             },
@@ -1115,7 +1109,10 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         let r = self.merge(vec![cr, r]).unwrap();
         let (cr, r) = self.split_absolute(r, &cindices_clone).unwrap();
         self.set_conditional_register(cr);
-        let (rs, _) = self.split_absolute_many(r, &index_groups).unwrap();
+        let (rs, remaining) = self.split_absolute_many(r.unwrap(), &index_groups).unwrap();
+        if let Some(r) = remaining {
+            panic!();
+        }
         rs
     }
 

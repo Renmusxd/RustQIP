@@ -117,6 +117,25 @@ pub fn add_mod(
         Ok((ra, rb, rm))
     }
 }
+wrap_fn!(pub add_mod_op, (add_mod), ra, rb, rm);
+
+/// Right shift the qubits in a register (or left shift by providing a negative number).
+pub fn rshift(b: &mut dyn UnitaryBuilder, r: Register) -> Register {
+    let n = r.n();
+    let mut rs: Vec<Option<Register>> = b.split_all(r).into_iter().map(|r| Some(r)).collect();
+    let mut hit: Vec<bool> = rs.iter().map(|_| false ).collect();
+    (0..n-1).rev().for_each(|indx| {
+        let ra = rs[indx as usize].take().unwrap();
+        let offset = (indx as i64 - 1) % (n as i64);
+        let offset = if offset < 0 { offset + n as i64 } else { offset } as u64;
+        let rb = rs[offset as usize].take().unwrap();
+        let (ra, rb) = b.swap(ra, rb).unwrap();
+        rs[indx as usize] = Some(ra);
+        rs[offset as usize] = Some(rb);
+    });
+    b.merge(rs.into_iter().map(|r| r.unwrap()).collect()).unwrap()
+}
+wrap_and_invert!(rshift_op, lshift_op, rshift, r);
 
 #[cfg(test)]
 mod arithmetic_tests {
@@ -389,6 +408,73 @@ mod arithmetic_tests {
                 assert_eq!(q_b, (a + b) % m);
                 assert_eq!(q_m, m);
             }
+        });
+        Ok(())
+    }
+
+    #[test]
+    fn test_rshift_simple() -> Result<(), CircuitError> {
+        let mut b = OpBuilder::new();
+        let n = 5;
+        let r = b.register(n)?;
+        let r = rshift(&mut b, r);
+
+        run_debug(&r)?;
+        let mapping = get_mapping::<f64>(&r)?;
+
+        mapping.into_iter().enumerate().for_each(|(indx, mapping)| {
+            println!("{:05b}\t{:05b}", indx, mapping);
+            let indx = indx as u64;
+            let expected_output = indx << 1;
+            let expected_output = (expected_output | (expected_output >> n)) & ((1 << n) - 1);
+
+            assert_eq!(mapping, expected_output);
+        });
+        Ok(())
+    }
+
+    #[test]
+    fn test_rshift_wrapped() -> Result<(), CircuitError> {
+        let mut b = OpBuilder::new();
+        let n = 5;
+        let r = b.register(n)?;
+        let r = program!(&mut b, r;
+            rshift_op r;
+        )?;
+
+        run_debug(&r)?;
+        let mapping = get_mapping::<f64>(&r)?;
+
+        mapping.into_iter().enumerate().for_each(|(indx, mapping)| {
+            println!("{:05b}\t{:05b}", indx, mapping);
+            let indx = indx as u64;
+            let expected_output = indx << 1;
+            let expected_output = (expected_output | (expected_output >> n)) & ((1 << n) - 1);
+
+            assert_eq!(mapping, expected_output);
+        });
+        Ok(())
+    }
+
+    #[test]
+    fn test_lshift_wrapped() -> Result<(), CircuitError> {
+        let mut b = OpBuilder::new();
+        let n = 5;
+        let r = b.register(n)?;
+        let r = program!(&mut b, r;
+            lshift_op r;
+        )?;
+
+        run_debug(&r)?;
+        let mapping = get_mapping::<f64>(&r)?;
+
+        mapping.into_iter().enumerate().for_each(|(indx, mapping)| {
+            println!("{:05b}\t{:05b}", indx, mapping);
+            let indx = indx as u64;
+            let expected_output = indx >> 1;
+            let expected_output = expected_output | ((indx & 1) << (n-1));
+
+            assert_eq!(mapping, expected_output);
         });
         Ok(())
     }

@@ -110,7 +110,6 @@ pub use self::errors::*;
 pub use self::macros::*;
 pub use self::pipeline::{run_local, run_local_with_init, run_with_state, QuantumState};
 pub use self::pipeline_debug::run_debug;
-pub use self::qubit_chainer::{chain, chain_tuple, chain_vec};
 pub use self::qubits::Register;
 pub use self::types::Precision;
 pub use num::Complex;
@@ -132,8 +131,6 @@ pub mod pipeline;
 pub mod pipeline_debug;
 /// Quantum fourier transform support.
 pub mod qfft;
-/// Ease of use for chains of single register ops.
-pub mod qubit_chainer;
 /// Basic classes for defining circuits/pipelines.
 pub mod qubits;
 /// Commonly used types.

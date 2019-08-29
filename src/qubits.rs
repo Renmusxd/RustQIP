@@ -79,7 +79,7 @@ impl Register {
         idb: u64,
         r: Register,
         indices: &[u64],
-    ) -> Result<(Register, Register), CircuitError> {
+    ) -> Result<(Register, Option<Register>), CircuitError> {
         for indx in indices {
             if *indx > r.n() {
                 let message = format!(
@@ -107,10 +107,8 @@ impl Register {
         idb: u64,
         r: Register,
         selected_indices: &[u64],
-    ) -> Result<(Register, Register), CircuitError> {
-        if selected_indices.len() == r.indices.len() {
-            return CircuitError::make_str_err("Cannot split out all indices into own Registers.");
-        } else if selected_indices.is_empty() {
+    ) -> Result<(Register, Option<Register>), CircuitError> {
+        if selected_indices.is_empty() {
             return CircuitError::make_str_err("Must provide indices to split.");
         }
         for indx in selected_indices {
@@ -123,28 +121,39 @@ impl Register {
             }
         }
 
-        let remaining = r
+        let remaining: Vec<_> = r
             .indices
             .clone()
             .into_iter()
             .filter(|x| !selected_indices.contains(x))
             .collect();
-        let shared_parent = Rc::new(r);
-
-        Ok((
-            Register {
-                indices: selected_indices.to_vec(),
-                parent: Some(Parent::Shared(shared_parent.clone())),
-                deps: None,
-                id: ida,
-            },
-            Register {
-                indices: remaining,
-                parent: Some(Parent::Shared(shared_parent.clone())),
-                deps: None,
-                id: idb,
-            },
-        ))
+        if remaining.len() > 0 {
+            let shared_parent = Rc::new(r);
+            Ok((
+                Register {
+                    indices: selected_indices.to_vec(),
+                    parent: Some(Parent::Shared(shared_parent.clone())),
+                    deps: None,
+                    id: ida,
+                },
+                Some(Register {
+                    indices: remaining,
+                    parent: Some(Parent::Shared(shared_parent.clone())),
+                    deps: None,
+                    id: idb,
+                }),
+            ))
+        } else {
+            Ok((
+                Register {
+                    indices: selected_indices.to_vec(),
+                    parent: Some(Parent::Owned(vec![r], None)),
+                    deps: None,
+                    id: ida,
+                },
+                None
+            ))
+        }
     }
 
     /// Make a measurement handle and a Register which depends on that measurement.
