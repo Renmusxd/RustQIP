@@ -186,7 +186,7 @@ mod inverter_test {
     use super::*;
     use crate::boolean_circuits::arithmetic::{add, add_op};
     use crate::pipeline::InitialState;
-    use crate::{run_debug, run_local_with_init, Complex, Precision, QuantumState};
+    use crate::{run_debug, run_local_with_init, Complex, QuantumState};
     use num::One;
 
     fn test_inversion<

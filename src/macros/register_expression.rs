@@ -139,7 +139,6 @@ macro_rules! register_expr {
 
 #[cfg(test)]
 mod common_circuit_tests {
-    use super::*;
     use crate::pipeline::make_circuit_matrix;
     use crate::{run_debug, CircuitError, OpBuilder, Register, UnitaryBuilder};
 
