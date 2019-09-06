@@ -127,7 +127,7 @@ impl Register {
             .into_iter()
             .filter(|x| !selected_indices.contains(x))
             .collect();
-        if remaining.len() > 0 {
+        if !remaining.is_empty() {
             let shared_parent = Rc::new(r);
             Ok((
                 Register {
@@ -151,7 +151,7 @@ impl Register {
                     deps: None,
                     id: ida,
                 },
-                None
+                None,
             ))
         }
     }

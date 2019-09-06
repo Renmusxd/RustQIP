@@ -53,7 +53,7 @@ macro_rules! register_expr {
             $builder.merge_with_indices(tmp_r, tmp, &$indices)?
         } else {
             $name
-        }
+        };
     };
     (@joiner($remaining:ident) $builder:expr, $name:ident $indices:expr, $($tail:tt)*) => {
         register_expr!(@joiner($remaining) $builder, $($tail)*);
@@ -65,6 +65,9 @@ macro_rules! register_expr {
     };
 
     // Output (name_1, name_2, ...)
+    (@name_tuple () <- $name:ident $indices:expr; $($tail:tt)*) => {
+        $name
+    };
     (@name_tuple ($($body:tt)*) <- $name:ident $indices:expr; $($tail:tt)*) => {
         ($($body)* $name)
     };

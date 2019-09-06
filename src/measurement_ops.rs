@@ -1,6 +1,7 @@
 extern crate rand;
 extern crate rayon;
 use crate::{Complex, Precision};
+use num::Zero;
 use rayon::prelude::*;
 use std::cmp::{max, min};
 
@@ -61,7 +62,7 @@ pub fn measure_prob<P: Precision>(
         });
     let remaining_indices: Vec<u64> = (0..n).filter(|i| !indices.contains(i)).collect();
 
-    let f = |remaining_index_bits: u64| -> P {
+    let f = |remaining_index_bits: u64| -> Option<P> {
         let tmp_index: u64 =
             remaining_indices
                 .iter()
@@ -73,20 +74,22 @@ pub fn measure_prob<P: Precision>(
                 });
         let index = tmp_index + template;
         if index < input_offset {
-            return P::zero();
+            None
+        } else {
+            let index = index - input_offset;
+            if index >= input.len() as u64 || input[index as usize] == Complex::zero(){
+                None
+            } else {
+                Some(input[index as usize].norm_sqr())
+            }
         }
-        let index = index - input_offset;
-        if index >= input.len() as u64 {
-            return P::zero();
-        }
-        input[index as usize].norm_sqr()
     };
 
     let r = 0u64..1 << remaining_indices.len();
     if multithread {
-        r.into_par_iter().map(f).sum()
+        r.into_par_iter().filter_map(f).sum()
     } else {
-        r.map(f).sum()
+        r.filter_map(f).sum()
     }
 }
 

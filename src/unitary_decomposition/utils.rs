@@ -4,7 +4,6 @@ use crate::{Complex, Precision};
 use rayon::prelude::*;
 use std::cmp::max;
 use std::ops::{Add, Mul};
-use std::sync::{Arc, Mutex};
 
 /// Create an array of indices all one bit off from one another.
 pub(crate) fn gray_code(n: u64) -> Vec<u64> {
@@ -19,47 +18,6 @@ pub(crate) fn gray_code(n: u64) -> Vec<u64> {
         let rhs: Vec<_> = reflected.into_iter().map(|x| x | (1 << (n - 1))).collect();
         lhs.into_iter().chain(rhs.into_iter()).collect()
     }
-}
-
-/// Transpose a sparse matrix.
-pub fn transpose_sparse<T: Sync + Send>(sparse_mat: Vec<Vec<(u64, T)>>) -> Vec<Vec<(u64, T)>> {
-    let sparse_len = sparse_mat.len();
-    let flat_mat: Vec<_> = sparse_mat
-        .into_par_iter()
-        .enumerate()
-        .map(|(row, v)| {
-            let v: Vec<_> = v
-                .into_iter()
-                .map(|(col, val)| (col, (row as u64, val)))
-                .collect();
-            v
-        })
-        .flatten()
-        .collect();
-    let mut col_mat = <Vec<Arc<Mutex<Vec<(u64, T)>>>>>::new();
-    col_mat.resize_with(sparse_len, || Arc::new(Mutex::new(vec![])));
-    flat_mat
-        .into_par_iter()
-        .for_each(|(col, (row, val)): (u64, (u64, T))| {
-            col_mat[col as usize].lock().unwrap().push((row, val))
-        });
-    let col_mat: Vec<_> = col_mat
-        .into_par_iter()
-        .map(|v| {
-            if let Ok(v) = Arc::try_unwrap(v) {
-                v.into_inner().unwrap()
-            } else {
-                panic!()
-            }
-        })
-        .collect();
-    col_mat
-        .into_par_iter()
-        .map(|mut v: Vec<(u64, T)>| {
-            v.sort_by_key(|(row, _)| *row);
-            v
-        })
-        .collect()
 }
 
 /// Get the value at a given column in a sorted sparse row.
@@ -309,6 +267,7 @@ pub(crate) fn column_magnitude_sqr<P: Precision>(
 #[cfg(test)]
 mod unitary_decomp_tests {
     use super::*;
+    use crate::utils::transpose_sparse;
 
     fn flat_round(v: Vec<Vec<(u64, f64)>>, prec: i32) -> Vec<(u64, u64, f64)> {
         let flat = flat_sparse(v);

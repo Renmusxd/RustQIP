@@ -1,8 +1,6 @@
 use crate::pipeline::{get_owned_opfns, StateModifierType};
-use crate::state_ops::UnitaryOp;
-use crate::unitary_decomposition::utils::transpose_sparse;
-use crate::utils::get_flat_index;
-use crate::{CircuitError, Complex, OpBuilder, Register, UnitaryBuilder};
+use crate::state_ops::{invert_op, UnitaryOp};
+use crate::{CircuitError, OpBuilder, Register, UnitaryBuilder};
 
 /// Wrap a function to create a version compatible with `program!` as well as an inverse which is
 /// also compatible.
@@ -160,43 +158,6 @@ pub fn inverter<
     Ok(rs)
 }
 
-fn invert_op(op: UnitaryOp) -> UnitaryOp {
-    match op {
-        UnitaryOp::Matrix(indices, mut mat) => {
-            let n = indices.len() as u64;
-            (0..1 << n).for_each(|row| {
-                (0..row).for_each(|col| {
-                    mat.swap(
-                        get_flat_index(n, row, col) as usize,
-                        get_flat_index(n, col, row) as usize,
-                    );
-                })
-            });
-            let mat = mat.into_iter().map(|v| v.conj()).collect();
-            UnitaryOp::Matrix(indices, mat)
-        }
-        UnitaryOp::SparseMatrix(indices, mat) => {
-            UnitaryOp::SparseMatrix(indices, transpose_sparse(mat))
-        }
-        UnitaryOp::Swap(a_indices, b_indices) => UnitaryOp::Swap(a_indices, b_indices),
-        UnitaryOp::Control(c_indices, op_indices, op) => {
-            UnitaryOp::Control(c_indices, op_indices, Box::new(invert_op(*op)))
-        }
-        UnitaryOp::Function(x_indices, y_indices, f) => {
-            let n = (x_indices.len() + y_indices.len()) as u64;
-            let mat = (0..1 << n)
-                .map(|col| {
-                    let (row, phase) = f(col);
-                    let val = Complex { re: 0.0, im: phase }.exp();
-                    vec![(row, val)]
-                })
-                .collect();
-            let indices = x_indices.into_iter().chain(y_indices.into_iter()).collect();
-            invert_op(UnitaryOp::SparseMatrix(indices, mat))
-        }
-    }
-}
-
 fn remap_indices(op: UnitaryOp, new_indices: &[u64]) -> UnitaryOp {
     let remap = |indices: Vec<u64>| -> Vec<u64> {
         indices
@@ -225,7 +186,7 @@ mod inverter_test {
     use super::*;
     use crate::boolean_circuits::arithmetic::{add, add_op};
     use crate::pipeline::InitialState;
-    use crate::{run_debug, run_local_with_init, Precision, QuantumState};
+    use crate::{run_debug, run_local_with_init, Complex, Precision, QuantumState};
     use num::One;
 
     fn test_inversion<
