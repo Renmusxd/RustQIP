@@ -26,7 +26,6 @@ type SparseBuilderFn = dyn Fn(u64) -> Vec<(u64, Complex<f64>)>;
 
 /// A builder which support unitary operations
 pub trait UnitaryBuilder {
-
     /// Create a single qubit register.
     fn qubit(&mut self) -> Register;
 
@@ -35,7 +34,7 @@ pub trait UnitaryBuilder {
         if n == 0 {
             CircuitError::make_str_err("Register n must be greater than 0.")
         } else {
-            let rs = (0 .. n).map(|_| self.qubit()).collect();
+            let rs = (0..n).map(|_| self.qubit()).collect();
             self.merge(rs)
         }
     }
@@ -55,10 +54,7 @@ pub trait UnitaryBuilder {
 
     /// Build a new register with `n` indices, return it plus a handle which can be
     /// used for feeding in an initial state.
-    fn register_and_handle(
-        &mut self,
-        n: u64,
-    ) -> Result<(Register, RegisterHandle), CircuitError> {
+    fn register_and_handle(&mut self, n: u64) -> Result<(Register, RegisterHandle), CircuitError> {
         let r = self.register(n)?;
         let h = r.handle();
         Ok((r, h))
@@ -1122,8 +1118,8 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         let (cr, r) = self.split_absolute(r, &cindices_clone).unwrap();
         self.set_conditional_register(cr);
         let (rs, remaining) = self.split_absolute_many(r.unwrap(), &index_groups).unwrap();
-        if let Some(r) = remaining {
-            panic!();
+        if remaining.is_some() {
+            panic!("There should be no qubits remaining.");
         }
         rs
     }

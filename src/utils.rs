@@ -1,3 +1,6 @@
+use rayon::prelude::*;
+use std::sync::{Arc, Mutex};
+
 /// Set the `bit_index` bit in `num` to `value`.
 ///
 /// # Example
@@ -97,4 +100,45 @@ pub fn extract_bits(num: u64, indices: &[u64]) -> u64 {
         let bit = (num >> index) & 1;
         acc | (bit << i)
     })
+}
+
+/// Transpose a sparse matrix.
+pub fn transpose_sparse<T: Sync + Send>(sparse_mat: Vec<Vec<(u64, T)>>) -> Vec<Vec<(u64, T)>> {
+    let sparse_len = sparse_mat.len();
+    let flat_mat: Vec<_> = sparse_mat
+        .into_par_iter()
+        .enumerate()
+        .map(|(row, v)| {
+            let v: Vec<_> = v
+                .into_iter()
+                .map(|(col, val)| (col, (row as u64, val)))
+                .collect();
+            v
+        })
+        .flatten()
+        .collect();
+    let mut col_mat = <Vec<Arc<Mutex<Vec<(u64, T)>>>>>::new();
+    col_mat.resize_with(sparse_len, || Arc::new(Mutex::new(vec![])));
+    flat_mat
+        .into_par_iter()
+        .for_each(|(col, (row, val)): (u64, (u64, T))| {
+            col_mat[col as usize].lock().unwrap().push((row, val))
+        });
+    let col_mat: Vec<_> = col_mat
+        .into_par_iter()
+        .map(|v| {
+            if let Ok(v) = Arc::try_unwrap(v) {
+                v.into_inner().unwrap()
+            } else {
+                panic!()
+            }
+        })
+        .collect();
+    col_mat
+        .into_par_iter()
+        .map(|mut v: Vec<(u64, T)>| {
+            v.sort_by_key(|(row, _)| *row);
+            v
+        })
+        .collect()
 }

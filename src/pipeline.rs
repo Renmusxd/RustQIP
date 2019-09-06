@@ -307,8 +307,6 @@ impl<P: Precision> LocalQuantumState<P> {
 
         let n = max_init_n.map(|m| max(n, m)).unwrap_or(n);
 
-        let mut cvec: Vec<Complex<P>> = (0..1 << n).map(|_| Complex::default()).collect();
-
         // Assume that all unrepresented indices are in the |0> state.
         let n_fullindices: u64 = states
             .iter()
@@ -327,45 +325,17 @@ impl<P: Precision> LocalQuantumState<P> {
         });
 
         // Go through each combination of full index locations
+        let mut cvec: Vec<Complex<P>> = (0..1 << n).map(|_| Complex::default()).collect();
         (0..1 << n_fullindices).for_each(|i| {
             // Calculate the offset from template, and the product of fullstates.
-            let (delta_index, _, val) =
-                states
-                    .iter()
-                    .fold((0u64, 0u64, Complex::one()), |acc, (indices, state)| {
-                        if let InitialState::FullState(vals) = state {
-                            let (superindex_acc, sub_index_offset, val_acc) = acc;
-                            // Now we need to make additions to the superindex by adding bits based on
-                            // indices, as well as return the value given by the [sub .. sub + len] bits
-                            // from i.
-                            let index_mask = (1 << indices.len() as u64) - 1;
-                            let val_index_bits = (i >> sub_index_offset) & index_mask;
-                            let val_acc = val_acc * vals[val_index_bits as usize];
-
-                            let superindex_delta: u64 = indices
-                                .iter()
-                                .enumerate()
-                                .map(|(j, indx)| {
-                                    let bit = (val_index_bits >> j as u64) & 1u64;
-                                    bit << (n - 1 - indx)
-                                })
-                                .sum();
-                            (
-                                superindex_acc + superindex_delta,
-                                sub_index_offset + indices.len() as u64,
-                                val_acc,
-                            )
-                        } else {
-                            acc
-                        }
-                    });
+            let (delta_index, val) = create_state_entry(n, i, states);
             cvec[(delta_index + template) as usize] = val;
         });
 
         let arena = vec![Complex::zero(); cvec.len()];
         LocalQuantumState {
             n,
-            state: cvec.clone(),
+            state: cvec,
             arena,
             multithread,
         }
@@ -570,6 +540,44 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
             self.state
         }
     }
+}
+
+pub(crate) fn create_state_entry<P: Precision>(
+    n: u64,
+    i: u64,
+    states: &[RegisterInitialState<P>],
+) -> (u64, Complex<P>) {
+    let (delta_index, _, val) =
+        states
+            .iter()
+            .fold((0u64, 0u64, Complex::one()), |acc, (indices, state)| {
+                if let InitialState::FullState(vals) = state {
+                    let (superindex_acc, sub_index_offset, val_acc) = acc;
+                    // Now we need to make additions to the superindex by adding bits based on
+                    // indices, as well as return the value given by the [sub .. sub + len] bits
+                    // from i.
+                    let index_mask = (1 << indices.len() as u64) - 1;
+                    let val_index_bits = (i >> sub_index_offset) & index_mask;
+                    let val_acc = val_acc * vals[val_index_bits as usize];
+
+                    let superindex_delta: u64 = indices
+                        .iter()
+                        .enumerate()
+                        .map(|(j, indx)| {
+                            let bit = (val_index_bits >> j as u64) & 1u64;
+                            bit << (n - 1 - indx)
+                        })
+                        .sum();
+                    (
+                        superindex_acc + superindex_delta,
+                        sub_index_offset + indices.len() as u64,
+                        val_acc,
+                    )
+                } else {
+                    acc
+                }
+            });
+    (delta_index, val)
 }
 
 /// Apply an QubitOp to the state `s` and return the new state.

@@ -125,6 +125,9 @@ use std::ops::{Range, RangeInclusive};
 /// ```
 #[macro_export]
 macro_rules! program {
+    (@name_tuple () <- $name:ident; $($tail:tt)*) => {
+        $name
+    };
     (@name_tuple ($($body:tt)*) <- $name:ident; $($tail:tt)*) => {
         ($($body)* $name)
     };
@@ -491,6 +494,9 @@ macro_rules! program {
 /// ```
 #[macro_export]
 macro_rules! wrap_fn {
+    (@names () <- $name:ident) => {
+        $name
+    };
     (@names ($($body:tt)*) <- $name:ident) => {
         ($($body)* $name)
     };

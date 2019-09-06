@@ -28,6 +28,37 @@ pub enum UnitaryOp {
     ),
 }
 
+/// Cannot clone functions, so converts them to sparse matrices.
+impl Clone for UnitaryOp {
+    fn clone(&self) -> Self {
+        match self {
+            UnitaryOp::Matrix(indices, mat) => UnitaryOp::Matrix(indices.clone(), mat.clone()),
+            UnitaryOp::SparseMatrix(indices, mat) => {
+                let mat = mat.to_vec();
+                UnitaryOp::SparseMatrix(indices.clone(), mat)
+            }
+            UnitaryOp::Swap(a_indices, b_indices) => {
+                UnitaryOp::Swap(a_indices.clone(), b_indices.clone())
+            }
+            UnitaryOp::Control(c_indices, op_indices, op) => {
+                UnitaryOp::Control(c_indices.clone(), op_indices.clone(), op.clone())
+            }
+            UnitaryOp::Function(x_indices, y_indices, f) => {
+                let n = (x_indices.len() + y_indices.len()) as u64;
+                let mat = (0..1 << n)
+                    .map(|col| {
+                        let (row, phase) = f(col);
+                        let val = Complex { re: 0.0, im: phase };
+                        vec![(row, val.exp())]
+                    })
+                    .collect();
+                let indices = x_indices.iter().chain(y_indices.iter()).cloned().collect();
+                invert_op(UnitaryOp::SparseMatrix(indices, mat))
+            }
+        }
+    }
+}
+
 impl fmt::Debug for UnitaryOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (name, indices) = match self {
@@ -227,6 +258,89 @@ pub fn make_function_op(
     }
 }
 
+/// Invert a unitary op (equivalent to conjugate transpose).
+pub fn invert_op(op: UnitaryOp) -> UnitaryOp {
+    conj_op(transpose_op(op))
+}
+
+/// Get conjugate of op.
+pub fn conj_op(op: UnitaryOp) -> UnitaryOp {
+    match op {
+        UnitaryOp::Matrix(indices, mat) => {
+            let mat = mat.into_iter().map(|v| v.conj()).collect();
+            UnitaryOp::Matrix(indices, mat)
+        }
+        UnitaryOp::SparseMatrix(indices, mat) => {
+            let mat = mat
+                .into_iter()
+                .map(|v| {
+                    v.into_iter()
+                        .map(|(indx, val)| (indx, val.conj()))
+                        .collect()
+                })
+                .collect();
+            UnitaryOp::SparseMatrix(indices, mat)
+        }
+        UnitaryOp::Swap(a_indices, b_indices) => UnitaryOp::Swap(a_indices, b_indices),
+        UnitaryOp::Control(c_indices, op_indices, op) => {
+            UnitaryOp::Control(c_indices, op_indices, Box::new(conj_op(*op)))
+        }
+        UnitaryOp::Function(x_indices, y_indices, f) => {
+            let n = (x_indices.len() + y_indices.len()) as u64;
+            let mat = (0..1 << n)
+                .map(|col| {
+                    let (row, phase) = f(col);
+                    let val = Complex {
+                        re: 0.0,
+                        im: -phase,
+                    }
+                    .exp();
+                    vec![(row, val)]
+                })
+                .collect();
+            let indices = x_indices.into_iter().chain(y_indices.into_iter()).collect();
+            invert_op(UnitaryOp::SparseMatrix(indices, mat))
+        }
+    }
+}
+
+/// Invert a unitary op (equivalent to conjugate transpose).
+pub fn transpose_op(op: UnitaryOp) -> UnitaryOp {
+    match op {
+        UnitaryOp::Matrix(indices, mut mat) => {
+            let n = indices.len() as u64;
+            (0..1 << n).for_each(|row| {
+                (0..row).for_each(|col| {
+                    mat.swap(
+                        get_flat_index(n, row, col) as usize,
+                        get_flat_index(n, col, row) as usize,
+                    );
+                })
+            });
+            UnitaryOp::Matrix(indices, mat)
+        }
+        UnitaryOp::SparseMatrix(indices, mat) => {
+            UnitaryOp::SparseMatrix(indices, transpose_sparse(mat))
+        }
+        UnitaryOp::Swap(a_indices, b_indices) => UnitaryOp::Swap(a_indices, b_indices),
+        UnitaryOp::Control(c_indices, op_indices, op) => {
+            UnitaryOp::Control(c_indices, op_indices, Box::new(transpose_op(*op)))
+        }
+        UnitaryOp::Function(x_indices, y_indices, f) => {
+            let n = (x_indices.len() + y_indices.len()) as u64;
+            let mat = (0..1 << n)
+                .map(|col| {
+                    let (row, phase) = f(col);
+                    let val = Complex { re: 0.0, im: phase }.exp();
+                    vec![(row, val)]
+                })
+                .collect();
+            let indices = x_indices.into_iter().chain(y_indices.into_iter()).collect();
+            invert_op(UnitaryOp::SparseMatrix(indices, mat))
+        }
+    }
+}
+
 /// Make a vector of complex numbers whose reals are given by `data`
 pub fn from_reals<P: Precision>(data: &[P]) -> Vec<Complex<P>> {
     data.iter()
@@ -330,7 +444,7 @@ pub fn get_index(op: &UnitaryOp, i: usize) -> u64 {
 }
 
 /// Convert &UnitaryOp to equivalent PrecisionUnitaryOp<P>
-fn clone_as_precision_op<P: Precision>(op: &UnitaryOp) -> PrecisionUnitaryOp<P> {
+pub(crate) fn clone_as_precision_op<P: Precision>(op: &UnitaryOp) -> PrecisionUnitaryOp<P> {
     match op {
         UnitaryOp::Matrix(indices, data) => {
             let data: Vec<_> = data

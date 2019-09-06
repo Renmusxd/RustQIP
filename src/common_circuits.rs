@@ -21,15 +21,13 @@ where
             qs.len(),
             indices.len()
         ))
+    } else if let Some(remaining) = remaining {
+        b.merge_with_indices(remaining, qs, indices)
     } else {
-        if let Some(remaining) = remaining {
-            b.merge_with_indices(remaining, qs, indices)
-        } else {
-            let mut qs: Vec<(Register, u64)> = qs.into_iter().zip(indices.iter().cloned()).collect();
-            qs.sort_by_key(|(_, indx)| *indx);
-            let qs = qs.into_iter().map(|(r, _)| r).collect();
-            b.merge(qs)
-        }
+        let mut qs: Vec<(Register, u64)> = qs.into_iter().zip(indices.iter().cloned()).collect();
+        qs.sort_by_key(|(_, indx)| *indx);
+        let qs = qs.into_iter().map(|(r, _)| r).collect();
+        b.merge(qs)
     }
 }
 

@@ -164,18 +164,22 @@ pub fn times_mod(b: &mut dyn UnitaryBuilder, ra: Register, rb: Register, rm: Reg
 /// Right shift the qubits in a register (or left shift by providing a negative number).
 pub fn rshift(b: &mut dyn UnitaryBuilder, r: Register) -> Register {
     let n = r.n();
-    let mut rs: Vec<Option<Register>> = b.split_all(r).into_iter().map(|r| Some(r)).collect();
-    let mut hit: Vec<bool> = rs.iter().map(|_| false ).collect();
-    (0..n-1).rev().for_each(|indx| {
+    let mut rs: Vec<Option<Register>> = b.split_all(r).into_iter().map(Some).collect();
+    (0..n - 1).rev().for_each(|indx| {
         let ra = rs[indx as usize].take().unwrap();
         let offset = (indx as i64 - 1) % (n as i64);
-        let offset = if offset < 0 { offset + n as i64 } else { offset } as u64;
+        let offset = if offset < 0 {
+            offset + n as i64
+        } else {
+            offset
+        } as u64;
         let rb = rs[offset as usize].take().unwrap();
         let (ra, rb) = b.swap(ra, rb).unwrap();
         rs[indx as usize] = Some(ra);
         rs[offset as usize] = Some(rb);
     });
-    b.merge(rs.into_iter().map(|r| r.unwrap()).collect()).unwrap()
+    b.merge(rs.into_iter().map(|r| r.unwrap()).collect())
+        .unwrap()
 }
 wrap_and_invert!(rshift_op, lshift_op, rshift, r);
 
@@ -183,11 +187,11 @@ wrap_and_invert!(rshift_op, lshift_op, rshift, r);
 mod arithmetic_tests {
     use super::*;
     use crate::pipeline::{
-        get_opfns_and_frontier, get_required_state_size_from_frontier,
-        InitialState,
+        get_opfns_and_frontier, get_required_state_size_from_frontier, InitialState,
     };
     use crate::utils::{extract_bits, flip_bits};
     use num::One;
+    use crate::sparse_state::run_sparse_local_with_init;
 
     fn get_mapping_from_indices(r: &Register, indices: &[u64]) -> Result<Vec<u64>, CircuitError> {
         let v = (0..1 << indices.len())
@@ -196,7 +200,7 @@ mod arithmetic_tests {
                 let mut indices = indices.to_vec();
                 indices.reverse();
                 let (state, _) =
-                    run_local_with_init::<f64>(&r, &[(indices, InitialState::Index(indx as u64))])
+                    run_sparse_local_with_init::<f64>(&r, &[(indices, InitialState::Index(indx as u64))])
                         .unwrap();
                 let pos = state
                     .get_state(false)
@@ -514,7 +518,7 @@ mod arithmetic_tests {
             println!("{:05b}\t{:05b}", indx, mapping);
             let indx = indx as u64;
             let expected_output = indx >> 1;
-            let expected_output = expected_output | ((indx & 1) << (n-1));
+            let expected_output = expected_output | ((indx & 1) << (n - 1));
 
             assert_eq!(mapping, expected_output);
         });

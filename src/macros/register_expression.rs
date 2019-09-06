@@ -65,6 +65,9 @@ macro_rules! register_expr {
     };
 
     // Output (name_1, name_2, ...)
+    (@name_tuple () <- $name:ident $indices:expr; $($tail:tt)*) => {
+        $name
+    };
     (@name_tuple ($($body:tt)*) <- $name:ident $indices:expr; $($tail:tt)*) => {
         ($($body)* $name)
     };
@@ -136,7 +139,6 @@ macro_rules! register_expr {
 
 #[cfg(test)]
 mod common_circuit_tests {
-    use super::*;
     use crate::pipeline::make_circuit_matrix;
     use crate::{run_debug, CircuitError, OpBuilder, Register, UnitaryBuilder};
 

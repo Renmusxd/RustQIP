@@ -133,6 +133,8 @@ pub mod pipeline_debug;
 pub mod qfft;
 /// Basic classes for defining circuits/pipelines.
 pub mod qubits;
+/// Sparse quantum states
+pub mod sparse_state;
 /// Commonly used types.
 pub mod types;
 /// Break unitary matrices into circuits.
