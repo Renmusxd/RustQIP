@@ -186,9 +186,7 @@ wrap_and_invert!(rshift_op, lshift_op, rshift, r);
 #[cfg(test)]
 mod arithmetic_tests {
     use super::*;
-    use crate::pipeline::{
-        get_opfns_and_frontier, get_required_state_size_from_frontier, InitialState,
-    };
+    use crate::pipeline::{get_opfns_and_frontier, get_required_state_size_from_frontier, InitialState, MeasuredResults, run_with_init};
     use crate::utils::{extract_bits, flip_bits};
     use num::One;
     use crate::sparse_state::run_sparse_local_with_init;
@@ -559,8 +557,7 @@ mod arithmetic_tests {
                         hm.make_init_from_index(m_val)?,
                         hp.make_init_from_index(p_val)?
                     ];
-                    let (state, measurements) = run_local_with_init::<f64>(&r, &inits)?;
-
+                    let (state, measurements) = run_sparse_local_with_init::<f64>(&r, &inits)?;
                     let state = state.get_state(false);
                     let pos = state.into_iter().position(|v| v == Complex::one())
                         .ok_or(CircuitError::new("Could not find 1.0 position.".to_string()))?;

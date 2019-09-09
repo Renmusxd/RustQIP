@@ -4,6 +4,7 @@ use crate::{Complex, Precision};
 use num::Zero;
 use rayon::prelude::*;
 use std::cmp::{max, min};
+use crate::utils::extract_bits;
 
 /// Get total magnitude of state.
 pub fn prob_magnitude<P: Precision>(input: &[Complex<P>], multithread: bool) -> P {
@@ -156,15 +157,8 @@ pub fn soft_measure<P: Precision>(
             break;
         }
     }
-    indices
-        .iter()
-        .cloned()
-        .enumerate()
-        .map(|(i, index)| -> u64 {
-            let sel_bit = (measured_indx >> (n - 1 - index)) & 1;
-            sel_bit << i as u64
-        })
-        .sum()
+    let indices: Vec<_> = indices.iter().map(|indx| n - 1 - indx).collect();
+    extract_bits(measured_indx, &indices)
 }
 
 /// A set of measured results we want to receive (used to avoid the randomness of measurement if
