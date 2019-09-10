@@ -134,6 +134,10 @@ pub fn measure_probs<P: Precision>(
 /// assert_eq!(m, 1);
 /// let m = soft_measure(2, &[1], &input, None, false);
 /// assert_eq!(m, 0);
+/// let m = soft_measure(2, &[0, 1], &input, None, false);
+/// assert_eq!(m, 0b01);
+/// let m = soft_measure(2, &[1, 0], &input, None, false);
+/// assert_eq!(m, 0b10);
 /// ```
 pub fn soft_measure<P: Precision>(
     n: u64,

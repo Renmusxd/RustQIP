@@ -3,7 +3,7 @@ use crate::state_ops::{full_to_sub, sub_to_full};
 use crate::{Complex, Precision};
 use rayon::prelude::*;
 use std::ops::Add;
-use crate::utils::extract_bits;
+use crate::utils::{extract_bits, flip_bits};
 
 pub(crate) fn consolidate_vec<
     K: PartialEq + Ord + Clone + Send + Sync,
@@ -52,9 +52,10 @@ fn sparse_measure_state<P: Precision>(
 ) -> Vec<(u64, Complex<P>)> {
     let (m, measured_prob) = measured;
     let p_mult = P::one() / measured_prob.sqrt();
+    let rev_m = flip_bits(indices.len(), m);
     let mask = sub_to_full(n, indices, std::u64::MAX, 0);
     let f = |(indx, v): (u64, Complex<P>)| -> Option<(u64, Complex<P>)> {
-        if full_to_sub(n, indices, indx & mask) == m {
+        if full_to_sub(n, indices, indx & mask) == rev_m {
             Some((indx, v * p_mult))
         } else {
             None
@@ -119,8 +120,9 @@ pub(crate) fn sparse_measure_prob<P: Precision>(
     multithread: bool,
 ) -> P {
     let mask = sub_to_full(n, indices, std::u64::MAX, 0);
+    let rev_m = flip_bits(indices.len(), m);
     let f = |(indx, v): &(u64, Complex<P>)| -> Option<P> {
-        if full_to_sub(n, indices, indx & mask) == m {
+        if full_to_sub(n, indices, indx & mask) == rev_m {
             Some(v.norm_sqr())
         } else {
             None
