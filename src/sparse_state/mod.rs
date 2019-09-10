@@ -2,10 +2,9 @@
 pub mod state;
 mod utils;
 
+use crate::pipeline::{run, run_with_init, MeasuredResults, RegisterInitialState};
+use crate::{CircuitError, Precision, Register};
 pub use state::SparseQuantumState;
-use crate::{Precision, Register, CircuitError};
-use crate::pipeline::{MeasuredResults, run, RegisterInitialState, run_with_init};
-
 
 /// `run` the pipeline using `SparseQuantumState`.
 pub fn run_sparse_local<P: Precision>(

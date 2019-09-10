@@ -53,7 +53,7 @@ fn sum(
     b.pop_name_scope();
     (rc, ra, rb)
 }
-wrap_fn!(sum_op, sum, rc, ra, rb);
+wrap_and_invert!(pub sum_op, pub subtract_op, sum, rc, ra, rb);
 
 fn carry(
     b: &mut dyn UnitaryBuilder,
@@ -139,7 +139,7 @@ pub fn rshift(b: &mut dyn UnitaryBuilder, r: Register) -> Register {
     b.merge(rs.into_iter().map(|r| r.unwrap()).collect())
         .unwrap()
 }
-wrap_and_invert!(rshift_op, lshift_op, rshift, r);
+wrap_and_invert!(pub rshift_op, pub lshift_op, rshift, r);
 
 #[cfg(test)]
 mod arithmetic_tests {
@@ -147,9 +147,9 @@ mod arithmetic_tests {
     use crate::pipeline::{
         get_opfns_and_frontier, get_required_state_size_from_frontier, InitialState,
     };
+    use crate::sparse_state::run_sparse_local_with_init;
     use crate::utils::{extract_bits, flip_bits};
     use num::One;
-    use crate::sparse_state::run_sparse_local_with_init;
 
     fn get_mapping_from_indices(r: &Register, indices: &[u64]) -> Result<Vec<u64>, CircuitError> {
         let v = (0..1 << indices.len())
@@ -157,9 +157,11 @@ mod arithmetic_tests {
             .try_fold(vec![], |mut acc, indx| {
                 let mut indices = indices.to_vec();
                 indices.reverse();
-                let (state, _) =
-                    run_sparse_local_with_init::<f64>(&r, &[(indices, InitialState::Index(indx as u64))])
-                        .unwrap();
+                let (state, _) = run_sparse_local_with_init::<f64>(
+                    &r,
+                    &[(indices, InitialState::Index(indx as u64))],
+                )
+                .unwrap();
                 let pos = state
                     .get_state(false)
                     .into_iter()

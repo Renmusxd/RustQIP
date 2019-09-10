@@ -46,32 +46,6 @@ pub(crate) fn sparse_value_at_coords<C: Ord, T>(
     sparse_value_at_col(col, &sparse_mat[row])
 }
 
-/// Apply a phase to the column of a sparse matrix.
-pub(crate) fn apply_phase_to_column<P: Precision>(
-    column: u64,
-    phi: P,
-    sparse_mat: &mut [Vec<(u64, Complex<P>)>],
-) {
-    let phi = Complex {
-        re: P::zero(),
-        im: phi,
-    };
-    let phase = phi.exp();
-    sparse_mat.par_iter_mut().for_each(|v| {
-        // This is a common one so hard code a check.
-        let indx = if !v.is_empty() && v[0].0 == column {
-            Ok(0)
-        } else {
-            v.binary_search_by_key(&column, |(c, _)| *c)
-        };
-
-        if let Ok(indx) = indx {
-            let val = &mut v[indx].1;
-            *val = *val * phase;
-        }
-    })
-}
-
 /// Apply a phase to a row of a sparse matrix.
 pub(crate) fn apply_phase_to_row<P: Precision>(phi: P, sparse_row: &mut [(u64, Complex<P>)]) {
     let phi = Complex {
@@ -81,20 +55,6 @@ pub(crate) fn apply_phase_to_row<P: Precision>(phi: P, sparse_row: &mut [(u64, C
     let phase = phi.exp();
     sparse_row.par_iter_mut().for_each(|(_, val)| {
         *val = *val * phase;
-    })
-}
-
-/// Apply a phase to all entries of a sparse matrix.
-pub(crate) fn apply_global_phase<P: Precision>(phi: P, sparse_mat: &mut [Vec<(u64, Complex<P>)>]) {
-    let phi = Complex {
-        re: P::zero(),
-        im: phi,
-    };
-    let phase = phi.exp();
-    sparse_mat.par_iter_mut().for_each(|v| {
-        v.iter_mut().for_each(|(_, val)| {
-            *val = *val * phase;
-        })
     })
 }
 
@@ -215,31 +175,6 @@ fn merge_vecs<K: Eq + Ord, V, F: Fn(V, V) -> V>(
     out.reverse();
 }
 
-/// Flatten the sparse matrix and add row information.
-pub(crate) fn flat_sparse<T>(v: Vec<Vec<(u64, T)>>) -> Vec<(u64, u64, T)> {
-    v.into_iter()
-        .enumerate()
-        .map(|(row, v)| -> Vec<(u64, u64, T)> {
-            v.into_iter()
-                .map(|(col, val)| (row as u64, col, val))
-                .collect()
-        })
-        .flatten()
-        .collect()
-}
-
-/// Print out a sparse matrix.
-pub(crate) fn print_sparse<P: Precision>(v: &[Vec<(u64, Complex<P>)>]) {
-    v.iter().enumerate().for_each(|(row, v)| {
-        print!("{:?}\t", row);
-        v.iter().for_each(|(col, val)| {
-            let (r, p) = val.to_polar();
-            print!("({}, {}||{})\t", col, r, p)
-        });
-        println!();
-    });
-}
-
 pub(crate) fn row_magnitude_sqr<P: Precision>(
     row: u64,
     sparse_mat: &[Vec<(u64, Complex<P>)>],
@@ -267,6 +202,7 @@ pub(crate) fn column_magnitude_sqr<P: Precision>(
 #[cfg(test)]
 mod unitary_decomp_tests {
     use super::*;
+    use crate::unitary_decomposition::test_utils::flat_sparse;
     use crate::utils::transpose_sparse;
 
     fn flat_round(v: Vec<Vec<(u64, f64)>>, prec: i32) -> Vec<(u64, u64, f64)> {

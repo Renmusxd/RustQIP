@@ -7,3 +7,6 @@ pub mod utils;
 mod bit_pathing;
 /// Decompose a unitary op into smaller controlled phases and rotations.
 mod decomposition;
+
+#[cfg(test)]
+mod test_utils;

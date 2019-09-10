@@ -77,7 +77,7 @@ pub fn measure_prob<P: Precision>(
             None
         } else {
             let index = index - input_offset;
-            if index >= input.len() as u64 || input[index as usize] == Complex::zero(){
+            if index >= input.len() as u64 || input[index as usize] == Complex::zero() {
                 None
             } else {
                 Some(input[index as usize].norm_sqr())
