@@ -1,8 +1,8 @@
+use crate::UnitaryBuilder;
 /// Common circuits for general usage.
-use crate::{Register, CircuitError};
+use crate::{CircuitError, Register};
 use std::iter::Iterator;
 use std::ops::{Range, RangeInclusive};
-use crate::UnitaryBuilder;
 
 /// A helper macro for applying functions to specific qubits in registers.
 ///
@@ -513,16 +513,14 @@ macro_rules! wrap_fn {
 /// Negate all the qubits in a register where the mask bit == 0.
 pub fn negate_bitmask(b: &mut dyn UnitaryBuilder, r: Register, mask: u64) -> Register {
     let rs = b.split_all(r);
-    let (rs, _) = rs.into_iter().fold((vec![], mask), |(mut qubit_acc, mask_acc), qubit| {
-        let lowest = mask_acc & 1;
-        let qubit = if lowest == 0 {
-            b.not(qubit)
-        } else {
-            qubit
-        };
-        qubit_acc.push(qubit);
-        (qubit_acc, mask_acc >> 1)
-    });
+    let (rs, _) = rs
+        .into_iter()
+        .fold((vec![], mask), |(mut qubit_acc, mask_acc), qubit| {
+            let lowest = mask_acc & 1;
+            let qubit = if lowest == 0 { b.not(qubit) } else { qubit };
+            qubit_acc.push(qubit);
+            (qubit_acc, mask_acc >> 1)
+        });
     b.merge(rs).unwrap()
 }
 
@@ -530,58 +528,98 @@ pub fn negate_bitmask(b: &mut dyn UnitaryBuilder, r: Register, mask: u64) -> Reg
 #[derive(Default, Debug)]
 pub struct RegisterManager {
     registers: Vec<(String, Vec<Option<Register>>)>,
-    reverse_lookup: Vec<Option<(usize, usize)>>
+    reverse_lookup: Vec<Option<(usize, usize)>>,
 }
 
 impl RegisterManager {
     /// Add a register to the manager
-    pub fn add_register(&mut self, b: &mut dyn UnitaryBuilder, r: Register, name: &str) -> RegisterDataWrapper {
+    pub fn add_register(
+        &mut self,
+        b: &mut dyn UnitaryBuilder,
+        r: Register,
+        name: &str,
+    ) -> RegisterDataWrapper {
         let register_wrapper = RegisterDataWrapper::new(&r, self.registers.len());
         let rs = b.split_all(r);
         let reverse_map: Vec<usize> = rs.iter().map(|r| r.indices[0] as usize).collect();
         let max_reverse = *reverse_map.iter().max().unwrap();
         let reg_vec = rs.into_iter().map(Some).collect();
         if max_reverse >= self.reverse_lookup.len() {
-            self.reverse_lookup.resize(max_reverse+1, None);
+            self.reverse_lookup.resize(max_reverse + 1, None);
         }
         let reg_len = self.registers.len();
-        reverse_map.into_iter().enumerate().for_each(|(rel_indx, qubit_indx)| {
-           self.reverse_lookup[qubit_indx] = Some((reg_len, rel_indx));
-        });
+        reverse_map
+            .into_iter()
+            .enumerate()
+            .for_each(|(rel_indx, qubit_indx)| {
+                self.reverse_lookup[qubit_indx] = Some((reg_len, rel_indx));
+            });
 
         self.registers.push((name.to_string(), reg_vec));
         register_wrapper
     }
 
     /// Get all qubits from a register
-    pub fn get_full_register(&mut self, b: &mut dyn UnitaryBuilder, rid: usize) -> Result<Register, CircuitError> {
+    pub fn get_full_register(
+        &mut self,
+        b: &mut dyn UnitaryBuilder,
+        rid: usize,
+    ) -> Result<Register, CircuitError> {
         let (name, registers_for_name) = &mut self.registers[rid];
-        let rs = registers_for_name.into_iter().enumerate().try_fold(vec![], |mut acc, (index, op_r)| {
-            let r = op_r.take().ok_or_else(|| CircuitError::new(format!("Failed to fetch {}[{}]. May have already been used on this line.",
-                                                                              name.clone(), index)))?;
-            acc.push(r);
-            Ok(acc)
-        })?;
+        let rs = registers_for_name.iter_mut().enumerate().try_fold(
+            vec![],
+            |mut acc, (index, op_r)| {
+                let r = op_r.take().ok_or_else(|| {
+                    CircuitError::new(format!(
+                        "Failed to fetch {}[{}]. May have already been used on this line.",
+                        name.clone(),
+                        index
+                    ))
+                })?;
+                acc.push(r);
+                Ok(acc)
+            },
+        )?;
         b.merge(rs)
     }
 
     /// Get qubits with specific relative indices for a register.
-    pub fn get_registers<'a, T>(&mut self, b: &mut dyn UnitaryBuilder, rid: usize, relative_indices: &'a [T]) -> Result<Register, CircuitError>
-        where &'a T: Into<QubitIndices>
+    pub fn get_registers<'a, T>(
+        &mut self,
+        b: &mut dyn UnitaryBuilder,
+        rid: usize,
+        relative_indices: &'a [T],
+    ) -> Result<Register, CircuitError>
+    where
+        &'a T: Into<QubitIndices>,
     {
         let (name, registers_for_name) = &mut self.registers[rid];
-        let rs = relative_indices.iter().try_fold(vec![], |mut acc, indices| {
-            let indices: QubitIndices = indices.into();
-            let rs: Vec<Register> = indices.get_indices().into_iter().try_fold(vec![], |mut acc, index| {
-                let op_r = registers_for_name[index].take();
-                let r = op_r.ok_or_else(|| CircuitError::new(format!("Failed to fetch {}[{}]. May have already been used on this line.",
-                                                                          name.clone(), index)))?;
-                acc.push(r);
+        let rs = relative_indices
+            .iter()
+            .try_fold(vec![], |mut acc, indices| {
+                let indices: QubitIndices = indices.into();
+                let rs: Vec<Register> =
+                    indices
+                        .get_indices()
+                        .into_iter()
+                        .try_fold(vec![], |mut acc, index| {
+                            let op_r = registers_for_name[index].take();
+                            let r = op_r.ok_or_else(|| {
+                                CircuitError::new(format!(
+                                "Failed to fetch {}[{}]. May have already been used on this line.",
+                                name.clone(),
+                                index
+                            ))
+                            })?;
+                            acc.push(r);
+                            Ok(acc)
+                        })?;
+                acc.push(rs);
                 Ok(acc)
-            })?;
-            acc.push(rs);
-            Ok(acc)
-        })?.into_iter().flatten().collect();
+            })?
+            .into_iter()
+            .flatten()
+            .collect();
         b.merge(rs)
     }
 
@@ -597,11 +635,14 @@ impl RegisterManager {
 
     /// Give qubits back to any registers.
     pub fn return_registers(&mut self, b: &mut dyn UnitaryBuilder, rs: Vec<Register>) {
-        rs.into_iter().map(|r| b.split_all(r)).flatten().for_each(|r: Register| {
-            let (reg_indx, rel_indx) = self.reverse_lookup[r.indices[0] as usize].unwrap();
-            let (_, qubits) = &mut self.registers[reg_indx];
-            qubits[rel_indx] = Some(r);
-        });
+        rs.into_iter()
+            .map(|r| b.split_all(r))
+            .flatten()
+            .for_each(|r: Register| {
+                let (reg_indx, rel_indx) = self.reverse_lookup[r.indices[0] as usize].unwrap();
+                let (_, qubits) = &mut self.registers[reg_indx];
+                qubits[rel_indx] = Some(r);
+            });
     }
 }
 

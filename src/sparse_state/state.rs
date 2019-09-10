@@ -1,10 +1,13 @@
-use crate::iterators::{fold_for_op_cols, precision_num_indices, precision_get_index};
+use crate::iterators::{fold_for_op_cols, precision_get_index, precision_num_indices};
 use crate::measurement_ops::MeasuredCondition;
 use crate::pipeline::{create_state_entry, InitialState};
 use crate::sparse_state::utils::{
     consolidate_vec, sparse_measure, sparse_measure_prob, sparse_measure_probs, sparse_soft_measure,
 };
-use crate::state_ops::{clone_as_precision_op, from_reals, make_matrix_op, sub_to_full, transpose_op, UnitaryOp, full_to_sub};
+use crate::state_ops::{
+    clone_as_precision_op, from_reals, full_to_sub, make_matrix_op, sub_to_full, transpose_op,
+    UnitaryOp,
+};
 use crate::utils::flip_bits;
 use crate::{Complex, Precision, QuantumState};
 use num::{One, Zero};
@@ -105,12 +108,11 @@ impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
         let f = |(col, val): &(u64, Complex<P>)| -> Vec<(u64, Complex<P>)> {
             let matcol = full_to_sub(self.n, &mat_indices, *col);
             let col_template = (*col) & !mat_mask;
-            fold_for_op_cols(nindices, matcol, &op, vec![],
-                             |mut acc, (row, row_val)| {
-                                 let full_row = sub_to_full(self.n, &mat_indices, row, col_template);
-                                 acc.push((full_row, val * row_val));
-                                 acc
-                             })
+            fold_for_op_cols(nindices, matcol, &op, vec![], |mut acc, (row, row_val)| {
+                let full_row = sub_to_full(self.n, &mat_indices, row, col_template);
+                acc.push((full_row, val * row_val));
+                acc
+            })
         };
         let flat = if self.multithread {
             state.par_iter().map(f).flatten().collect()
