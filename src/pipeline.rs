@@ -319,7 +319,10 @@ impl<P: Precision> LocalQuantumState<P> {
         // Make the index template/base
         let template: u64 = states.iter().fold(0, |acc, (indices, state)| -> u64 {
             match state {
-                InitialState::Index(val_indx) => sub_to_full(n, indices, *val_indx, acc),
+                InitialState::Index(val_indx) => {
+                    let val_indx = flip_bits(indices.len(), *val_indx);
+                    sub_to_full(n, indices, val_indx, acc)
+                }
                 _ => acc,
             }
         });
@@ -834,6 +837,7 @@ pub fn make_circuit_matrix<P: Precision>(
     let indices: Vec<u64> = (0..n).collect();
     let lookup: Vec<Vec<Complex<P>>> = (0..1 << n)
         .map(|indx| {
+            let indx = flip_bits(n as usize, indx);
             let (state, _) =
                 run_local_with_init(&r, &[(indices.clone(), InitialState::Index(indx))]).unwrap();
             (0..state.state.len())

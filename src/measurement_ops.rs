@@ -1,10 +1,10 @@
 extern crate rand;
 extern crate rayon;
+use crate::utils::extract_bits;
 use crate::{Complex, Precision};
 use num::Zero;
 use rayon::prelude::*;
 use std::cmp::{max, min};
-use crate::utils::extract_bits;
 
 /// Get total magnitude of state.
 pub fn prob_magnitude<P: Precision>(input: &[Complex<P>], multithread: bool) -> P {

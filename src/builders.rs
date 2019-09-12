@@ -613,8 +613,20 @@ impl OpBuilder {
 
     /// Get indices of zeros and ones temps currently in holding.
     pub(crate) fn get_temp_indices(&self) -> (Vec<u64>, Vec<u64>) {
-        let zeros = self.temp_zero_qubits.iter().map(|r| &r.indices).flatten().cloned().collect();
-        let ones = self.temp_one_qubits.iter().map(|r| &r.indices).flatten().cloned().collect();
+        let zeros = self
+            .temp_zero_qubits
+            .iter()
+            .map(|r| &r.indices)
+            .flatten()
+            .cloned()
+            .collect();
+        let ones = self
+            .temp_one_qubits
+            .iter()
+            .map(|r| &r.indices)
+            .flatten()
+            .cloned()
+            .collect();
         (zeros, ones)
     }
 

@@ -232,6 +232,11 @@ pub struct RegisterHandle {
 }
 
 impl RegisterHandle {
+    /// Get the number of qubits represented by this handle.
+    pub fn n(&self) -> u64 {
+        self.indices.len() as u64
+    }
+
     /// Make an initial state for the handle using an index: `|index>`
     pub fn make_init_from_index<P: Precision>(
         &self,

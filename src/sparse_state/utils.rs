@@ -1,9 +1,9 @@
 use crate::measurement_ops::MeasuredCondition;
 use crate::state_ops::{full_to_sub, sub_to_full};
+use crate::utils::{extract_bits, flip_bits};
 use crate::{Complex, Precision};
 use rayon::prelude::*;
 use std::ops::Add;
-use crate::utils::{extract_bits, flip_bits};
 
 pub(crate) fn consolidate_vec<
     K: PartialEq + Ord + Clone + Send + Sync,

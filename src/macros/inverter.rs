@@ -132,7 +132,7 @@ pub fn inverter<
     let reg: Register = get_owned_opfns(end_reg)
         .into_iter()
         .map(|modifier| {
-            let name = format!("Invert({})", modifier.name);
+            let name = format!("{}_inverse", modifier.name);
             match modifier.modifier {
                 StateModifierType::UnitaryOp(op) => {
                     let inv_op = remap_indices(invert_op(op), &flat_indices);
@@ -179,9 +179,10 @@ pub fn inverter<
         if temps.is_empty() {
             Ok(reg)
         } else {
-            let temps: Vec<_> = temps.into_iter().map(|indx| {
-                temp_indices[(indx - before_n) as usize]
-            }).collect();
+            let temps: Vec<_> = temps
+                .into_iter()
+                .map(|indx| temp_indices[(indx - before_n) as usize])
+                .collect();
             let (ts, reg) = b.split_absolute(reg, &temps)?;
             b.return_temp_register(ts, value);
             Ok(reg.unwrap())
@@ -219,25 +220,25 @@ fn remap_indices(op: UnitaryOp, new_indices: &[u64]) -> UnitaryOp {
 mod inverter_test {
     use super::*;
     use crate::boolean_circuits::arithmetic::{add, add_op};
-    use crate::pipeline::InitialState;
+    use crate::pipeline::{get_required_state_size_from_frontier, InitialState};
+    use crate::utils::flip_bits;
     use crate::{run_debug, run_local_with_init, Complex, QuantumState};
     use num::One;
 
     fn test_inversion<
         F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
     >(
-        b: &mut dyn UnitaryBuilder,
+        b: &mut OpBuilder,
         rs: Vec<Register>,
         f: F,
     ) -> Result<(), CircuitError> {
-        let n: u64 = rs.iter().map(|r| r.n()).sum();
-        let indices: Vec<_> = (0..n).collect();
         let rs = f(b, rs)?;
         let rs = inverter(b, rs, f)?;
         let r = b.merge(rs)?;
-
         run_debug(&r)?;
 
+        let n = get_required_state_size_from_frontier(&[&r]);
+        let indices: Vec<_> = (0..n).collect();
         (0..1 << n).for_each(|indx| {
             let (state, _) =
                 run_local_with_init::<f64>(&r, &[(indices.clone(), InitialState::Index(indx))])
@@ -246,7 +247,7 @@ mod inverter_test {
                 .get_state(false)
                 .into_iter()
                 .position(|v| v == Complex::one())
-                .map(|pos| pos as u64);
+                .map(|pos| flip_bits(n as usize, pos as u64));
             assert!(pos.is_some());
             assert_eq!(pos.unwrap(), indx);
         });
