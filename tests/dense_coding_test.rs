@@ -27,9 +27,6 @@ fn run_bob(b: &mut OpBuilder, r_alice: Register, epr_bob: Register) -> (bool, bo
 
 #[test]
 fn test_coding() -> Result<(), CircuitError> {
-    let bit_a = true;
-    let bit_b = false;
-
     let bits_a = vec![true, false, true, false];
     let bits_b = vec![true, true, false, false];
 

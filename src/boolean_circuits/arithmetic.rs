@@ -143,34 +143,41 @@ pub fn times_mod(
             rp.n()
         ))
     } else {
+        b.push_name_scope("times_mod");
         let rt = b.get_temp_register(k, false);
         let rc = b.get_temp_register(n, false);
 
         let rs = (ra, rb, rm, rp, rt, rc);
         let rs = (0..k).try_fold(rs, |rs, indx| {
             let (ra, rb, rm, rp, rt, rc) = rs;
-            program!(b, ra, rb, rm, rp, rt, rc;
+            b.push_name_scope(&format!("first_{}", indx));
+            let ret = program!(b, ra, rb, rm, rp, rt, rc;
                 add_inv rc, rm, ra;
                 control x ra[n], rt[indx];
                 control add_op rt[indx], rc, rm, ra;
                 control add_mod_op rb[indx], ra[0 .. n], rp, rm;
                 rshift_op ra;
-            )
+            );
+            b.pop_name_scope();
+            ret
         })?;
         let rs = (0..k).rev().try_fold(rs, |rs, indx| {
             let (ra, rb, rm, rp, rt, rc) = rs;
-            program!(b, ra, rb, rm, rp, rt, rc;
+            b.push_name_scope(&format!("second_{}", indx));
+            let ret = program!(b, ra, rb, rm, rp, rt, rc;
                 lshift_op ra;
                 control add_inv rt[indx], rc, rm, ra;
                 control x ra[n], rt[indx];
                 add_op rc, rm, ra;
-            )
+            );
+            b.pop_name_scope();
+            ret
         })?;
         let (ra, rb, rm, rp, rt, rc) = rs;
 
         b.return_temp_register(rc, false);
         b.return_temp_register(rt, false);
-
+        b.pop_name_scope();
         Ok((ra, rb, rm, rp))
     }
 }
@@ -429,7 +436,7 @@ mod arithmetic_tests {
 
                 println!("Full: {:06b}", full);
                 dbg!(a, b, m, q_a, q_b, q_m);
-                if b < m && (b >> 1) == 0 {
+                if a < m && b < m && (b >> 1) == 0 {
                     dbg!((a + b) % m);
                     assert_eq!(q_a, a);
                     assert_eq!(q_b, (a + b) % m);
@@ -465,7 +472,7 @@ mod arithmetic_tests {
 
                 println!("Full: {:010b}", full);
                 dbg!(a, b, m, q_a, q_b, q_m);
-                if b < m && (b >> 2) == 0 {
+                if a < m && b < m && (b >> 2) == 0 {
                     dbg!((a + b) % m);
                     assert_eq!(q_a, a);
                     assert_eq!(q_b, (a + b) % m);
@@ -534,15 +541,15 @@ mod arithmetic_tests {
                 let q_a = afters[0];
                 let q_b = afters[1];
                 let q_m = afters[2];
-                let q_p = afters[2];
+                let q_p = afters[3];
 
-                println!("Full: {:b}", full);
+                println!("Full: {:017b}", full);
                 if a < m && m > 0 {
                     dbg!(a, b, m, p, q_a, q_b, q_m, q_p, (p + a * b) % m);
                     assert_eq!(q_a, a);
                     assert_eq!(q_b, b);
                     assert_eq!(q_m, m);
-                    assert_eq!(q_p, (p + a * b) % m);
+                    assert_eq!(q_p, p + (p + a * b) % m);
                     assert_eq!(full >> (3 * n + k + 2), 0);
                 } else {
                     println!("Skipped");

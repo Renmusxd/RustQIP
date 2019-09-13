@@ -135,6 +135,8 @@ pub mod qfft;
 pub mod qubits;
 /// Sparse quantum states
 pub mod sparse_state;
+/// Tracing state
+pub mod trace_state;
 /// Commonly used types.
 pub mod types;
 /// Break unitary matrices into circuits.

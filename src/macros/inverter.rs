@@ -131,19 +131,19 @@ pub fn inverter<
     let reg = b.merge(rs)?;
     let reg: Register = get_owned_opfns(end_reg)
         .into_iter()
-        .map(|modifier| {
-            let name = format!("{}_inverse", modifier.name);
-            match modifier.modifier {
-                StateModifierType::UnitaryOp(op) => {
-                    let inv_op = remap_indices(invert_op(op), &flat_indices);
-                    (name, inv_op)
-                }
+        .fold(vec![], |mut acc, modifier| {
+            let name = format!("Inverse({})", modifier.name);
+            let op = match modifier.modifier {
+                StateModifierType::UnitaryOp(op) => remap_indices(invert_op(op), &flat_indices),
                 StateModifierType::Debug(_, _) => unimplemented!(),
                 StateModifierType::SideChannelModifiers(_, _) => unimplemented!(),
                 StateModifierType::MeasureState(_, _, _) => unimplemented!(),
                 StateModifierType::StochasticMeasureState(_, _, _) => unimplemented!(),
-            }
+            };
+            acc.push((name, op));
+            acc
         })
+        .into_iter()
         .rev()
         .try_fold(reg, |reg, (name, op)| {
             let indices = match &op {

@@ -205,9 +205,7 @@ pub trait UnitaryBuilder {
     fn swap(&mut self, ra: Register, rb: Register) -> Result<(Register, Register), CircuitError> {
         let op = self.make_swap_op(&ra, &rb)?;
         let ra_indices = ra.indices.clone();
-
-        let name = String::from("swap");
-        let r = self.merge_with_op(vec![ra, rb], Some((name, op)))?;
+        let r = self.merge_with_op(vec![ra, rb], Some(("swap".to_string(), op)))?;
         let (ra, rb) = self.split_absolute(r, &ra_indices)?;
         Ok((ra, rb.unwrap()))
     }
@@ -745,8 +743,7 @@ impl UnitaryBuilder for OpBuilder {
             self.merge_with_op(rs, None)
         } else {
             let op = self.make_mat_op(&r, mat)?;
-            let name = self.get_full_name(name);
-            self.merge_with_op(vec![r], Some((name, op)))
+            self.merge_with_op(vec![r], Some((name.to_string(), op)))
         }
     }
 
@@ -770,8 +767,7 @@ impl UnitaryBuilder for OpBuilder {
             self.merge_with_op(rs, None)
         } else {
             let op = self.make_sparse_mat_op(&r, mat, natural_order)?;
-            let name = self.get_full_name(name);
-            self.merge_with_op(vec![r], Some((name, op)))
+            self.merge_with_op(vec![r], Some((name.to_string(), op)))
         }
     }
 
@@ -784,8 +780,7 @@ impl UnitaryBuilder for OpBuilder {
     ) -> Result<(Register, Register), CircuitError> {
         let op = self.make_function_op(&r_in, &r_out, f)?;
         let in_indices = r_in.indices.clone();
-        let name = self.get_full_name(name);
-        let r = self.merge_with_op(vec![r_in, r_out], Some((name, op)))?;
+        let r = self.merge_with_op(vec![r_in, r_out], Some((name.to_string(), op)))?;
         let (r_in, r_out) = self.split_absolute(r, &in_indices)?;
         Ok((r_in, r_out.unwrap()))
     }
@@ -803,7 +798,9 @@ impl UnitaryBuilder for OpBuilder {
         rs: Vec<Register>,
         named_operator: Option<(String, UnitaryOp)>,
     ) -> Result<Register, CircuitError> {
-        let modifier = named_operator.map(|(name, op)| StateModifier::new_unitary(name, op));
+        let modifier = named_operator
+            .map(|(name, op)| (self.get_full_name(&name), op))
+            .map(|(name, op)| StateModifier::new_unitary(name, op));
         Register::merge_with_modifier(self.get_op_id(), rs, modifier)
     }
 
@@ -950,14 +947,8 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
             self.merge_with_op(rs, None)
         } else {
             let op = self.make_mat_op(&r, mat)?;
-            let cr = self.get_conditional_register();
-            let cr_indices = cr.indices.clone();
-            let name = format!("C({})", name);
-            let name = self.parent_builder.get_full_name(&name);
-            let r = self.merge_with_op(vec![cr, r], Some((name, op)))?;
-            let (cr, r) = self.split_absolute(r, &cr_indices)?;
-            self.set_conditional_register(cr);
-            Ok(r.unwrap())
+            let r = self.merge_with_op(vec![r], Some((name.to_string(), op)))?;
+            Ok(r)
         }
     }
 
@@ -981,28 +972,16 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
             self.merge_with_op(rs, None)
         } else {
             let op = self.make_sparse_mat_op(&r, mat, natural_order)?;
-            let cr = self.get_conditional_register();
-            let cr_indices = cr.indices.clone();
-            let name = format!("C({})", name);
-            let name = self.parent_builder.get_full_name(&name);
-            let r = self.merge_with_op(vec![cr, r], Some((name, op)))?;
-            let (cr, r) = self.split_absolute(r, &cr_indices)?;
-
-            self.set_conditional_register(cr);
-            Ok(r.unwrap())
+            let r = self.merge_with_op(vec![r], Some((name.to_string(), op)))?;
+            Ok(r)
         }
     }
 
     fn swap(&mut self, ra: Register, rb: Register) -> Result<(Register, Register), CircuitError> {
         let op = self.make_swap_op(&ra, &rb)?;
-        let cr = self.get_conditional_register();
-        let cr_indices = cr.indices.clone();
         let ra_indices = ra.indices.clone();
-        let name = self.parent_builder.get_full_name("C(swap)");
-        let r = self.merge_with_op(vec![cr, ra, rb], Some((name, op)))?;
-        let (cr, r) = self.split_absolute(r, &cr_indices)?;
-        let (ra, rb) = self.split_absolute(r.unwrap(), &ra_indices)?;
-        self.set_conditional_register(cr);
+        let r = self.merge_with_op(vec![ra, rb], Some(("swap".to_string(), op)))?;
+        let (ra, rb) = self.split_absolute(r, &ra_indices)?;
         Ok((ra, rb.unwrap()))
     }
 
@@ -1014,17 +993,9 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<(Register, Register), CircuitError> {
         let op = self.make_function_op(&r_in, &r_out, f)?;
-        let cr = self.get_conditional_register();
-
-        let cr_indices = cr.indices.clone();
         let in_indices = r_in.indices.clone();
-        let name = format!("C({})", name);
-        let name = self.parent_builder.get_full_name(&name);
-        let r = self.merge_with_op(vec![cr, r_in, r_out], Some((name, op)))?;
-        let (cr, r) = self.split_absolute(r, &cr_indices)?;
-        let (r_in, r_out) = self.split_absolute(r.unwrap(), &in_indices)?;
-
-        self.set_conditional_register(cr);
+        let r = self.merge_with_op(vec![r_in, r_out], Some((name.to_string(), op)))?;
+        let (r_in, r_out) = self.split_absolute(r, &in_indices)?;
         Ok((r_in, r_out.unwrap()))
     }
 
@@ -1041,13 +1012,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         r: &Register,
         data: Vec<Complex<f64>>,
     ) -> Result<UnitaryOp, CircuitError> {
-        match &self.conditioned_register {
-            Some(cr) => make_control_op(
-                cr.indices.clone(),
-                self.parent_builder.make_mat_op(r, data)?,
-            ),
-            None => panic!("Conditional context builder failed to populate Register."),
-        }
+        self.parent_builder.make_mat_op(r, data)
     }
 
     fn make_sparse_mat_op(
@@ -1056,24 +1021,12 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         data: Vec<Vec<(u64, Complex<f64>)>>,
         natural_order: bool,
     ) -> Result<UnitaryOp, CircuitError> {
-        match &self.conditioned_register {
-            Some(cr) => make_control_op(
-                cr.indices.clone(),
-                self.parent_builder
-                    .make_sparse_mat_op(r, data, natural_order)?,
-            ),
-            None => panic!("Conditional context builder failed to populate Register."),
-        }
+        self.parent_builder
+            .make_sparse_mat_op(r, data, natural_order)
     }
 
     fn make_swap_op(&self, ra: &Register, rb: &Register) -> Result<UnitaryOp, CircuitError> {
-        match &self.conditioned_register {
-            Some(cr) => {
-                let op = self.parent_builder.make_swap_op(ra, rb)?;
-                make_control_op(cr.indices.clone(), op)
-            }
-            None => panic!("Conditional context builder failed to populate Register."),
-        }
+        self.parent_builder.make_swap_op(ra, rb)
     }
 
     fn make_function_op(
@@ -1082,21 +1035,27 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         r_out: &Register,
         f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<UnitaryOp, CircuitError> {
-        match &self.conditioned_register {
-            Some(cr) => {
-                let op = self.parent_builder.make_function_op(r_in, r_out, f)?;
-                make_control_op(cr.indices.clone(), op)
-            }
-            None => panic!("Conditional context builder failed to populate Register."),
-        }
+        self.parent_builder.make_function_op(r_in, r_out, f)
     }
 
     fn merge_with_op(
         &mut self,
-        rs: Vec<Register>,
+        mut rs: Vec<Register>,
         named_operator: Option<(String, UnitaryOp)>,
     ) -> Result<Register, CircuitError> {
-        self.parent_builder.merge_with_op(rs, named_operator)
+        if let Some((name, op)) = named_operator {
+            let cr = self.get_conditional_register();
+            let cr_indices = cr.indices.clone();
+            let op = make_control_op(cr_indices.clone(), op)?;
+            rs.insert(0, cr);
+            let name = format!("C({})", name);
+            let r = self.parent_builder.merge_with_op(rs, Some((name, op)))?;
+            let (cr, r) = self.split_absolute(r, &cr_indices)?;
+            self.set_conditional_register(cr);
+            Ok(r.unwrap())
+        } else {
+            self.parent_builder.merge_with_op(rs, None)
+        }
     }
 
     fn stochastic_measure(&mut self, r: Register) -> (Register, u64) {

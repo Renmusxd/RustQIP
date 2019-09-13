@@ -36,6 +36,18 @@ impl<P: Precision> SparseQuantumState<P> {
             });
         }
     }
+
+    /// Operate on state
+    pub fn borrow_state<T, F: FnOnce(&Vec<(u64, Complex<P>)>) -> T>(&mut self, f: F) -> T {
+        let s = self.state.take();
+        let ret = if let Some(s) = &s {
+            f(s)
+        } else {
+            panic!();
+        };
+        self.state = s;
+        ret
+    }
 }
 
 impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
