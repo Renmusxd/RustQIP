@@ -211,6 +211,7 @@ mod arithmetic_tests {
     use crate::pipeline::{InitialState, MeasurementHandle};
     use crate::sparse_state::run_sparse_local_with_init;
     use num::One;
+    use crate::utils::extract_bits;
 
     fn measure_each(
         b: &mut OpBuilder,
@@ -225,14 +226,16 @@ mod arithmetic_tests {
             })
     }
 
-    fn assert_on_registers<
+    fn assert_on_registers_and_filter<
         F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
         G: Fn(Vec<u64>, Vec<u64>, u64) -> (),
+        FilterFn: Fn(&[u64]) -> bool
     >(
         b: &mut OpBuilder,
         rs: Vec<Register>,
         f: F,
         assertion: G,
+        filter: FilterFn
     ) -> Result<(), CircuitError> {
         let n: u64 = rs.iter().map(|r| r.n()).sum();
         let index_groups: Vec<_> = rs.iter().map(|r| r.indices.clone()).collect();
@@ -243,26 +246,44 @@ mod arithmetic_tests {
         run_debug(&r)?;
         let indices: Vec<_> = (0..n).collect();
         (0..1 << n).into_iter().try_for_each(|indx| {
-            let (state, measurements) = run_sparse_local_with_init::<f64>(
-                &r,
-                &[(indices.clone(), InitialState::Index(indx))],
-            )?;
-            let before_measurements = before_measurements
-                .iter()
-                .map(|m| measurements.get_measurement(m).unwrap().0)
-                .collect();
-            let after_measurements = after_measurements
-                .iter()
-                .map(|m| measurements.get_measurement(m).unwrap().0)
-                .collect();
-            let state_index = state
-                .get_state(true)
-                .into_iter()
-                .position(|v| v == Complex::one())
-                .unwrap() as u64;
-            assertion(before_measurements, after_measurements, state_index);
+            let filter_measurements: Vec<_> = index_groups.iter().map(|indices| {
+                extract_bits(indx, indices)
+            }).collect();
+            if filter(&filter_measurements) {
+                let (state, measurements) = run_sparse_local_with_init::<f64>(
+                    &r,
+                    &[(indices.clone(), InitialState::Index(indx))],
+                )?;
+                let before_measurements = before_measurements
+                    .iter()
+                    .map(|m| measurements.get_measurement(m).unwrap().0)
+                    .collect();
+                assert_eq!(filter_measurements, before_measurements);
+                let after_measurements = after_measurements
+                    .iter()
+                    .map(|m| measurements.get_measurement(m).unwrap().0)
+                    .collect();
+                let state_index = state
+                    .get_state(true)
+                    .into_iter()
+                    .position(|v| v == Complex::one())
+                    .unwrap() as u64;
+                assertion(before_measurements, after_measurements, state_index);
+            }
             Ok(())
         })
+    }
+
+    fn assert_on_registers<
+        F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
+        G: Fn(Vec<u64>, Vec<u64>, u64) -> (),
+    >(
+        b: &mut OpBuilder,
+        rs: Vec<Register>,
+        f: F,
+        assertion: G,
+    ) -> Result<(), CircuitError> {
+        assert_on_registers_and_filter(b, rs, f, assertion, |_| true)
     }
 
     #[test]
@@ -363,7 +384,7 @@ mod arithmetic_tests {
         let ra = b.register(n)?;
         let rb = b.register(n + 1)?;
 
-        assert_on_registers(&mut b, vec![rc, ra, rb], add_op, |befores, afters, _| {
+        assert_on_registers_and_filter(&mut b, vec![rc, ra, rb], add_op, |befores, afters, _| {
             let c = befores[0];
             let a = befores[1];
             let b = befores[2];
@@ -373,13 +394,14 @@ mod arithmetic_tests {
             let q_b = afters[2];
 
             dbg!(c, a, b, q_c, q_a, q_b, (a + c + b) % (1 << (n + 1)));
-            if (b & (1 << n)) == 0 && (c & (1 << (n - 1)) == 0) {
-                assert_eq!(q_c, c);
-                assert_eq!(q_a, a);
-                assert_eq!(q_b, (a + c + b) % (1 << (n + 1)));
-            } else {
-                println!("Skipped");
-            }
+            assert_eq!(q_c, c);
+            assert_eq!(q_a, a);
+            assert_eq!(q_b, (a + c + b) % (1 << (n + 1)));
+        }, |befores| {
+            let c = befores[0];
+            let a = befores[1];
+            let b = befores[2];
+            (b & (1 << n)) == 0 && (c & (1 << (n - 1)) == 0)
         })?;
         Ok(())
     }
@@ -392,7 +414,7 @@ mod arithmetic_tests {
         let ra = b.register(n)?;
         let rb = b.register(n + 1)?;
 
-        assert_on_registers(&mut b, vec![rc, ra, rb], add_op, |befores, afters, full| {
+        assert_on_registers_and_filter(&mut b, vec![rc, ra, rb], add_op, |befores, afters, full| {
             let c = befores[0];
             let a = befores[1];
             let b = befores[2];
@@ -401,15 +423,15 @@ mod arithmetic_tests {
             let q_a = afters[1];
             let q_b = afters[2];
 
-            println!("Full: {:010b}", full);
             dbg!(c, a, b, q_c, q_a, q_b, (a + c + b) % (1 << (n + 1)));
-            if (b & (1 << n)) == 0 && c < 2 {
-                assert_eq!(q_c, c);
-                assert_eq!(q_a, a);
-                assert_eq!(q_b, (a + c + b) % (1 << (n + 1)));
-            } else {
-                println!("Skipped");
-            }
+            assert_eq!(q_c, c);
+            assert_eq!(q_a, a);
+            assert_eq!(q_b, (a + c + b) % (1 << (n + 1)));
+        }, |befores| {
+            let c = befores[0];
+            let a = befores[1];
+            let b = befores[2];
+            (b & (1 << n)) == 0 && c < 2
         })?;
         Ok(())
     }
@@ -421,7 +443,7 @@ mod arithmetic_tests {
         let rb = b.register(2)?;
         let rm = b.register(1)?;
 
-        assert_on_registers(
+        assert_on_registers_and_filter(
             &mut b,
             vec![ra, rb, rm],
             add_mod_op,
@@ -434,18 +456,16 @@ mod arithmetic_tests {
                 let q_b = afters[1];
                 let q_m = afters[2];
 
-                println!("Full: {:06b}", full);
-                dbg!(a, b, m, q_a, q_b, q_m);
-                if a < m && b < m && (b >> 1) == 0 {
-                    dbg!((a + b) % m);
-                    assert_eq!(q_a, a);
-                    assert_eq!(q_b, (a + b) % m);
-                    assert_eq!(q_m, m);
-                    assert_eq!(full >> 4, 0);
-                } else {
-                    println!("Skipped");
-                }
-            },
+                assert_eq!(q_a, a);
+                assert_eq!(q_b, (a + b) % m);
+                assert_eq!(q_m, m);
+                assert_eq!(full >> 4, 0);
+            }, |befores| {
+                let a = befores[0];
+                let b = befores[1];
+                let m = befores[2];
+                a < m && b < m && (b >> 1) == 0
+            }
         )?;
         Ok(())
     }
@@ -457,7 +477,7 @@ mod arithmetic_tests {
         let rb = b.register(3)?;
         let rm = b.register(2)?;
 
-        assert_on_registers(
+        assert_on_registers_and_filter(
             &mut b,
             vec![ra, rb, rm],
             add_mod_op,
@@ -470,18 +490,16 @@ mod arithmetic_tests {
                 let q_b = afters[1];
                 let q_m = afters[2];
 
-                println!("Full: {:010b}", full);
-                dbg!(a, b, m, q_a, q_b, q_m);
-                if a < m && b < m && (b >> 2) == 0 {
-                    dbg!((a + b) % m);
-                    assert_eq!(q_a, a);
-                    assert_eq!(q_b, (a + b) % m);
-                    assert_eq!(q_m, m);
-                    assert_eq!(full >> 7, 0);
-                } else {
-                    println!("Skipped");
-                }
-            },
+                assert_eq!(q_a, a);
+                assert_eq!(q_b, (a + b) % m);
+                assert_eq!(q_m, m);
+                assert_eq!(full >> 7, 0);
+            }, |befores| {
+                let a = befores[0];
+                let b = befores[1];
+                let m = befores[2];
+                a < m && b < m && (b >> 2) == 0
+            }
         )?;
         Ok(())
     }
@@ -528,7 +546,7 @@ mod arithmetic_tests {
         let (rm, hm) = b.register_and_handle(n)?;
         let (rp, hp) = b.register_and_handle(n + 1)?;
 
-        assert_on_registers(
+        assert_on_registers_and_filter(
             &mut b,
             vec![ra, rb, rm, rp],
             times_mod_op,
@@ -543,18 +561,17 @@ mod arithmetic_tests {
                 let q_m = afters[2];
                 let q_p = afters[3];
 
-                println!("Full: {:017b}", full);
-                if a < m && m > 0 {
-                    dbg!(a, b, m, p, q_a, q_b, q_m, q_p, (p + a * b) % m);
-                    assert_eq!(q_a, a);
-                    assert_eq!(q_b, b);
-                    assert_eq!(q_m, m);
-                    assert_eq!(q_p, p + (p + a * b) % m);
-                    assert_eq!(full >> (3 * n + k + 2), 0);
-                } else {
-                    println!("Skipped");
-                }
-            },
+                assert_eq!(q_a, a);
+                assert_eq!(q_b, b);
+                assert_eq!(q_m, m);
+                assert_eq!(q_p, (p + a * b) % m);
+                assert_eq!(full >> (3 * n + k + 2), 0);
+            }, |befores| {
+                let a = befores[0];
+                let m = befores[2];
+                let p = befores[3];
+                a < m && p < m && m > 0
+            }
         )?;
         Ok(())
     }

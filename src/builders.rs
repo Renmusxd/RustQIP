@@ -1046,9 +1046,13 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         if let Some((name, op)) = named_operator {
             let cr = self.get_conditional_register();
             let cr_indices = cr.indices.clone();
+            let name = if let UnitaryOp::Control(_,_,_) = &op {
+                name
+            } else {
+                format!("C({})", name)
+            };
             let op = make_control_op(cr_indices.clone(), op)?;
             rs.insert(0, cr);
-            let name = format!("C({})", name);
             let r = self.parent_builder.merge_with_op(rs, Some((name, op)))?;
             let (cr, r) = self.split_absolute(r, &cr_indices)?;
             self.set_conditional_register(cr);
