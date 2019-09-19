@@ -75,8 +75,7 @@ fn carry(
 wrap_and_invert!(carry_op, carry_inv, (carry), rc, ra, rb, rcp);
 
 /// Addition of ra and rb modulo rm. Conditions are:
-/// 0 <= a
-/// a,b < M
+/// `a,b < M`, `M > 0`.
 pub fn add_mod(
     b: &mut dyn UnitaryBuilder,
     ra: Register,
@@ -117,10 +116,10 @@ pub fn add_mod(
         Ok((ra, rb, rm))
     }
 }
-wrap_fn!(pub add_mod_op, (add_mod), ra, rb, rm);
+wrap_and_invert!(pub add_mod_op, pub add_mod_inv, (add_mod), ra, rb, rm);
 
 /// Maps `|a>|b>|M>|p>` to `|a>|b>|M>|(p + ba) mod M>`
-/// With `a[n+1]`, `b[k]`, `M[n]`, and `p[n+1]`, and `a < M`.
+/// With `a[n+1]`, `b[k]`, `M[n]`, and `p[n+1]`, and `a,p < M`, `M > 0`.
 pub fn times_mod(
     b: &mut dyn UnitaryBuilder,
     ra: Register,
@@ -164,14 +163,14 @@ pub fn times_mod(
         let rs = (0..k).rev().try_fold(rs, |rs, indx| {
             let (ra, rb, rm, rp, rt, rc) = rs;
             b.push_name_scope(&format!("second_{}", indx));
-            let ret = program!(b, ra, rb, rm, rp, rt, rc;
+            let (ra, rm, rt, rc) = program!(b, ra, rm, rt, rc;
                 lshift_op ra;
                 control add_inv rt[indx], rc, rm, ra;
                 control x ra[n], rt[indx];
                 add_op rc, rm, ra;
-            );
+            )?;
             b.pop_name_scope();
-            ret
+            Ok((ra, rb, rm, rp, rt, rc))
         })?;
         let (ra, rb, rm, rp, rt, rc) = rs;
 
@@ -181,10 +180,11 @@ pub fn times_mod(
         Ok((ra, rb, rm, rp))
     }
 }
-wrap_fn!(pub times_mod_op, (times_mod), ra, rb, rm, rp);
+wrap_and_invert!(pub times_mod_op, pub times_mod_inv, (times_mod), ra, rb, rm, rp);
 
 /// Right shift the qubits in a register (or left shift by providing a negative number).
 pub fn rshift(b: &mut dyn UnitaryBuilder, r: Register) -> Register {
+    b.push_name_scope("rshift");
     let n = r.n();
     let mut rs: Vec<Option<Register>> = b.split_all(r).into_iter().map(Some).collect();
     (0..n - 1).rev().for_each(|indx| {
@@ -200,10 +200,123 @@ pub fn rshift(b: &mut dyn UnitaryBuilder, r: Register) -> Register {
         rs[indx as usize] = Some(ra);
         rs[offset as usize] = Some(rb);
     });
+    b.pop_name_scope();
     b.merge(rs.into_iter().map(|r| r.unwrap()).collect())
         .unwrap()
 }
 wrap_and_invert!(pub rshift_op, pub lshift_op, rshift, r);
+
+/// Performs |a>|b> -> |a>|a ^ b>, which for b=0 is a copy operation.
+pub fn copy(b: &mut dyn UnitaryBuilder, ra: Register, rb: Register) -> Result<(Register, Register), CircuitError> {
+    if ra.n() != rb.n() {
+        CircuitError::make_err(format!(
+            "Expected ra.n = rb.n, but found {} and {}",
+            ra.n(), rb.n()
+        ))
+    } else {
+        b.push_name_scope("copy");
+        let ras = b.split_all(ra);
+        let rbs = b.split_all(rb);
+        let (ras, rbs) = ras.into_iter().zip(rbs.into_iter())
+            .fold((vec![], vec![]),
+                  |(mut ras, mut rbs), (ra, rb)| {
+                      let (ra, rb) = b.cnot(ra, rb);
+                      ras.push(ra);
+                      rbs.push(rb);
+                      (ras, rbs)
+                  });
+        let ra = b.merge(ras)?;
+        let rb = b.merge(rbs)?;
+        b.pop_name_scope();
+        Ok((ra, rb))
+    }
+}
+wrap_and_invert!(pub copy_op, pub copy_inv, (copy), ra, rb);
+
+/// Performs |a>|m>|s> -> |a>|m>|(s + a*a) % m>.
+pub fn square_mod(b: &mut dyn UnitaryBuilder, ra: Register, rm: Register, rs: Register) -> Result<(Register, Register, Register), CircuitError> {
+    let n = rm.n();
+    if ra.n() != n + 1 {
+        CircuitError::make_err(format!(
+            "Expected ra.n = rm.n + 1 = {}, but found {}",
+            n + 1,
+            ra.n()
+        ))
+    } else if rs.n() != n + 1 {
+        CircuitError::make_err(format!(
+            "Expected rs.n = rm.n + 1 = {}, but found {}",
+            n + 1,
+            rs.n()
+        ))
+    } else {
+        b.push_name_scope("square_mod");
+        let rt = b.get_temp_register(n, false);
+        let (ra, rm, rs, rt) = program!(b, ra, rm, rs, rt;
+            copy_op ra[0 .. n], rt;
+            times_mod_op ra, rt, rm, rs;
+            copy_inv ra[0 .. n], rt;
+        )?;
+        b.return_temp_register(rt, false);
+        b.pop_name_scope();
+        Ok((ra, rm, rs))
+    }
+}
+wrap_and_invert!(pub square_mod_op, pub square_mod_inv, (square_mod), ra, rm, rs);
+
+/// Maps |a>|b>|m>|p>|0> -> |a>|b>|m>|p>|(p*a^b) mod m>
+pub fn exp_mod(b: &mut dyn UnitaryBuilder, ra: Register, rb: Register, rm: Register, rp: Register, re: Register) -> Result<(Register, Register, Register, Register, Register), CircuitError> {
+    let n = rm.n();
+    let k = rb.n();
+    if ra.n() != n+1 {
+        CircuitError::make_err(format!(
+            "Expected ra.n = rm.n + 1 = {}, but found {}",
+            n + 1,
+            ra.n()
+        ))
+    } else if rp.n() != n+1 {
+        CircuitError::make_err(format!(
+            "Expected ro.n = rm.n + 1 = {}, but found {}",
+            n + 1,
+            rp.n()
+        ))
+    } else if re.n() != n+1 {
+        CircuitError::make_err(format!(
+            "Expected re.n = rm.n + 1 = {}, but found {}",
+            n + 1,
+            re.n()
+        ))
+    } else {
+        b.push_name_scope("exp_mod");
+        let ret = if k == 1 {
+            program!(b, ra, rb, rm, rp, re;
+                control(0) copy_op rb[0], rp, re;
+                control times_mod_op rb[0], ra, rp, rm, re;
+            )
+        } else {
+            let ru = b.get_temp_register(n + 1, false);
+            let rv = b.get_temp_register(n + 1, false);
+
+            let (ra, rb, rm, rp, re, ru, rv) = program!(b, ra, rb, rm, rp, re, ru, rv;
+                control(0) copy_op rb[0], rp, rv;
+                control times_mod_op rb[0], ra, rp, rm, re;
+                square_mod_op ra, rm, ru;
+                exp_mod_op ru, rb[1 .. k], rm, rv, re;
+                square_mod_inv ra, rm, ru;
+                control times_mod_inv rb[0], ra, rp, rm, re;
+                control(0) copy_inv rb[0], rp, rv;
+            )?;
+
+            b.return_temp_register(ru, false);
+            b.return_temp_register(rv, false);
+
+            Ok((ra, rb, rm, rp, re))
+        };
+        b.pop_name_scope();
+        ret
+    }
+}
+wrap_and_invert!(pub exp_mod_op, pub exp_mod_inv, (exp_mod), ra, rb, rm, rp, re);
+
 
 #[cfg(test)]
 mod arithmetic_tests {
@@ -399,7 +512,6 @@ mod arithmetic_tests {
             assert_eq!(q_b, (a + c + b) % (1 << (n + 1)));
         }, |befores| {
             let c = befores[0];
-            let a = befores[1];
             let b = befores[2];
             (b & (1 << n)) == 0 && (c & (1 << (n - 1)) == 0)
         })?;
@@ -414,7 +526,7 @@ mod arithmetic_tests {
         let ra = b.register(n)?;
         let rb = b.register(n + 1)?;
 
-        assert_on_registers_and_filter(&mut b, vec![rc, ra, rb], add_op, |befores, afters, full| {
+        assert_on_registers_and_filter(&mut b, vec![rc, ra, rb], add_op, |befores, afters, _| {
             let c = befores[0];
             let a = befores[1];
             let b = befores[2];
@@ -429,7 +541,6 @@ mod arithmetic_tests {
             assert_eq!(q_b, (a + c + b) % (1 << (n + 1)));
         }, |befores| {
             let c = befores[0];
-            let a = befores[1];
             let b = befores[2];
             (b & (1 << n)) == 0 && c < 2
         })?;
@@ -510,7 +621,7 @@ mod arithmetic_tests {
         let n = 5;
         let r = b.register(n)?;
 
-        assert_on_registers(&mut b, vec![r], rshift_op, |befores, afters, full| {
+        assert_on_registers(&mut b, vec![r], rshift_op, |befores, afters, _| {
             let expected_output = befores[0] << 1;
             let expected_output = (expected_output | (expected_output >> n)) & ((1 << n) - 1);
             assert_eq!(afters[0], expected_output);
@@ -524,11 +635,7 @@ mod arithmetic_tests {
         let n = 5;
         let r = b.register(n)?;
 
-        let mut b = OpBuilder::new();
-        let n = 5;
-        let r = b.register(n)?;
-
-        assert_on_registers(&mut b, vec![r], lshift_op, |befores, afters, full| {
+        assert_on_registers(&mut b, vec![r], lshift_op, |befores, afters, _| {
             let expected_output = befores[0] >> 1;
             let expected_output = expected_output | ((befores[0] & 1) << (n - 1));
             assert_eq!(afters[0], expected_output);
@@ -541,10 +648,10 @@ mod arithmetic_tests {
         let n = 2;
         let k = 2;
         let mut b = OpBuilder::new();
-        let (ra, ha) = b.register_and_handle(n + 1)?;
-        let (rb, hb) = b.register_and_handle(k)?;
-        let (rm, hm) = b.register_and_handle(n)?;
-        let (rp, hp) = b.register_and_handle(n + 1)?;
+        let ra = b.register(n + 1)?;
+        let rb = b.register(k)?;
+        let rm = b.register(n)?;
+        let rp = b.register(n + 1)?;
 
         assert_on_registers_and_filter(
             &mut b,
@@ -575,4 +682,135 @@ mod arithmetic_tests {
         )?;
         Ok(())
     }
+
+    #[test]
+    fn test_mod_squared() -> Result<(), CircuitError> {
+        let n = 2;
+        let mut b = OpBuilder::new();
+        let ra = b.register(n + 1)?;
+        let rm = b.register(n)?;
+        let rs = b.register(n + 1)?;
+
+        assert_on_registers_and_filter(
+            &mut b,
+            vec![ra, rm, rs],
+            square_mod_op,
+            |befores, afters, full| {
+                let a = befores[0];
+                let m = befores[1];
+                let s = befores[2];
+
+                let q_a = afters[0];
+                let q_m = afters[1];
+                let q_s = afters[2];
+
+                dbg!(a, m, s, q_a, q_m, q_s, (s + a*a) % m);
+
+                assert_eq!(q_a, a);
+                assert_eq!(q_m, m);
+                assert_eq!(q_s, (s + a*a) % m);
+                assert_eq!(full >> (3 * n + 1), 0);
+            }, |befores| {
+                let a = befores[0];
+                let m = befores[1];
+                let s = befores[2];
+                m > 0 && a < m && s < m
+            }
+        )?;
+        Ok(())
+    }
+
+    fn assert_exp_mod(n: u64, k: u64, befores: &[u64], afters: &[u64], full: u64) {
+        let c_a = befores[0];
+        let c_b = befores[1];
+        let c_m = befores[2];
+        let c_p = befores[3];
+
+        let q_a = afters[0];
+        let q_b = afters[1];
+        let q_m = afters[2];
+        let q_p = afters[3];
+        let q_e = afters[4];
+
+        let expected = (c_p * c_a.pow(c_b as u32)) % c_m;
+        assert_eq!(q_a, c_a);
+        assert_eq!(q_b, c_b);
+        assert_eq!(q_m, c_m);
+        assert_eq!(q_p, c_p);
+        assert_eq!(q_e, expected);
+        assert_eq!(full >> (4 * n + 3 + k), 0);
+    }
+
+    fn filter_exp_mod(befores: &[u64]) -> bool {
+        let a = befores[0];
+        let m = befores[2];
+        let p = befores[3];
+        let e = befores[4];
+        m > 0 && a < m && p < m && e == 0
+    }
+
+    #[test]
+    fn test_exp_mod_base() -> Result<(), CircuitError> {
+        let n = 1;
+        let k = 1;
+        let mut b = OpBuilder::new();
+        let ra = b.register(n + 1)?;
+        let rb = b.register(k)?;
+        let rm = b.register(n)?;
+        let rp = b.register(n + 1)?;
+        let re = b.register(n + 1)?;
+
+        assert_on_registers_and_filter(
+            &mut b,
+            vec![ra, rb, rm, rp, re],
+            exp_mod_op,
+            |befores, afters, full| assert_exp_mod(n, k, &befores, &afters, full),
+            filter_exp_mod
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_exp_mod_base_larger() -> Result<(), CircuitError> {
+        let n = 2;
+        let k = 1;
+        let mut b = OpBuilder::new();
+        let ra = b.register(n + 1)?;
+        let rb = b.register(k)?;
+        let rm = b.register(n)?;
+        let rp = b.register(n + 1)?;
+        let re = b.register(n + 1)?;
+
+        assert_on_registers_and_filter(
+            &mut b,
+            vec![ra, rb, rm, rp, re],
+            exp_mod_op,
+            |befores, afters, full| assert_exp_mod(n, k, &befores, &afters, full),
+            filter_exp_mod
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_exp_small_rec() -> Result<(), CircuitError> {
+        let n = 1;
+        let k = 2;
+        let mut b = OpBuilder::new();
+        let ra = b.register(n + 1)?;
+        let rb = b.register(k)?;
+        let rm = b.register(n)?;
+        let rp = b.register(n + 1)?;
+        let re = b.register(n + 1)?;
+
+        assert_on_registers_and_filter(
+            &mut b,
+            vec![ra, rb, rm, rp, re],
+            exp_mod_op,
+            |befores, afters, full| assert_exp_mod(n, k, &befores, &afters, full),
+            filter_exp_mod
+        )?;
+        Ok(())
+    }
+
+    // The n=k=2 case takes too long to test completely.
 }

@@ -1,7 +1,6 @@
 extern crate qip;
 
 use qip::common_circuits::epr_pair;
-use qip::errors::CircuitError;
 use qip::*;
 
 fn run_alice(b: &mut OpBuilder, epr_alice: Register, bit_a: bool, bit_b: bool) -> Register {
@@ -26,9 +25,6 @@ fn run_bob(b: &mut OpBuilder, r_alice: Register, epr_bob: Register) -> (bool, bo
 }
 
 fn main() -> Result<(), CircuitError> {
-    let bit_a = true;
-    let bit_b = false;
-
     let bits_a = vec![true, false, true, false];
     let bits_b = vec![true, true, false, false];
 

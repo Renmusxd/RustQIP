@@ -20,7 +20,7 @@ fn run_alice(b: &mut OpBuilder, epr_alice: Register, initial_angle: f64) -> Meas
 
     // Now she measures her two particles
     let q = b.merge(vec![q_random, q_alice]).unwrap();
-    let (q, handle) = b.measure(q);
+    let (_, handle) = b.measure(q);
 
     handle
 }

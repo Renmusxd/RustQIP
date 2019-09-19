@@ -3,7 +3,6 @@ extern crate qip;
 
 use qip::builders::apply_function;
 use qip::pipeline::LocalQuantumState;
-use qip::types::Precision;
 use qip::*;
 
 fn prepare_state<P: Precision>(n: u64) -> Result<LocalQuantumState<P>, CircuitError> {

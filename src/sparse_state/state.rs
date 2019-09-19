@@ -55,7 +55,7 @@ impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
         Self {
             n,
             state: Some(vec![(0, Complex::one())]),
-            multithread: false,
+            multithread: true,
         }
     }
 
@@ -101,7 +101,7 @@ impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
         Self {
             n,
             state: Some(cvec),
-            multithread: false,
+            multithread: true,
         }
     }
 

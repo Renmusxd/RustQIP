@@ -22,7 +22,7 @@ fn run_alice(
 
     // Now she measures her two particles
     let q = b.merge(vec![q_random, q_alice])?;
-    let (q, handle) = b.measure(q);
+    let (_, handle) = b.measure(q);
 
     Ok(handle)
 }

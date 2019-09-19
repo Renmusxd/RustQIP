@@ -29,10 +29,10 @@ fn setup_cswap_sidechannel_circuit(
     // Make a qubit whose sole use is for sidechannels
     let q2 = b.qubit();
     let q2 = b.hadamard(q2);
-    let (q2, h2) = b.measure(q2);
+    let (_, h2) = b.measure(q2);
 
     let mut c = b.with_condition(q1);
-    let qs = c.classical_sidechannel(
+    let _ = c.classical_sidechannel(
         vec![ra, rb],
         &[h2],
         Box::new(|b, mut qs, _ms| {
