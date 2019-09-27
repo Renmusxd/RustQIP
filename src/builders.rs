@@ -1046,7 +1046,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         if let Some((name, op)) = named_operator {
             let cr = self.get_conditional_register();
             let cr_indices = cr.indices.clone();
-            let name = if let UnitaryOp::Control(_,_,_) = &op {
+            let name = if let UnitaryOp::Control(_, _, _) = &op {
                 name
             } else {
                 format!("C({})", name)

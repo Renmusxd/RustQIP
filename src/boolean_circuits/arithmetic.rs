@@ -207,24 +207,30 @@ pub fn rshift(b: &mut dyn UnitaryBuilder, r: Register) -> Register {
 wrap_and_invert!(pub rshift_op, pub lshift_op, rshift, r);
 
 /// Performs |a>|b> -> |a>|a ^ b>, which for b=0 is a copy operation.
-pub fn copy(b: &mut dyn UnitaryBuilder, ra: Register, rb: Register) -> Result<(Register, Register), CircuitError> {
+pub fn copy(
+    b: &mut dyn UnitaryBuilder,
+    ra: Register,
+    rb: Register,
+) -> Result<(Register, Register), CircuitError> {
     if ra.n() != rb.n() {
         CircuitError::make_err(format!(
             "Expected ra.n = rb.n, but found {} and {}",
-            ra.n(), rb.n()
+            ra.n(),
+            rb.n()
         ))
     } else {
         b.push_name_scope("copy");
         let ras = b.split_all(ra);
         let rbs = b.split_all(rb);
-        let (ras, rbs) = ras.into_iter().zip(rbs.into_iter())
-            .fold((vec![], vec![]),
-                  |(mut ras, mut rbs), (ra, rb)| {
-                      let (ra, rb) = b.cnot(ra, rb);
-                      ras.push(ra);
-                      rbs.push(rb);
-                      (ras, rbs)
-                  });
+        let (ras, rbs) = ras.into_iter().zip(rbs.into_iter()).fold(
+            (vec![], vec![]),
+            |(mut ras, mut rbs), (ra, rb)| {
+                let (ra, rb) = b.cnot(ra, rb);
+                ras.push(ra);
+                rbs.push(rb);
+                (ras, rbs)
+            },
+        );
         let ra = b.merge(ras)?;
         let rb = b.merge(rbs)?;
         b.pop_name_scope();
@@ -234,7 +240,12 @@ pub fn copy(b: &mut dyn UnitaryBuilder, ra: Register, rb: Register) -> Result<(R
 wrap_and_invert!(pub copy_op, pub copy_inv, (copy), ra, rb);
 
 /// Performs |a>|m>|s> -> |a>|m>|(s + a*a) % m>.
-pub fn square_mod(b: &mut dyn UnitaryBuilder, ra: Register, rm: Register, rs: Register) -> Result<(Register, Register, Register), CircuitError> {
+pub fn square_mod(
+    b: &mut dyn UnitaryBuilder,
+    ra: Register,
+    rm: Register,
+    rs: Register,
+) -> Result<(Register, Register, Register), CircuitError> {
     let n = rm.n();
     if ra.n() != n + 1 {
         CircuitError::make_err(format!(
@@ -264,22 +275,29 @@ pub fn square_mod(b: &mut dyn UnitaryBuilder, ra: Register, rm: Register, rs: Re
 wrap_and_invert!(pub square_mod_op, pub square_mod_inv, (square_mod), ra, rm, rs);
 
 /// Maps |a>|b>|m>|p>|0> -> |a>|b>|m>|p>|(p*a^b) mod m>
-pub fn exp_mod(b: &mut dyn UnitaryBuilder, ra: Register, rb: Register, rm: Register, rp: Register, re: Register) -> Result<(Register, Register, Register, Register, Register), CircuitError> {
+pub fn exp_mod(
+    b: &mut dyn UnitaryBuilder,
+    ra: Register,
+    rb: Register,
+    rm: Register,
+    rp: Register,
+    re: Register,
+) -> Result<(Register, Register, Register, Register, Register), CircuitError> {
     let n = rm.n();
     let k = rb.n();
-    if ra.n() != n+1 {
+    if ra.n() != n + 1 {
         CircuitError::make_err(format!(
             "Expected ra.n = rm.n + 1 = {}, but found {}",
             n + 1,
             ra.n()
         ))
-    } else if rp.n() != n+1 {
+    } else if rp.n() != n + 1 {
         CircuitError::make_err(format!(
             "Expected ro.n = rm.n + 1 = {}, but found {}",
             n + 1,
             rp.n()
         ))
-    } else if re.n() != n+1 {
+    } else if re.n() != n + 1 {
         CircuitError::make_err(format!(
             "Expected re.n = rm.n + 1 = {}, but found {}",
             n + 1,
@@ -317,14 +335,13 @@ pub fn exp_mod(b: &mut dyn UnitaryBuilder, ra: Register, rb: Register, rm: Regis
 }
 wrap_and_invert!(pub exp_mod_op, pub exp_mod_inv, (exp_mod), ra, rb, rm, rp, re);
 
-
 #[cfg(test)]
 mod arithmetic_tests {
     use super::*;
     use crate::pipeline::{InitialState, MeasurementHandle};
     use crate::sparse_state::run_sparse_local_with_init;
-    use num::One;
     use crate::utils::extract_bits;
+    use num::One;
 
     fn measure_each(
         b: &mut OpBuilder,
@@ -342,13 +359,13 @@ mod arithmetic_tests {
     fn assert_on_registers_and_filter<
         F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
         G: Fn(Vec<u64>, Vec<u64>, u64) -> (),
-        FilterFn: Fn(&[u64]) -> bool
+        FilterFn: Fn(&[u64]) -> bool,
     >(
         b: &mut OpBuilder,
         rs: Vec<Register>,
         f: F,
         assertion: G,
-        filter: FilterFn
+        filter: FilterFn,
     ) -> Result<(), CircuitError> {
         let n: u64 = rs.iter().map(|r| r.n()).sum();
         let index_groups: Vec<_> = rs.iter().map(|r| r.indices.clone()).collect();
@@ -359,9 +376,10 @@ mod arithmetic_tests {
         run_debug(&r)?;
         let indices: Vec<_> = (0..n).collect();
         (0..1 << n).into_iter().try_for_each(|indx| {
-            let filter_measurements: Vec<_> = index_groups.iter().map(|indices| {
-                extract_bits(indx, indices)
-            }).collect();
+            let filter_measurements: Vec<_> = index_groups
+                .iter()
+                .map(|indices| extract_bits(indx, indices))
+                .collect();
             if filter(&filter_measurements) {
                 let (state, measurements) = run_sparse_local_with_init::<f64>(
                     &r,
@@ -497,24 +515,30 @@ mod arithmetic_tests {
         let ra = b.register(n)?;
         let rb = b.register(n + 1)?;
 
-        assert_on_registers_and_filter(&mut b, vec![rc, ra, rb], add_op, |befores, afters, _| {
-            let c = befores[0];
-            let a = befores[1];
-            let b = befores[2];
+        assert_on_registers_and_filter(
+            &mut b,
+            vec![rc, ra, rb],
+            add_op,
+            |befores, afters, _| {
+                let c = befores[0];
+                let a = befores[1];
+                let b = befores[2];
 
-            let q_c = afters[0];
-            let q_a = afters[1];
-            let q_b = afters[2];
+                let q_c = afters[0];
+                let q_a = afters[1];
+                let q_b = afters[2];
 
-            dbg!(c, a, b, q_c, q_a, q_b, (a + c + b) % (1 << (n + 1)));
-            assert_eq!(q_c, c);
-            assert_eq!(q_a, a);
-            assert_eq!(q_b, (a + c + b) % (1 << (n + 1)));
-        }, |befores| {
-            let c = befores[0];
-            let b = befores[2];
-            (b & (1 << n)) == 0 && (c & (1 << (n - 1)) == 0)
-        })?;
+                dbg!(c, a, b, q_c, q_a, q_b, (a + c + b) % (1 << (n + 1)));
+                assert_eq!(q_c, c);
+                assert_eq!(q_a, a);
+                assert_eq!(q_b, (a + c + b) % (1 << (n + 1)));
+            },
+            |befores| {
+                let c = befores[0];
+                let b = befores[2];
+                (b & (1 << n)) == 0 && (c & (1 << (n - 1)) == 0)
+            },
+        )?;
         Ok(())
     }
 
@@ -526,24 +550,30 @@ mod arithmetic_tests {
         let ra = b.register(n)?;
         let rb = b.register(n + 1)?;
 
-        assert_on_registers_and_filter(&mut b, vec![rc, ra, rb], add_op, |befores, afters, _| {
-            let c = befores[0];
-            let a = befores[1];
-            let b = befores[2];
+        assert_on_registers_and_filter(
+            &mut b,
+            vec![rc, ra, rb],
+            add_op,
+            |befores, afters, _| {
+                let c = befores[0];
+                let a = befores[1];
+                let b = befores[2];
 
-            let q_c = afters[0];
-            let q_a = afters[1];
-            let q_b = afters[2];
+                let q_c = afters[0];
+                let q_a = afters[1];
+                let q_b = afters[2];
 
-            dbg!(c, a, b, q_c, q_a, q_b, (a + c + b) % (1 << (n + 1)));
-            assert_eq!(q_c, c);
-            assert_eq!(q_a, a);
-            assert_eq!(q_b, (a + c + b) % (1 << (n + 1)));
-        }, |befores| {
-            let c = befores[0];
-            let b = befores[2];
-            (b & (1 << n)) == 0 && c < 2
-        })?;
+                dbg!(c, a, b, q_c, q_a, q_b, (a + c + b) % (1 << (n + 1)));
+                assert_eq!(q_c, c);
+                assert_eq!(q_a, a);
+                assert_eq!(q_b, (a + c + b) % (1 << (n + 1)));
+            },
+            |befores| {
+                let c = befores[0];
+                let b = befores[2];
+                (b & (1 << n)) == 0 && c < 2
+            },
+        )?;
         Ok(())
     }
 
@@ -571,12 +601,13 @@ mod arithmetic_tests {
                 assert_eq!(q_b, (a + b) % m);
                 assert_eq!(q_m, m);
                 assert_eq!(full >> 4, 0);
-            }, |befores| {
+            },
+            |befores| {
                 let a = befores[0];
                 let b = befores[1];
                 let m = befores[2];
                 a < m && b < m && (b >> 1) == 0
-            }
+            },
         )?;
         Ok(())
     }
@@ -605,12 +636,13 @@ mod arithmetic_tests {
                 assert_eq!(q_b, (a + b) % m);
                 assert_eq!(q_m, m);
                 assert_eq!(full >> 7, 0);
-            }, |befores| {
+            },
+            |befores| {
                 let a = befores[0];
                 let b = befores[1];
                 let m = befores[2];
                 a < m && b < m && (b >> 2) == 0
-            }
+            },
         )?;
         Ok(())
     }
@@ -673,12 +705,13 @@ mod arithmetic_tests {
                 assert_eq!(q_m, m);
                 assert_eq!(q_p, (p + a * b) % m);
                 assert_eq!(full >> (3 * n + k + 2), 0);
-            }, |befores| {
+            },
+            |befores| {
                 let a = befores[0];
                 let m = befores[2];
                 let p = befores[3];
                 a < m && p < m && m > 0
-            }
+            },
         )?;
         Ok(())
     }
@@ -704,18 +737,19 @@ mod arithmetic_tests {
                 let q_m = afters[1];
                 let q_s = afters[2];
 
-                dbg!(a, m, s, q_a, q_m, q_s, (s + a*a) % m);
+                dbg!(a, m, s, q_a, q_m, q_s, (s + a * a) % m);
 
                 assert_eq!(q_a, a);
                 assert_eq!(q_m, m);
-                assert_eq!(q_s, (s + a*a) % m);
+                assert_eq!(q_s, (s + a * a) % m);
                 assert_eq!(full >> (3 * n + 1), 0);
-            }, |befores| {
+            },
+            |befores| {
                 let a = befores[0];
                 let m = befores[1];
                 let s = befores[2];
                 m > 0 && a < m && s < m
-            }
+            },
         )?;
         Ok(())
     }
@@ -765,7 +799,7 @@ mod arithmetic_tests {
             vec![ra, rb, rm, rp, re],
             exp_mod_op,
             |befores, afters, full| assert_exp_mod(n, k, &befores, &afters, full),
-            filter_exp_mod
+            filter_exp_mod,
         )?;
         Ok(())
     }
@@ -786,7 +820,7 @@ mod arithmetic_tests {
             vec![ra, rb, rm, rp, re],
             exp_mod_op,
             |befores, afters, full| assert_exp_mod(n, k, &befores, &afters, full),
-            filter_exp_mod
+            filter_exp_mod,
         )?;
         Ok(())
     }
@@ -807,7 +841,7 @@ mod arithmetic_tests {
             vec![ra, rb, rm, rp, re],
             exp_mod_op,
             |befores, afters, full| assert_exp_mod(n, k, &befores, &afters, full),
-            filter_exp_mod
+            filter_exp_mod,
         )?;
         Ok(())
     }

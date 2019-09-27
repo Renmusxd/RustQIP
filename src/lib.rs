@@ -19,7 +19,7 @@
 //! # Example (CSWAP)
 //! Here's an example of a small circuit where two groups of Registers are swapped conditioned on a
 //! third. This circuit is very small, only three operations plus a measurement, so the boilerplate
-//! can look quite large in compairison, but that setup provides the ability to construct circuits
+//! can look quite large in comparison, but that setup provides the ability to construct circuits
 //! easily and safely when they do get larger.
 //! ```
 //! use qip::*;
@@ -83,6 +83,7 @@
 //!     let rb = rs.pop().unwrap();
 //!     let ra = rs.pop().unwrap();
 //!     let (ra, rb) = b.cnot(ra, rb);
+//!     let (rb, ra) = b.cnot(rb, ra);
 //!     Ok(vec![ra, rb])
 //! };
 //!
@@ -95,8 +96,35 @@
 //!     gamma ra[0], |rb[0], ra[2],|;
 //!     // Applies gamma to |ra[0] ra[1]>|ra[2]> if rb == |111>
 //!     control gamma rb, ra[0..2], ra[2];
-//!     // Applies gamma to |ra[0] ra[1]>|ra[2]> if rb == |110> (meaning rb[0] == |0>)
+//!     // Applies gamma to |ra[0] ra[1]>|ra[2]> if rb == |110> (rb[0] == |0>, rb[1] == 1, ...)
 //!     control(0b110) gamma rb, ra[0..2], ra[2];
+//! )?;
+//! let r = b.merge(vec![ra, rb])?;
+//!
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! To clean up gamma we can use the `wrap_fn` macro:
+//!
+//! ```
+//! use qip::*;
+//! # fn main() -> Result<(), CircuitError> {
+//!
+//! let n = 3;
+//! let mut b = OpBuilder::new();
+//! let ra = b.register(n)?;
+//! let rb = b.register(n)?;
+//!
+//! fn gamma(b: &mut dyn UnitaryBuilder, ra: Register, rb: Register) -> (Register, Register) {
+//!     let (ra, rb) = b.cnot(ra, rb);
+//!     let (rb, ra) = b.cnot(rb, ra);
+//!     (ra, rb)
+//! }
+//! wrap_fn!(gamma_op, gamma, ra, rb); // if gamma returns a Result, write (gamma) instead.
+//!
+//! let (ra, rb) = program!(&mut b, ra, rb;
+//!     gamma_op ra[0..2], ra[2];
 //! )?;
 //! let r = b.merge(vec![ra, rb])?;
 //!
@@ -143,7 +171,6 @@ pub mod types;
 pub mod unitary_decomposition;
 /// Commonly used short functions.
 pub mod utils;
-
 /// Efficient iterators for sparse kronprod matrices.
 pub mod iterators;
 /// Functions for measuring states.

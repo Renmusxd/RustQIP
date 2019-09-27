@@ -74,17 +74,17 @@ macro_rules! invert_fn {
     (pub $newinvert:ident, $func:expr) => {
         /// Invert the given function.
         pub fn $newinvert(
-            b: &mut dyn UnitaryBuilder,
+            b: &mut dyn $crate::UnitaryBuilder,
             rs: Vec<Register>,
-        ) -> Result<Vec<Register>, CircuitError> {
+        ) -> Result<Vec<Register>, $crate::CircuitError> {
             $crate::inverter(b, rs, $func)
         }
     };
     ($newinvert:ident, $func:expr) => {
         fn $newinvert(
-            b: &mut dyn UnitaryBuilder,
+            b: &mut dyn $crate::UnitaryBuilder,
             rs: Vec<Register>,
-        ) -> Result<Vec<Register>, CircuitError> {
+        ) -> Result<Vec<Register>, $crate::CircuitError> {
             $crate::inverter(b, rs, $func)
         }
     };

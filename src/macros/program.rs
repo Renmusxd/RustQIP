@@ -178,7 +178,7 @@ macro_rules! program {
     };
     //opening (must be with comma) (no indices)
     (@args_acc($builder:expr, $reg_man:ident, $args:ident) |$name:ident, $($tail:tt)*) => {
-        let mut tmp_grouped_args: Vec<Register> = vec![];
+        let mut tmp_grouped_args: Vec<$crate::Register> = vec![];
         program!(@args_acc($builder, $reg_man, $args, tmp_grouped_args) $name, $($tail)*)
     };
     // with indices
@@ -296,7 +296,7 @@ macro_rules! program {
     // Start parsing a program of the form "control function [register <indices>, ...];"
     (@program($builder:expr, $reg_man:ident) control($control:expr) $func:ident $($tail:tt)*) => {
         // Get all args
-        let mut tmp_acc_vec: Vec<Register> = vec![];
+        let mut tmp_acc_vec: Vec<$crate::Register> = vec![];
         program!(@args_acc($builder, $reg_man, tmp_acc_vec) $($tail)*);
         let tmp_cr = tmp_acc_vec.remove(0);
 
@@ -304,7 +304,7 @@ macro_rules! program {
         let mut tmp_cb = $builder.with_condition(tmp_cr);
 
         // Now all the args are in acc_vec
-        let mut tmp_results: Vec<Register> = $func(&mut tmp_cb, tmp_acc_vec)?;
+        let mut tmp_results: Vec<$crate::Register> = $func(&mut tmp_cb, tmp_acc_vec)?;
 
         let tmp_cr = tmp_cb.release_register();
         let tmp_cr = $crate::negate_bitmask($builder, tmp_cr, $control);
@@ -336,9 +336,9 @@ macro_rules! program {
     // (builder, register_1, ...; programs; ...)
     ($builder:expr, $($tail:tt)*) => {
         {
-            let tmp_f = |b: &mut dyn UnitaryBuilder| {
+            let tmp_f = |b: &mut dyn $crate::UnitaryBuilder| {
                 // First reassign each name to a vec index
-                let mut register_manager = RegisterManager::default();
+                let mut register_manager = $crate::RegisterManager::default();
                 program!(@splitter(b, register_manager) $($tail)*);
 
                 program!(@skip_to_program(b, register_manager) $($tail)*);
@@ -455,11 +455,11 @@ macro_rules! wrap_fn {
         wrap_fn!(@invoke($func, $builder) ($($body)* $name,) <- $($tail)*)
     };
     (@unwrap_regs($func:expr, $rs:ident) $name:ident) => {
-        let $name = $rs.pop().ok_or_else(|| CircuitError::new(format!("Error unwrapping {} for {}", stringify!($name), stringify!($func))))?;
+        let $name = $rs.pop().ok_or_else(|| $crate::CircuitError::new(format!("Error unwrapping {} for {}", stringify!($name), stringify!($func))))?;
     };
     (@unwrap_regs($func:expr, $rs:ident) $name:ident, $($tail:tt)*) => {
         wrap_fn!(@unwrap_regs($func, $rs) $($tail)*);
-        let $name = $rs.pop().ok_or_else(|| CircuitError::new(format!("Error unwrapping {} for {}", stringify!($name), stringify!($func))))?;
+        let $name = $rs.pop().ok_or_else(|| $crate::CircuitError::new(format!("Error unwrapping {} for {}", stringify!($name), stringify!($func))))?;
     };
     (@wrap_regs($rs:ident) $name:ident) => {
         $rs.push($name);
@@ -472,7 +472,7 @@ macro_rules! wrap_fn {
         {
             wrap_fn!(@unwrap_regs($func, $rs) $($tail)*);
             let wrap_fn!(@names () <- $($tail)*) = wrap_fn!(@invoke($func, $builder) () <- $($tail)*) ?;
-            let mut $rs: Vec<Register> = vec![];
+            let mut $rs: Vec<$crate::Register> = vec![];
             wrap_fn!(@wrap_regs($rs) $($tail)*);
             Ok($rs)
         }
@@ -481,30 +481,30 @@ macro_rules! wrap_fn {
         {
             wrap_fn!(@unwrap_regs($func, $rs) $($tail)*);
             let wrap_fn!(@names () <- $($tail)*) = wrap_fn!(@invoke($func, $builder) () <- $($tail)*);
-            let mut $rs: Vec<Register> = vec![];
+            let mut $rs: Vec<$crate::Register> = vec![];
             wrap_fn!(@wrap_regs($rs) $($tail)*);
             Ok($rs)
         }
     };
     (pub $newfunc:ident, ($func:expr), $($tail:tt)*) => {
         /// Wrapped version of function
-        pub fn $newfunc(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Register>, CircuitError> {
+        pub fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@result_body(b, $func, rs) $($tail)*)
         }
     };
     (pub $newfunc:ident, $func:expr, $($tail:tt)*) => {
         /// Wrapped version of function
-        pub fn $newfunc(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Register>, CircuitError> {
+        pub fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@raw_body(b, $func, rs) $($tail)*)
         }
     };
     ($newfunc:ident, ($func:expr), $($tail:tt)*) => {
-        fn $newfunc(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Register>, CircuitError> {
+        fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@result_body(b, $func, rs) $($tail)*)
         }
     };
     ($newfunc:ident, $func:expr, $($tail:tt)*) => {
-        fn $newfunc(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Register>, CircuitError> {
+        fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@raw_body(b, $func, rs) $($tail)*)
         }
     };
