@@ -12,7 +12,7 @@ See all the examples in the [examples directory](https://github.com/Renmusxd/Rus
 Here's an example of a small circuit where two groups of qubits are swapped conditioned on a
 third. This circuit is very small, only three operations plus a measurement, so the boilerplate
 can look quite large in comparison, but that setup provides the ability to construct circuits
-easily and safely when they do get larger.
+easily and safely when they do get larger. Furthermore there are tools in the library which can clean up this code significantly. See the [docs](https://docs.rs/qip).
 ```rust
 use qip::*;
 
