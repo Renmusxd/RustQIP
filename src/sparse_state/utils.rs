@@ -24,7 +24,7 @@ pub(crate) fn consolidate_vec<
                 let (last_indx, last_val) = acc.pop().unwrap();
                 acc.push((last_indx, last_val + val));
             }
-            _ => acc.push((indx.clone(), val)),
+            _ => acc.push((indx, val)),
         }
         acc
     })

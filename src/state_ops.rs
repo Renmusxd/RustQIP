@@ -648,7 +648,7 @@ pub fn make_op_matrix<P: Precision>(
             let mut output = input.clone();
             input[i] = Complex::one();
             apply_op(n, op, &input, &mut output, 0, 0, multithread);
-            output.clone()
+            output
         })
         .collect()
 }

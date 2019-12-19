@@ -131,7 +131,7 @@ pub(crate) fn apply_controlled_rotation<
     );
 }
 
-/// Overwrites `vecc` with the merge content of `veca` and `vecb`.
+/// Overwrites `out` with the merge content of `veca` and `vecb`.
 fn merge_vecs<K: Eq + Ord, V, F: Fn(V, V) -> V>(
     veca: &mut Vec<(K, V)>,
     vecb: &mut Vec<(K, V)>,
@@ -145,19 +145,23 @@ fn merge_vecs<K: Eq + Ord, V, F: Fn(V, V) -> V>(
     while (!veca.is_empty()) || (!vecb.is_empty() || a_item.is_some() || b_item.is_some()) {
         let new_item = match (a_item.take(), b_item.take()) {
             (Some((ka, va)), Some((kb, vb))) => {
-                if ka > kb {
-                    a_item = veca.pop();
-                    b_item = Some((kb, vb));
-                    (ka, va)
-                } else if kb > ka {
-                    a_item = Some((ka, va));
-                    b_item = vecb.pop();
-                    (kb, vb)
-                } else {
+                match (ka, kb) {
+                    (ka, kb) if ka > kb => {
+                        a_item = veca.pop();
+                        b_item = Some((kb, vb));
+                        (ka, va)
+                    }
+                    (ka, kb) if kb > ka => {
+                        a_item = Some((ka, va));
+                        b_item = vecb.pop();
+                        (kb, vb)
+                    }
                     /* if ka == kb */
-                    a_item = veca.pop();
-                    b_item = vecb.pop();
-                    (ka, acc(va, vb))
+                    (ka, _kb) => {
+                        a_item = veca.pop();
+                        b_item = vecb.pop();
+                        (ka, acc(va, vb))
+                    }
                 }
             }
             (Some((ka, va)), None) => {

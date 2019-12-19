@@ -138,7 +138,7 @@ impl Register {
                 },
                 Some(Register {
                     indices: remaining,
-                    parent: Some(Parent::Shared(shared_parent.clone())),
+                    parent: Some(Parent::Shared(shared_parent)),
                     deps: None,
                     id: idb,
                 }),

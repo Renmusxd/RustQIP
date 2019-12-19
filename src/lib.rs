@@ -153,6 +153,10 @@ pub mod errors;
 /// Macros for general ease of use.
 #[macro_use]
 pub mod macros;
+/// Efficient iterators for sparse kronprod matrices.
+pub mod iterators;
+/// Functions for measuring states.
+pub mod measurement_ops;
 /// Code for building pipelines.
 pub mod pipeline;
 /// Tools for displaying pipelines.
@@ -163,6 +167,8 @@ pub mod qfft;
 pub mod qubits;
 /// Sparse quantum states
 pub mod sparse_state;
+/// Functions for running ops on states.
+pub mod state_ops;
 /// Tracing state
 pub mod trace_state;
 /// Commonly used types.
@@ -171,9 +177,3 @@ pub mod types;
 pub mod unitary_decomposition;
 /// Commonly used short functions.
 pub mod utils;
-/// Efficient iterators for sparse kronprod matrices.
-pub mod iterators;
-/// Functions for measuring states.
-pub mod measurement_ops;
-/// Functions for running ops on states.
-pub mod state_ops;
