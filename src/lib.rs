@@ -41,7 +41,7 @@
 //! let b_handle = rb.handle();
 //!
 //! // Define circuit
-//! // First apply an H to r
+//! // First apply an H to q
 //! let q = b.hadamard(q);
 //! // Then swap ra and rb, conditioned on q.
 //! let (q, _, _) = b.cswap(q, ra, rb)?;
