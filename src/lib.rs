@@ -79,13 +79,13 @@
 //! let ra = b.register(n)?;
 //! let rb = b.register(n)?;
 //!
-//! let gamma = |b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+//! fn gamma(b: &mut dyn UnitaryBuilder, mut rs: Vec<Register>) -> Result<Vec<Register>, CircuitError> {
 //!     let rb = rs.pop().unwrap();
 //!     let ra = rs.pop().unwrap();
 //!     let (ra, rb) = b.cnot(ra, rb);
 //!     let (rb, ra) = b.cnot(rb, ra);
 //!     Ok(vec![ra, rb])
-//! };
+//! }
 //!
 //! let (ra, rb) = program!(&mut b, ra, rb;
 //!     // Applies gamma to |ra[0] ra[1]>|ra[2]>
@@ -121,7 +121,9 @@
 //!     let (rb, ra) = b.cnot(rb, ra);
 //!     (ra, rb)
 //! }
-//! wrap_fn!(gamma_op, gamma, ra, rb); // if gamma returns a Result, write (gamma) instead.
+//! wrap_fn!(gamma_op, gamma, ra, rb);
+//! // if gamma returns a Result<(Register, Register), CircuitError>, write (gamma) instead.
+//! // wrap_fn!(gamma_op, (gamma), ra, rb)
 //!
 //! let (ra, rb) = program!(&mut b, ra, rb;
 //!     gamma_op ra[0..2], ra[2];
