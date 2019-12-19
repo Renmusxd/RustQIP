@@ -1109,6 +1109,32 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
 }
 
 /// Condition a circuit defined by `f` using `cr`.
+///
+/// # Example
+/// ```
+/// use qip::*;
+///
+/// let mut b = qip::OpBuilder::new();
+/// let qa = b.qubit();
+/// let qb = b.qubit();
+/// let qc = b.qubit();
+///
+/// // Run this subcircuit entirely conditioned on qa, with argument qb.
+/// let (qa, qb) = condition(&mut b, qa, qb, |b, q| {
+///     // Here qb is bound to q, qa is implicitly a condition on the operation.
+///     b.not(q)
+/// });
+///
+/// // We can provide any type as the argument to the function, so long as we can return the same
+/// // type. Here we provide the tuple of (Register, Register). This circuit is the same as:
+/// // let (qa, qb) = b.cnot(qa, qb);
+/// // let (qa, qc) = b.cnot(qa, qc);
+/// let (qa, (qb, qc)) = condition(&mut b, qa, (qb, qc), |b, (q1, q2)| {
+///     let q1 = b.not(q1);
+///     let q2 = b.not(q2);
+///     (q1, q2)
+/// });
+/// ```
 pub fn condition<F, RS, OS>(
     b: &mut dyn UnitaryBuilder,
     cr: Register,
@@ -1125,6 +1151,25 @@ where
 }
 
 /// Condition a circuit defined by `f` using `cr`, better supports Result types.
+///
+/// # Example
+/// ```
+/// use qip::*;
+/// # fn main() -> Result<(), CircuitError> {
+/// let mut b = qip::OpBuilder::new();
+/// let qa = b.qubit();
+/// let qb = b.qubit();
+/// let qc = b.qubit();
+///
+/// // We can provide any type as the argument to the function, so long as we can return the same
+/// // type. Here we provide the tuple of (Register, Register). This circuit is the same as
+/// // b.cswap(qa, qb, qc)?;
+/// let (qa, (qb, qc)) = try_condition(&mut b, qa, (qb, qc), |b, (q1, q2)| {
+///     b.swap(q1, q2)
+/// })?;
+/// # Ok(())
+/// # }
+/// ```
 pub fn try_condition<F, RS, OS>(
     b: &mut dyn UnitaryBuilder,
     cr: Register,

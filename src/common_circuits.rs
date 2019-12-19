@@ -32,6 +32,15 @@ where
 }
 
 /// Makes a pair of Register in the state `|0n>x|0n> + |1n>x|1n>`
+/// # Example
+/// ```
+/// use qip::*;
+///
+/// let mut b = OpBuilder::new();
+/// // Make a total of 6 qubits in state |000000> + |111111> with first 3 qubits given to alice,
+/// // and second 3 given to bob: |000>|000> + |111>|111>
+/// let (q_alice, q_bob) = qip::epr_pair(&mut b, 3);
+/// ```
 pub fn epr_pair(b: &mut OpBuilder, n: u64) -> (Register, Register) {
     let m = 2 * n;
 

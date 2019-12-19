@@ -13,6 +13,8 @@
 
 //! Quantum Computing library leveraging graph building to build efficient quantum circuit
 //! simulations.
+//! Rust is a great language for quantum computing with gate models because the borrow checker
+//! is very similar to the [No-cloning theorem](https://wikipedia.org/wiki/No-cloning_theorem).
 //!
 //! See all the examples in the [examples directory](https://github.com/Renmusxd/RustQIP/tree/master/examples) of the Github repository.
 //!
@@ -29,7 +31,7 @@
 //! let mut b = OpBuilder::new();
 //!
 //! // Make three registers of sizes 1, 3, 3 (7 qubits total).
-//! let q = b.qubit();
+//! let q = b.qubit();  // Same as b.register(1)?;
 //! let ra = b.register(3)?;
 //! let rb = b.register(3)?;
 //!
@@ -41,7 +43,7 @@
 //! // Define circuit
 //! // First apply an H to r
 //! let q = b.hadamard(q);
-//! // Then run this subcircuit conditioned on r, applied to ra and rb
+//! // Then swap ra and rb, conditioned on q.
 //! let (q, _, _) = b.cswap(q, ra, rb)?;
 //! // Finally apply H to q again.
 //! let q = b.hadamard(q);
@@ -51,13 +53,14 @@
 //!
 //! // Now q is the end result of the above circuit, and we can run the circuit by referencing it.
 //!
-//! // Make an initial state: |0,000,001>
-//! let initial_state = [a_handle.make_init_from_index(0)?,
-//!                      b_handle.make_init_from_index(1)?];
+//! // Make an initial state: |0,000,001> (default value for registers not mentioned is 0).
+//! let initial_state = [a_handle.make_init_from_index(0b000)?,
+//!                      b_handle.make_init_from_index(0b001)?];
 //! // Run circuit with a given precision.
 //! let (_, measured) = run_local_with_init::<f64>(&q, &initial_state)?;
 //!
-//! // Lookup the result of the measurement we performed using the handle.
+//! // Lookup the result of the measurement we performed using the handle, and the probability
+//! // of getting that measurement.
 //! let (result, p) = measured.get_measurement(&m_handle).unwrap();
 //!
 //! // Print the measured result
@@ -121,6 +124,8 @@
 //!     let (rb, ra) = b.cnot(rb, ra);
 //!     (ra, rb)
 //! }
+//! // Make a function gamma_op from gamma which matches the spec required by program!(...).
+//! // Here we tell wrap_fn! that gamma takes two registers, which we will internally call ra, rb.
 //! wrap_fn!(gamma_op, gamma, ra, rb);
 //! // if gamma returns a Result<(Register, Register), CircuitError>, write (gamma) instead.
 //! // wrap_fn!(gamma_op, (gamma), ra, rb)
@@ -129,6 +134,35 @@
 //!     gamma_op ra[0..2], ra[2];
 //! )?;
 //! let r = b.merge(vec![ra, rb])?;
+//!
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! And with these wrapped functions, automatically produce their conjugates / inverses:
+//!
+//! ```
+//! use qip::*;
+//! # fn main() -> Result<(), CircuitError> {
+//!
+//! let n = 3;
+//! let mut b = OpBuilder::new();
+//! let ra = b.register(n)?;
+//! let rb = b.register(n)?;
+//!
+//! fn gamma(b: &mut dyn UnitaryBuilder, ra: Register, rb: Register) -> (Register, Register) {
+//!     let (ra, rb) = b.cnot(ra, rb);
+//!     let (rb, ra) = b.cnot(rb, ra);
+//!     (ra, rb)
+//! }
+//! wrap_fn!(gamma_op, gamma, ra, rb);
+//! invert_fn!(inv_gamma_op, gamma_op);
+//!
+//! // This program is equivalent to the identity (U^-1 U = I).
+//! let (ra, rb) = program!(&mut b, ra, rb;
+//!     gamma_op ra, rb[2];
+//!     inv_gamma_op ra, rb[2];
+//! )?;
 //!
 //! # Ok(())
 //! # }
