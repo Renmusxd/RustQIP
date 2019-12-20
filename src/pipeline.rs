@@ -381,9 +381,7 @@ impl<P: Precision> LocalQuantumState<P> {
             (None, None) => (1 << n as usize, 1 << n as usize),
             (Some((sa, ea)), None) => (ea - sa, 1 << n as usize),
             (None, Some(_)) => (1 << n as usize, 1 << n as usize),
-            (Some((sa, ea)), Some((sb, eb))) => {
-                (ea - sa, max(ea - sa, eb - sb))
-            }
+            (Some((sa, ea)), Some((sb, eb))) => (ea - sa, max(ea - sa, eb - sb)),
         };
 
         if state.len() != expected_size {
@@ -467,22 +465,23 @@ impl<P: Precision> LocalQuantumState<P> {
     fn get_input_slice_and_offset(&self) -> (&[Complex<P>], u64) {
         match self.input_region {
             None => (self.state.as_slice(), 0),
-            Some((sa, ea)) => (&self.state[..ea-sa], sa as u64),
+            Some((sa, ea)) => (&self.state[..ea - sa], sa as u64),
         }
     }
 
-    fn get_input_and_output_slice_and_offset(&mut self) -> ((&[Complex<P>], u64), (&mut [Complex<P>], u64)) {
+    fn get_input_and_output_slice_and_offset(
+        &mut self,
+    ) -> ((&[Complex<P>], u64), (&mut [Complex<P>], u64)) {
         let input = match self.input_region {
             None => (self.state.as_slice(), 0),
-            Some((sa, ea)) => (&self.state[..ea-sa], sa as u64),
+            Some((sa, ea)) => (&self.state[..ea - sa], sa as u64),
         };
         let output = match self.output_region {
             None => (self.arena.as_mut_slice(), 0),
-            Some((sb, eb)) => (&mut self.arena[..eb-sb], sb as u64),
+            Some((sb, eb)) => (&mut self.arena[..eb - sb], sb as u64),
         };
         (input, output)
     }
-
 }
 
 /// An initial state supplier for building quantum states.
@@ -582,7 +581,14 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
         } else {
             soft_measure(self.n, indices, input, Some(input_offset), self.multithread)
         };
-        let p = measure_prob(self.n, m, indices, input, Some(input_offset), self.multithread);
+        let p = measure_prob(
+            self.n,
+            m,
+            indices,
+            input,
+            Some(input_offset),
+            self.multithread,
+        );
         self.rotate_basis(indices, -angle);
         (m, p)
     }
