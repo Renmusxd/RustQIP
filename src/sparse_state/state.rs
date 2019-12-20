@@ -105,6 +105,16 @@ impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
         }
     }
 
+    fn new_from_intitial_states_and_regions(
+        n: u64,
+        states: &[(Vec<u64>, InitialState<P>)],
+        input_region: (usize, usize),
+        output_region: (usize, usize),
+    ) -> Self {
+        // TODO just add this.
+        todo!()
+    }
+
     fn n(&self) -> u64 {
         self.n
     }

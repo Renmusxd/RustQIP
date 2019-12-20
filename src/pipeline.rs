@@ -242,6 +242,14 @@ pub trait QuantumState<P: Precision> {
     /// Initialize new state with initial states.
     fn new_from_initial_states(n: u64, states: &[RegisterInitialState<P>]) -> Self;
 
+    /// Initialize with initial states and regions.
+    fn new_from_intitial_states_and_regions(
+        n: u64,
+        states: &[RegisterInitialState<P>],
+        input_region: (usize, usize),
+        output_region: (usize, usize),
+    ) -> Self;
+
     /// Get number of qubits represented by this state.
     fn n(&self) -> u64;
 
@@ -280,12 +288,14 @@ pub trait QuantumState<P: Precision> {
 
 /// A basic representation of a quantum state, given by a vector of complex numbers stored
 /// locally on the machine (plus an arena of equal size to work in).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LocalQuantumState<P: Precision> {
     // A bundle with the quantum state data.
     n: u64,
     state: Vec<Complex<P>>,
     arena: Vec<Complex<P>>,
+    input_region: Option<(usize, usize)>,
+    output_region: Option<(usize, usize)>,
     multithread: bool,
 }
 
@@ -295,6 +305,8 @@ impl<P: Precision> LocalQuantumState<P> {
     fn new_from_initial_states_and_multithread(
         n: u64,
         states: &[RegisterInitialState<P>],
+        input_region: Option<(usize, usize)>,
+        output_region: Option<(usize, usize)>,
         multithread: bool,
     ) -> LocalQuantumState<P> {
         let max_init_n = states
@@ -328,11 +340,21 @@ impl<P: Precision> LocalQuantumState<P> {
         });
 
         // Go through each combination of full index locations
-        let mut cvec: Vec<Complex<P>> = (0..1 << n).map(|_| Complex::default()).collect();
+        let (input_offset, len) = match (input_region, output_region) {
+            (None, None) => (0, 1 << n),
+            (Some((sa, ea)), Some((sb, eb))) => (sa, max(ea - sa, eb - sb)),
+            (Some((sa, ea)), None) => (sa, ea - sa),
+            (None, Some((sb, eb))) => (0, eb - sb),
+        };
+        let mut cvec: Vec<Complex<P>> = (0..len).map(|_| Complex::default()).collect();
         (0..1 << n_fullindices).for_each(|i| {
             // Calculate the offset from template, and the product of fullstates.
             let (delta_index, val) = create_state_entry(n, i, states);
-            cvec[(delta_index + template) as usize] = val;
+            let diff = (delta_index + template) as usize;
+
+            if diff >= input_offset {
+                cvec[diff - input_offset] = val;
+            }
         });
 
         let arena = vec![Complex::zero(); cvec.len()];
@@ -340,6 +362,8 @@ impl<P: Precision> LocalQuantumState<P> {
             n,
             state: cvec,
             arena,
+            input_region,
+            output_region,
             multithread,
         }
     }
@@ -347,20 +371,31 @@ impl<P: Precision> LocalQuantumState<P> {
     /// Make a new LocalQuantumState from a fully defined state.
     pub fn new_from_full_state(
         n: u64,
-        state: Vec<Complex<P>>,
+        mut state: Vec<Complex<P>>,
         natural_order: bool,
+        input_region: Option<(usize, usize)>,
+        output_region: Option<(usize, usize)>,
         multithread: bool,
     ) -> Result<LocalQuantumState<P>, CircuitError> {
-        if state.len() != 1 << n as usize {
+        let (expected_size, required_size) = match (input_region, output_region) {
+            (None, None) => (1 << n as usize, 1 << n as usize),
+            (Some((sa, ea)), None) => (ea - sa, 1 << n as usize),
+            (None, Some(_)) => (1 << n as usize, 1 << n as usize),
+            (Some((sa, ea)), Some((sb, eb))) => {
+                (ea - sa, max(ea - sa, eb - sb))
+            }
+        };
+
+        if state.len() != expected_size {
             let message = format!(
                 "Provided state is not the correct size, expected {:?} but found {:?}",
-                1 << n,
+                expected_size,
                 state.len()
             );
             return CircuitError::make_err(message);
         }
-
-        let arena = vec![Complex::zero(); state.len()];
+        state.resize(required_size, Complex::zero());
+        let arena = vec![Complex::zero(); required_size];
 
         let state = if natural_order {
             let mut state: Vec<_> = state.into_iter().enumerate().collect();
@@ -374,6 +409,8 @@ impl<P: Precision> LocalQuantumState<P> {
             n,
             state,
             arena,
+            input_region,
+            output_region,
             multithread,
         })
     }
@@ -426,21 +463,30 @@ impl<P: Precision> LocalQuantumState<P> {
     pub fn set_multithreading(&mut self, multithread: bool) {
         self.multithread = multithread;
     }
-}
 
-impl<P: Precision> Clone for LocalQuantumState<P> {
-    fn clone(&self) -> Self {
-        LocalQuantumState {
-            n: self.n,
-            state: self.state.clone(),
-            arena: self.arena.clone(),
-            multithread: self.multithread,
+    fn get_input_slice_and_offset(&self) -> (&[Complex<P>], u64) {
+        match self.input_region {
+            None => (self.state.as_slice(), 0),
+            Some((sa, ea)) => (&self.state[..ea-sa], sa as u64),
         }
     }
+
+    fn get_input_and_output_slice_and_offset(&mut self) -> ((&[Complex<P>], u64), (&mut [Complex<P>], u64)) {
+        let input = match self.input_region {
+            None => (self.state.as_slice(), 0),
+            Some((sa, ea)) => (&self.state[..ea-sa], sa as u64),
+        };
+        let output = match self.output_region {
+            None => (self.arena.as_mut_slice(), 0),
+            Some((sb, eb)) => (&mut self.arena[..eb-sb], sb as u64),
+        };
+        (input, output)
+    }
+
 }
 
 /// An initial state supplier for building quantum states.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum InitialState<P: Precision> {
     /// A fully qualified state, each |x> has an amplitude
     FullState(Vec<Complex<P>>),
@@ -454,13 +500,28 @@ pub type RegisterInitialState<P> = (Vec<u64>, InitialState<P>);
 impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
     /// Build a new LocalQuantumState
     fn new(n: u64) -> LocalQuantumState<P> {
-        LocalQuantumState::new_from_initial_states(n, &[])
+        Self::new_from_initial_states(n, &[])
     }
 
     /// Build a local state using a set of initial states for subsets of the qubits.
     /// These initial states are made from the qubit handles.
     fn new_from_initial_states(n: u64, states: &[RegisterInitialState<P>]) -> LocalQuantumState<P> {
-        Self::new_from_initial_states_and_multithread(n, states, true)
+        Self::new_from_initial_states_and_multithread(n, states, None, None, true)
+    }
+
+    fn new_from_intitial_states_and_regions(
+        n: u64,
+        states: &[(Vec<u64>, InitialState<P>)],
+        input_region: (usize, usize),
+        output_region: (usize, usize),
+    ) -> Self {
+        Self::new_from_initial_states_and_multithread(
+            n,
+            states,
+            Some(input_region),
+            Some(output_region),
+            true,
+        )
     }
 
     fn n(&self) -> u64 {
@@ -468,14 +529,19 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
     }
 
     fn apply_op_with_name(&mut self, _name: Option<&str>, op: &UnitaryOp) {
+        let n = self.n;
+        let multithread = self.multithread;
+        let (input, output) = self.get_input_and_output_slice_and_offset();
+        let (input, input_offset) = input;
+        let (output, output_offset) = output;
         apply_op(
-            self.n,
+            n,
             op,
-            &self.state,
-            &mut self.arena,
-            0,
-            0,
-            self.multithread,
+            input,
+            output,
+            input_offset,
+            output_offset,
+            multithread,
         );
         std::mem::swap(&mut self.state, &mut self.arena);
     }
@@ -487,14 +553,20 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
         angle: f64,
     ) -> (u64, P) {
         self.rotate_basis(indices, angle);
+
+        let n = self.n;
+        let multithread = self.multithread;
+        let (input, output) = self.get_input_and_output_slice_and_offset();
+        let (input, input_offset) = input;
+        let (output, output_offset) = output;
         let measured_result = measure(
-            self.n,
+            n,
             indices,
-            &self.state,
-            &mut self.arena,
-            None,
+            input,
+            output,
+            Some((input_offset, output_offset)),
             measured,
-            self.multithread,
+            multithread,
         );
         self.rotate_basis(indices, -angle);
 
@@ -504,12 +576,13 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
 
     fn soft_measure(&mut self, indices: &[u64], measured: Option<u64>, angle: f64) -> (u64, P) {
         self.rotate_basis(indices, angle);
+        let (input, input_offset) = self.get_input_slice_and_offset();
         let m = if let Some(m) = measured {
             m
         } else {
-            soft_measure(self.n, indices, &self.state, None, self.multithread)
+            soft_measure(self.n, indices, input, Some(input_offset), self.multithread)
         };
-        let p = measure_prob(self.n, m, indices, &self.state, None, self.multithread);
+        let p = measure_prob(self.n, m, indices, input, Some(input_offset), self.multithread);
         self.rotate_basis(indices, -angle);
         (m, p)
     }
@@ -520,7 +593,8 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
 
     fn stochastic_measure(&mut self, indices: &[u64], angle: f64) -> Vec<P> {
         self.rotate_basis(indices, angle);
-        let probs = measure_probs(self.n, indices, &self.state, None, self.multithread);
+        let (input, input_offset) = self.get_input_slice_and_offset();
+        let probs = measure_probs(self.n, indices, input, Some(input_offset), self.multithread);
         self.rotate_basis(indices, -angle);
         probs
     }

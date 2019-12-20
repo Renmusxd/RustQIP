@@ -45,6 +45,23 @@ impl<P: Precision> QuantumState<P> for TraceState<P> {
         }
     }
 
+    fn new_from_intitial_states_and_regions(
+        n: u64,
+        states: &[(Vec<u64>, InitialState<P>)],
+        input_region: (usize, usize),
+        output_region: (usize, usize),
+    ) -> Self {
+        Self {
+            state: SparseQuantumState::new_from_intitial_states_and_regions(
+                n,
+                states,
+                input_region,
+                output_region,
+            ),
+            trace: Vec::new(),
+        }
+    }
+
     fn n(&self) -> u64 {
         self.state.n()
     }
