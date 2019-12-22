@@ -28,6 +28,7 @@
 /// # Ok(())
 /// # }
 /// ```
+#[deprecated]
 #[macro_export]
 macro_rules! register_expr {
     // Split the names into the selected indices, pushing the remaining to the acc vector.

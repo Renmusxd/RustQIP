@@ -1,6 +1,6 @@
 use crate::iterators::{fold_for_op_cols, precision_get_index, precision_num_indices};
 use crate::measurement_ops::MeasuredCondition;
-use crate::pipeline::{create_state_entry, InitialState};
+use crate::pipeline::{get_initial_index_value_iterator, RegisterInitialState};
 use crate::sparse_state::utils::{
     consolidate_vec, sparse_measure, sparse_measure_prob, sparse_measure_probs, sparse_soft_measure,
 };
@@ -20,6 +20,8 @@ pub struct SparseQuantumState<P: Precision> {
     n: u64,
     state: Option<Vec<(u64, Complex<P>)>>,
     multithread: bool,
+    input_region: Option<(u64, u64)>,
+    output_region: Option<(u64, u64)>,
 }
 
 impl<P: Precision> SparseQuantumState<P> {
@@ -48,18 +50,13 @@ impl<P: Precision> SparseQuantumState<P> {
         self.state = s;
         ret
     }
-}
 
-impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
-    fn new(n: u64) -> Self {
-        Self {
-            n,
-            state: Some(vec![(0, Complex::one())]),
-            multithread: true,
-        }
-    }
-
-    fn new_from_initial_states(n: u64, states: &[(Vec<u64>, InitialState<P>)]) -> Self {
+    fn make_initial_state(
+        n: u64,
+        states: &[RegisterInitialState<P>],
+        input_offset: Option<(usize, usize)>,
+    ) -> (u64, Vec<(u64, Complex<P>)>) {
+        // If there's an index in the initial states above n, adjust n.
         let max_init_n = states
             .iter()
             .map(|(indices, _)| indices)
@@ -69,50 +66,63 @@ impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
             .map(|m| m + 1);
         let n = max_init_n.map(|m| max(n, m)).unwrap_or(n);
 
-        // Assume that all unrepresented indices are in the |0> state.
-        let n_fullindices: u64 = states
-            .iter()
-            .map(|(indices, state)| match state {
-                InitialState::FullState(_) => indices.len() as u64,
-                _ => 0,
-            })
-            .sum();
-
-        // Make the index template/base
-        let template: u64 = states.iter().fold(0, |acc, (indices, state)| -> u64 {
-            match state {
-                InitialState::Index(val_indx) => {
-                    let val_indx = flip_bits(indices.len(), *val_indx);
-                    sub_to_full(n, indices, val_indx, acc)
+        let cvec =
+            get_initial_index_value_iterator(n, states).fold(vec![], |mut acc, (indx, val)| {
+                if val != Complex::zero() {
+                    let should_push = match input_offset {
+                        Some((low, high)) => (low <= indx) && ((indx) < high),
+                        None => true,
+                    };
+                    if should_push {
+                        acc.push((indx as u64, val));
+                    }
                 }
-                _ => acc,
-            }
-        });
+                acc
+            });
+        (n, cvec)
+    }
+}
 
-        // Go through each combination of full index locations
-        let cvec = (0..1 << n_fullindices).fold(vec![], |mut acc, i| {
-            let (delta_index, val) = create_state_entry(n, i, states);
-            if val != Complex::zero() {
-                acc.push((delta_index + template, val));
-            }
-            acc
-        });
+impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
+    fn new(n: u64) -> Self {
+        Self {
+            n,
+            state: Some(vec![(0, Complex::one())]),
+            multithread: true,
+            input_region: None,
+            output_region: None,
+        }
+    }
 
+    fn new_from_initial_states(n: u64, states: &[RegisterInitialState<P>]) -> Self {
+        let (n, cvec) = Self::make_initial_state(n, states, None);
         Self {
             n,
             state: Some(cvec),
             multithread: true,
+            input_region: None,
+            output_region: None,
         }
     }
 
     fn new_from_intitial_states_and_regions(
         n: u64,
-        states: &[(Vec<u64>, InitialState<P>)],
+        states: &[RegisterInitialState<P>],
         input_region: (usize, usize),
         output_region: (usize, usize),
     ) -> Self {
-        // TODO just add this.
-        todo!()
+        let (n, cvec) = Self::make_initial_state(n, states, Some(input_region));
+
+        // TODO clean up usage of u64. Should convert most things to usize.
+        let input_region = (input_region.0 as u64, input_region.1 as u64);
+        let output_region = (output_region.0 as u64, output_region.1 as u64);
+        Self {
+            n,
+            state: Some(cvec),
+            multithread: true,
+            input_region: Some(input_region),
+            output_region: Some(output_region),
+        }
     }
 
     fn n(&self) -> u64 {
@@ -135,7 +145,14 @@ impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
             let col_template = (*col) & !mat_mask;
             fold_for_op_cols(nindices, matcol, &op, vec![], |mut acc, (row, row_val)| {
                 let full_row = sub_to_full(self.n, &mat_indices, row, col_template);
-                acc.push((full_row, val * row_val));
+                // Only output to valid locations.
+                let should_push = match self.output_region {
+                    Some((low, high)) => (low <= full_row) && (full_row < high),
+                    None => true,
+                };
+                if should_push {
+                    acc.push((full_row, val * row_val));
+                }
                 acc
             })
         };

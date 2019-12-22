@@ -299,6 +299,9 @@ pub struct LocalQuantumState<P: Precision> {
     multithread: bool,
 }
 
+/// A slice into a state and an offset from which the slice starts.
+type SlicesAndOffsets<'a, P> = ((&'a [Complex<P>], u64), (&'a mut [Complex<P>], u64));
+
 impl<P: Precision> LocalQuantumState<P> {
     /// Build a local state using a set of initial states for subsets of the qubits.
     /// These initial states are made from the Register handles.
@@ -316,28 +319,7 @@ impl<P: Precision> LocalQuantumState<P> {
             .flatten()
             .max()
             .map(|m| m + 1);
-
         let n = max_init_n.map(|m| max(n, m)).unwrap_or(n);
-
-        // Assume that all unrepresented indices are in the |0> state.
-        let n_fullindices: u64 = states
-            .iter()
-            .map(|(indices, state)| match state {
-                InitialState::FullState(_) => indices.len() as u64,
-                _ => 0,
-            })
-            .sum();
-
-        // Make the index template/base
-        let template: u64 = states.iter().fold(0, |acc, (indices, state)| -> u64 {
-            match state {
-                InitialState::Index(val_indx) => {
-                    let val_indx = flip_bits(indices.len(), *val_indx);
-                    sub_to_full(n, indices, val_indx, acc)
-                }
-                _ => acc,
-            }
-        });
 
         // Go through each combination of full index locations
         let (input_offset, len) = match (input_region, output_region) {
@@ -346,14 +328,11 @@ impl<P: Precision> LocalQuantumState<P> {
             (Some((sa, ea)), None) => (sa, ea - sa),
             (None, Some((sb, eb))) => (0, eb - sb),
         };
-        let mut cvec: Vec<Complex<P>> = (0..len).map(|_| Complex::default()).collect();
-        (0..1 << n_fullindices).for_each(|i| {
-            // Calculate the offset from template, and the product of fullstates.
-            let (delta_index, val) = create_state_entry(n, i, states);
-            let diff = (delta_index + template) as usize;
 
-            if diff >= input_offset {
-                cvec[diff - input_offset] = val;
+        let mut cvec: Vec<Complex<P>> = (0..len).map(|_| Complex::default()).collect();
+        get_initial_index_value_iterator(n, states).for_each(|(indx, val)| {
+            if indx >= input_offset {
+                cvec[indx - input_offset] = val;
             }
         });
 
@@ -469,9 +448,7 @@ impl<P: Precision> LocalQuantumState<P> {
         }
     }
 
-    fn get_input_and_output_slice_and_offset(
-        &mut self,
-    ) -> ((&[Complex<P>], u64), (&mut [Complex<P>], u64)) {
+    fn get_input_and_output_slice_and_offset(&mut self) -> SlicesAndOffsets<P> {
         let input = match self.input_region {
             None => (self.state.as_slice(), 0),
             Some((sa, ea)) => (&self.state[..ea - sa], sa as u64),
@@ -491,6 +468,46 @@ pub enum InitialState<P: Precision> {
     FullState(Vec<Complex<P>>),
     /// A single index with the whole weight.
     Index(u64),
+}
+
+fn num_full_states_and_template<P: Precision>(
+    n: u64,
+    states: &[RegisterInitialState<P>],
+) -> (u64, u64) {
+    // Assume that all unrepresented indices are in the |0> state.
+    let n_fullindices: u64 = states
+        .iter()
+        .map(|(indices, state)| match state {
+            InitialState::FullState(_) => indices.len() as u64,
+            _ => 0,
+        })
+        .sum();
+
+    // Make the index template/base
+    let template: u64 = states.iter().fold(0, |acc, (indices, state)| -> u64 {
+        match state {
+            InitialState::Index(val_indx) => {
+                let val_indx = flip_bits(indices.len(), *val_indx);
+                sub_to_full(n, indices, val_indx, acc)
+            }
+            _ => acc,
+        }
+    });
+    (n_fullindices, template)
+}
+
+/// Iterates through the indices and values which appear in the initial state.
+pub(crate) fn get_initial_index_value_iterator<P: Precision>(
+    n: u64,
+    states: &[RegisterInitialState<P>],
+) -> impl Iterator<Item = (usize, Complex<P>)> + '_ {
+    let (n_fullindices, template) = num_full_states_and_template(n, states);
+    (0..1 << n_fullindices).map(move |i| {
+        // Calculate the offset from template, and the product of fullstates.
+        let (delta_index, val) = create_state_entry(n, i, states);
+        let diff = (delta_index + template) as usize;
+        (diff, val)
+    })
 }
 
 /// A set of indices and their initial state.
