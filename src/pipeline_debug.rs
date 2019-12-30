@@ -36,9 +36,9 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
 
     fn new_from_intitial_states_and_regions(
         n: u64,
-        states: &[(Vec<u64>, InitialState<P>)],
-        input_region: (usize, usize),
-        output_region: (usize, usize),
+        _states: &[(Vec<u64>, InitialState<P>)],
+        _input_region: (usize, usize),
+        _output_region: (usize, usize),
     ) -> Self {
         Self::new(n)
     }

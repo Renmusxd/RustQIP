@@ -6,7 +6,7 @@ use crate::errors::CircuitError;
 use crate::iterators::*;
 use crate::utils::*;
 use crate::{Complex, Precision};
-use num::One;
+use num::{One, Zero};
 use std::cmp::{max, min};
 use std::fmt;
 
@@ -514,11 +514,11 @@ pub fn apply_op<P: Precision>(
         let f = |(i, val): (u64, Complex<P>)| -> Complex<P> {
             let colbits = sub_to_full(n, &mat_indices, i, row);
             if colbits < input_offset {
-                Complex::default()
+                Complex::zero()
             } else {
                 let vecrow = colbits - input_offset;
                 if vecrow >= input.len() as u64 {
-                    Complex::default()
+                    Complex::zero()
                 } else {
                     val * input[vecrow as usize]
                 }
@@ -609,11 +609,11 @@ pub fn apply_ops<P: Precision>(
                 let f = |(i, val): (u64, Complex<P>)| -> Complex<P> {
                     let colbits = sub_to_full(n, &mat_indices, i, row);
                     if colbits < input_offset {
-                        Complex::default()
+                        Complex::zero()
                     } else {
                         let vecrow = colbits - input_offset;
                         if vecrow >= input.len() as u64 {
-                            Complex::default()
+                            Complex::zero()
                         } else {
                             val * input[vecrow as usize]
                         }
