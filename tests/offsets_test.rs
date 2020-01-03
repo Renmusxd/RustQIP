@@ -38,10 +38,9 @@ fn test_offsets() -> Result<(), CircuitError> {
     let r2 = b.qubit();
     let r = b.merge(vec![r, r2])?;
     let n = 2;
-    let (mut s, _) = run_with_offsets::<f64>(n, &r, (0, 1 << n as usize), (0, 1 << n as usize))?;
-    let (mut s1, _) =
-        run_with_offsets::<f64>(n, &r, (0, 1 << n as usize), (0, 1 << (n as usize - 1)))?;
-    let (mut s2, _) = run_with_offsets::<f64>(
+    let (s, _) = run_with_offsets::<f64>(n, &r, (0, 1 << n as usize), (0, 1 << n as usize))?;
+    let (s1, _) = run_with_offsets::<f64>(n, &r, (0, 1 << n as usize), (0, 1 << (n as usize - 1)))?;
+    let (s2, _) = run_with_offsets::<f64>(
         n,
         &r,
         (0, 1 << n as usize),

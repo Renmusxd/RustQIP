@@ -82,6 +82,14 @@ macro_rules! register_expr {
         register_expr!(@name_tuple ($($body)* $name,) <- $($tail)*)
     };
 
+    // Remove unnecessary parenthesis in types.
+    (@register_tuple_type ()) => {
+        Register
+    };
+    (@register_tuple_type ($($body:tt)*)) => {
+        ($($body)* Register)
+    };
+
     // Use a wrapper function called run_f in order to force any contained lambda to take on the
     // correct signature.
     (@func($builder:expr, $args:expr) ($($body:tt)*) <- $name:ident $indices:expr; $func:expr) => {
@@ -92,8 +100,9 @@ macro_rules! register_expr {
     };
     (@func($builder:expr, $args:expr) ($($body:tt)*) <- $name:ident; $func:expr) => {
         {
-            fn run_f<F>(b: &mut dyn UnitaryBuilder, rs: ($($body)* Register), f: F) ->  Result<($($body)* Register), CircuitError>
-            where F: FnOnce(&mut dyn UnitaryBuilder, ($($body)* Register)) -> Result<($($body)* Register), CircuitError> {
+            type TmpRegisterType = register_expr!(@register_tuple_type ($($body)*));
+            fn run_f<F>(b: &mut dyn UnitaryBuilder, rs: TmpRegisterType, f: F) ->  Result<TmpRegisterType, CircuitError>
+            where F: FnOnce(&mut dyn UnitaryBuilder, TmpRegisterType) -> Result<TmpRegisterType, CircuitError> {
                 f(b, rs)
             }
             run_f($builder, $args, $func)
@@ -105,13 +114,13 @@ macro_rules! register_expr {
 
     // output (Register, Register, ...) for each name
     (@registers_for_names ($($body:tt)*) <- $name:ident $indices:expr; $($tail:tt)*) => {
-        ($($body)* Register)
+        register_expr!(@register_tuple_type ($($body)*))
     };
     (@registers_for_names ($($body:tt)*) <- $name:ident $indices:expr, $($tail:tt)*) => {
         register_expr!(@registers_for_names ($($body)* Register,) <- $($tail)*)
     };
     (@registers_for_names ($($body:tt)*) <- $name:ident; $($tail:tt)*) => {
-        ($($body)* Register)
+        register_expr!(@register_tuple_type ($($body)*))
     };
     (@registers_for_names ($($body:tt)*) <- $name:ident, $($tail:tt)*) => {
         register_expr!(@registers_for_names ($($body)* Register,) <- $($tail)*)
@@ -120,7 +129,8 @@ macro_rules! register_expr {
     // Main public entry point.
     ($builder:expr, $($tail:tt)*) => {
         {
-            let run_register = |b: &mut dyn UnitaryBuilder, rs: register_expr!(@registers_for_names () <- $($tail)*)| -> Result<register_expr!(@registers_for_names () <- $($tail)*), CircuitError> {
+            type TmpRegistersForNames = register_expr!(@registers_for_names () <- $($tail)*);
+            let run_register = |b: &mut dyn UnitaryBuilder, rs: TmpRegistersForNames| -> Result<TmpRegistersForNames, CircuitError> {
                 let register_expr!(@name_tuple () <- $($tail)*) = rs;
                 // $name is now a tuple of split thing and original
                 let mut remaining_qubits: Vec<Option<Register>> = vec![];
