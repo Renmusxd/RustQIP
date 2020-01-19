@@ -1,4 +1,4 @@
-use qip::{CircuitError, OpBuilder, UnitaryBuilder, Register, run_local, apply_function};
+use qip::{apply_function, run_local, CircuitError, OpBuilder, Register, UnitaryBuilder};
 
 /// Apply a function f(bool) -> bool as a unitary operator U
 ///
@@ -8,22 +8,27 @@ use qip::{CircuitError, OpBuilder, UnitaryBuilder, Register, run_local, apply_fu
 /// |y> --- |   | --- |y xor f(x)>
 ///         -----
 ///
-fn apply_oracle<F>(b: &mut dyn UnitaryBuilder, rx: Register, ry: Register, f: F) -> Result<(Register, Register), CircuitError>
-    where
-        F: 'static + Fn(bool) -> bool + Send + Sync,
+fn apply_oracle<F>(
+    b: &mut dyn UnitaryBuilder,
+    rx: Register,
+    ry: Register,
+    f: F,
+) -> Result<(Register, Register), CircuitError>
+where
+    F: 'static + Fn(bool) -> bool + Send + Sync,
 {
     let (rx, ry) = apply_function(b, rx, ry, move |input| {
         let fx = f(input == 1);
-        (if fx {1} else {0}, 0.0)
+        (if fx { 1 } else { 0 }, 0.0)
     })?;
 
     Ok((rx, ry))
 }
 
 /// Check if a function f(bool) -> bool is constant
-fn is_constant_f<F>(f : F) -> Result<bool, CircuitError>
-    where
-        F: 'static + Fn(bool) -> bool + Send + Sync,
+fn is_constant_f<F>(f: F) -> Result<bool, CircuitError>
+where
+    F: 'static + Fn(bool) -> bool + Send + Sync,
 {
     let mut b = OpBuilder::new();
 
@@ -49,27 +54,17 @@ fn is_constant_f<F>(f : F) -> Result<bool, CircuitError>
     Ok(result_x == 0)
 }
 
-
 fn main() -> Result<(), CircuitError> {
-
-    let result = is_constant_f(|x| {
-        x
-    })?;
+    let result = is_constant_f(|x| x)?;
     println!("f(x) = x is constant: {:?}", result);
 
-    let result = is_constant_f(|x| {
-        !x
-    })?;
+    let result = is_constant_f(|x| !x)?;
     println!("f(x) = !x is constant: {:?}", result);
 
-    let result = is_constant_f(|_x| {
-        true
-    })?;
+    let result = is_constant_f(|_x| true)?;
     println!("f(x) = true is constant: {:?}", result);
 
-    let result = is_constant_f(|_x| {
-        false
-    })?;
+    let result = is_constant_f(|_x| false)?;
     println!("f(x) = false is constant: {:?}", result);
 
     Ok(())
