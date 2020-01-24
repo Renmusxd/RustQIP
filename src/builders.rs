@@ -196,12 +196,7 @@ pub trait UnitaryBuilder {
     fn ry(&mut self, r: Register, theta: f64) -> Register {
         let theta_2 = theta / 2.0;
         let (sin, cos) = theta_2.sin_cos();
-        self.real_mat(
-            "Ry",
-            r,
-            &[cos, -sin, sin, cos],
-        )
-        .unwrap()
+        self.real_mat("Ry", r, &[cos, -sin, sin, cos]).unwrap()
     }
 
     /// Apply Z to `r`, if `r` is multiple indices, apply to each
