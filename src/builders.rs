@@ -172,8 +172,7 @@ pub trait UnitaryBuilder {
     /// * `theta` - the angle to rotate around the x axis of the Bloch sphere
     fn rx(&mut self, r: Register, theta: f64) -> Register {
         let theta_2 = theta / 2.0;
-        let sin = theta_2.sin();
-        let cos = theta_2.cos();
+        let (sin, cos) = theta_2.sin_cos();
         self.mat(
             "Rx",
             r,
@@ -196,12 +195,11 @@ pub trait UnitaryBuilder {
     /// * `theta` - the angle to rotate around the y axis of the Bloch sphere
     fn ry(&mut self, r: Register, theta: f64) -> Register {
         let theta_2 = theta / 2.0;
-        let sin = theta_2.sin();
-        let cos = theta_2.cos();
-        self.mat(
+        let (sin, cos) = theta_2.sin_cos();
+        self.real_mat(
             "Ry",
             r,
-            from_tuples(&[(cos, 0.0), (-sin, 0.0), (sin, 0.0), (cos, 0.0)]),
+            &[cos, -sin, sin, cos],
         )
         .unwrap()
     }
