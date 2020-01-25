@@ -168,6 +168,19 @@ pub trait UnitaryBuilder {
         self.real_mat("X", r, &[0.0, 1.0, 1.0, 0.0]).unwrap()
     }
 
+    /// Apply Rx to `r`, if `r` is multiple indices, apply to each
+    /// * `theta` - the angle to rotate around the x axis of the Bloch sphere
+    fn rx(&mut self, r: Register, theta: f64) -> Register {
+        let theta_2 = theta / 2.0;
+        let (sin, cos) = theta_2.sin_cos();
+        self.mat(
+            "Rx",
+            r,
+            from_tuples(&[(cos, 0.0), (0.0, -sin), (0.0, -sin), (cos, 0.0)]),
+        )
+        .unwrap()
+    }
+
     /// Apply Y to `r`, if `r` is multiple indices, apply to each
     fn y(&mut self, r: Register) -> Register {
         self.mat(
@@ -178,9 +191,39 @@ pub trait UnitaryBuilder {
         .unwrap()
     }
 
+    /// Apply Ry to `r`, if `r` is multiple indices, apply to each
+    /// * `theta` - the angle to rotate around the y axis of the Bloch sphere
+    fn ry(&mut self, r: Register, theta: f64) -> Register {
+        let theta_2 = theta / 2.0;
+        let (sin, cos) = theta_2.sin_cos();
+        self.real_mat("Ry", r, &[cos, -sin, sin, cos]).unwrap()
+    }
+
     /// Apply Z to `r`, if `r` is multiple indices, apply to each
     fn z(&mut self, r: Register) -> Register {
         self.real_mat("Z", r, &[1.0, 0.0, 0.0, -1.0]).unwrap()
+    }
+
+    /// Apply Rz to `r`, if `r` is multiple indices, apply to each
+    /// * `theta` - the angle to rotate around the z axis of the Bloch sphere
+    fn rz(&mut self, r: Register, theta: f64) -> Register {
+        let theta_2 = theta / 2.0;
+        let phase_plus = Complex {
+            re: 0.0,
+            im: theta_2,
+        }
+        .exp();
+        let phase_minus = Complex {
+            re: 0.0,
+            im: -theta_2,
+        }
+        .exp();
+        self.mat(
+            "Rz",
+            r,
+            vec![phase_minus, Complex::zero(), Complex::zero(), phase_plus],
+        )
+        .unwrap()
     }
 
     /// Apply H to `r`, if `r` is multiple indices, apply to each
