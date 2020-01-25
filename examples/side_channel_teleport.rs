@@ -13,8 +13,7 @@ fn run_alice(
     let q_random = b.qubit();
 
     // Create Alice's state
-    let (sangle, cangle) = initial_angle.sin_cos();
-    let q_random = b.real_mat("Rotate", q_random, &[cangle, -sangle, sangle, cangle])?;
+    let q_random = b.ry(q_random, initial_angle * 2.0);
 
     // Alice prepares her state: a|0> + b|1>
     let (q_random, q_alice) = b.cnot(q_random, epr_alice);

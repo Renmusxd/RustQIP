@@ -9,10 +9,7 @@ fn run_alice(b: &mut OpBuilder, epr_alice: Register, initial_angle: f64) -> Meas
     let q_random = b.qubit();
 
     // Create Alice's state
-    let (sangle, cangle) = initial_angle.sin_cos();
-    let q_random = b
-        .real_mat("Rotate", q_random, &[cangle, -sangle, sangle, cangle])
-        .unwrap();
+    let q_random = b.ry(q_random, initial_angle * 2.0);
 
     // Alice prepares her state: a|0> + b|1>
     let (q_random, q_alice) = condition(b, q_random, epr_alice, |b, q| b.not(q));
