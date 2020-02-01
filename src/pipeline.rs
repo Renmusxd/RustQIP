@@ -234,6 +234,15 @@ impl<P: Precision> MeasuredResults<P> {
     }
 }
 
+/// Order of qubits returned by `QuantumState::into_state`.
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
+pub enum Order {
+    /// Qubit with index 0 is the least significant index bit.
+    Natural,
+    /// Qubit with index 0 is the most significant index bit.
+    Unnatural,
+}
+
 /// A trait which represents the state of the qubits
 pub trait QuantumState<P: Precision> {
     /// Make new state with n qubits
@@ -273,9 +282,7 @@ pub trait QuantumState<P: Precision> {
     fn stochastic_measure(&mut self, indices: &[u64], angle: f64) -> Vec<P>;
 
     /// Consume the QuantumState object and return the state as a vector of complex numbers.
-    /// `natural_order` means that qubit with index 0 is the least significant index bit, otherwise
-    /// it's the largest.
-    fn get_state(self, natural_order: bool) -> Vec<Complex<P>>;
+    fn into_state(self, order: Order) -> Vec<Complex<P>>;
 }
 
 /// A basic representation of a quantum state, given by a vector of complex numbers stored
@@ -525,22 +532,25 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
         probs
     }
 
-    fn get_state(mut self, natural_order: bool) -> Vec<Complex<P>> {
-        if natural_order {
-            let n = self.n;
-            let state = self.state;
-            let f = |(i, outputloc): (usize, &mut Complex<P>)| {
-                *outputloc = state[flip_bits(n as usize, i as u64) as usize];
-            };
+    fn into_state(mut self, order: Order) -> Vec<Complex<P>> {
+        match order {
+            Order::Natural => {
+                let n = self.n;
+                let state = self.state;
+                let f = |(i, outputloc): (usize, &mut Complex<P>)| {
+                    *outputloc = state[flip_bits(n as usize, i as u64) as usize];
+                };
 
-            if self.multithread {
-                self.arena.par_iter_mut().enumerate().for_each(f);
-            } else {
-                self.arena.iter_mut().enumerate().for_each(f);
+                if self.multithread {
+                    self.arena.par_iter_mut().enumerate().for_each(f);
+                } else {
+                    self.arena.iter_mut().enumerate().for_each(f);
+                }
+                self.arena
             }
-            self.arena
-        } else {
-            self.state
+            Order::Unnatural => {
+                self.state
+            }
         }
     }
 }

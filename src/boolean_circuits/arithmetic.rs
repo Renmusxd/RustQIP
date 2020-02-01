@@ -395,7 +395,7 @@ mod arithmetic_tests {
                     .map(|m| measurements.get_measurement(m).unwrap().0)
                     .collect();
                 let state_index = state
-                    .get_state(true)
+                    .into_state(pipeline::Order::Natural)
                     .into_iter()
                     .position(|v| v == Complex::one())
                     .unwrap() as u64;
