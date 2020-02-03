@@ -64,7 +64,7 @@ impl<P: Precision> SparseQuantumState<P> {
             .flatten()
             .max()
             .map(|m| m + 1);
-        let n = max_init_n.map(|m| max(n, m)).unwrap_or(n);
+        let n = max_init_n.map_or(n, |m| max(n, m));
 
         let cvec =
             get_initial_index_value_iterator(n, states).fold(vec![], |mut acc, (indx, val)| {

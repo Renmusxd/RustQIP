@@ -326,7 +326,7 @@ impl<P: Precision> LocalQuantumState<P> {
             .flatten()
             .max()
             .map(|m| m + 1);
-        let n = max_init_n.map(|m| max(n, m)).unwrap_or(n);
+        let n = max_init_n.map_or(n, |m| max(n, m));
 
         // Go through each combination of full index locations
         let (input_offset, len) = match (input_region, output_region) {
@@ -748,8 +748,7 @@ pub fn get_required_state_size_from_frontier(frontier: &[&Register]) -> u64 {
         .cloned()
         .flatten()
         .max()
-        .map(|m| m + 1)
-        .unwrap_or(0)
+        .map_or(0, |m| m + 1)
 }
 
 /// Return the required number of qubits for a given frontier of Registers (those in the circuit
@@ -765,8 +764,7 @@ pub fn get_required_state_size<P: Precision>(
         .cloned()
         .flatten()
         .max()
-        .map(|m| m + 1)
-        .unwrap_or(0);
+        .map_or(0, |m| m + 1);
     max(max_init_n, max_qubit_n)
 }
 

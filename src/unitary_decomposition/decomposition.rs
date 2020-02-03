@@ -85,8 +85,7 @@ fn consolidate_column<P: Precision>(
     let path = pathfinder.path(column, &nonzeros)?;
     let results = if path.is_empty() {
         let phi = sparse_value_at_coords(column as usize, column, &sparse_mat)
-            .map(|c| c.to_polar().1)
-            .unwrap_or_else(P::zero);
+            .map_or_else(P::zero, |c| c.to_polar().1);
         if phi != P::zero() {
             apply_phase_to_row(-phi, &mut sparse_mat[column as usize]);
             vec![DecompOp::Phase { row: column, phi }]
@@ -168,8 +167,7 @@ fn consolidate_column<P: Precision>(
                 }
 
                 let phi = sparse_value_at_coords(to_code as usize, column, &sparse_mat)
-                    .map(|c| c.to_polar().1)
-                    .unwrap_or_else(P::zero);
+                    .map_or_else(P::zero, |c| c.to_polar().1);
                 if phi != P::zero() {
                     apply_phase_to_row(-phi, &mut sparse_mat[to_code as usize]);
                     ops.push(DecompOp::Phase { row: to_code, phi });
@@ -184,8 +182,7 @@ fn consolidate_column<P: Precision>(
         let row_mag = row_magnitude_sqr(column, sparse_mat);
         let col_mag = column_magnitude_sqr(column, sparse_mat);
         let entry_mag = sparse_value_at_coords(column as usize, column, sparse_mat)
-            .map(|v| v.norm_sqr())
-            .unwrap_or_else(P::zero);
+            .map_or_else(P::zero, |v| v.norm_sqr());
 
         let message = format!(
             "Could not consolidate col/row = {:?}. |mat[col,col]|={}. |column|={}. |row|={}",
