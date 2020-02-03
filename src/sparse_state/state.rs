@@ -67,7 +67,7 @@ impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
             .flatten()
             .max()
             .map(|m| m + 1);
-        let n = max_init_n.map(|m| max(n, m)).unwrap_or(n);
+        let n = max_init_n.map_or(n, |m| max(n, m));
 
         // Assume that all unrepresented indices are in the |0> state.
         let n_fullindices: u64 = states
