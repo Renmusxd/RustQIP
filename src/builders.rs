@@ -118,7 +118,7 @@ pub trait UnitaryBuilder {
         name: &str,
         r: Register,
         mat: Vec<Vec<(u64, Complex<f64>)>>,
-        natural_order: bool,
+        order: Representation,
     ) -> Result<Register, CircuitError>;
 
     /// Build a sparse matrix op from `f`, apply to `r`, if `r` is multiple indices and
@@ -129,11 +129,11 @@ pub trait UnitaryBuilder {
         name: &str,
         r: Register,
         f: Box<SparseBuilderFn>,
-        natural_order: bool,
+        order: Representation,
     ) -> Result<Register, CircuitError> {
         let n = r.indices.len();
-        let mat = make_sparse_matrix_from_function(n, f, natural_order);
-        self.sparse_mat(name, r, mat, false)
+        let mat = make_sparse_matrix_from_function(n, f, order);
+        self.sparse_mat(name, r, mat, Representation::BigEndian)
     }
 
     /// Build a sparse matrix op from real numbers, apply to `r`, if `r` is multiple indices and
@@ -144,7 +144,7 @@ pub trait UnitaryBuilder {
         name: &str,
         r: Register,
         mat: &[Vec<(u64, f64)>],
-        natural_order: bool,
+        order: Representation,
     ) -> Result<Register, CircuitError> {
         let mat = mat
             .iter()
@@ -155,7 +155,7 @@ pub trait UnitaryBuilder {
                     .collect()
             })
             .collect();
-        self.sparse_mat(name, r, mat, natural_order)
+        self.sparse_mat(name, r, mat, order)
     }
 
     /// Apply NOT to `r`, if `r` is multiple indices, apply to each
@@ -417,9 +417,9 @@ pub trait UnitaryBuilder {
         &self,
         r: &Register,
         data: Vec<Vec<(u64, Complex<f64>)>>,
-        natural_order: bool,
+        order: Representation,
     ) -> Result<UnitaryOp, CircuitError> {
-        make_sparse_matrix_op(r.indices.clone(), data, natural_order)
+        make_sparse_matrix_op(r.indices.clone(), data, order)
     }
 
     /// Build a swap op. ra and rb must have the same number of indices.
@@ -795,21 +795,18 @@ impl UnitaryBuilder for OpBuilder {
         name: &str,
         r: Register,
         mat: Vec<Vec<(u64, Complex<f64>)>>,
-        natural_order: bool,
+        order: Representation,
     ) -> Result<Register, CircuitError> {
         // Special case for broadcasting ops
         if r.indices.len() > 1 && mat.len() == (2 * 2) {
             let rs = self.split_all(r);
             let rs = rs
                 .into_iter()
-                .map(|r| {
-                    self.sparse_mat(name, r, mat.clone(), natural_order)
-                        .unwrap()
-                })
+                .map(|r| self.sparse_mat(name, r, mat.clone(), order).unwrap())
                 .collect();
             self.merge_with_op(rs, None)
         } else {
-            let op = self.make_sparse_mat_op(&r, mat, natural_order)?;
+            let op = self.make_sparse_mat_op(&r, mat, order)?;
             self.merge_with_op(vec![r], Some((name.to_string(), op)))
         }
     }
@@ -1000,21 +997,18 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         name: &str,
         r: Register,
         mat: Vec<Vec<(u64, Complex<f64>)>>,
-        natural_order: bool,
+        order: Representation,
     ) -> Result<Register, CircuitError> {
         // Special case for applying mat to each Register in collection.
         if r.indices.len() > 1 && mat.len() == (2 * 2) {
             let rs = self.split_all(r);
             let rs = rs
                 .into_iter()
-                .map(|r| {
-                    self.sparse_mat(name, r, mat.clone(), natural_order)
-                        .unwrap()
-                })
+                .map(|r| self.sparse_mat(name, r, mat.clone(), order).unwrap())
                 .collect();
             self.merge_with_op(rs, None)
         } else {
-            let op = self.make_sparse_mat_op(&r, mat, natural_order)?;
+            let op = self.make_sparse_mat_op(&r, mat, order)?;
             let r = self.merge_with_op(vec![r], Some((name.to_string(), op)))?;
             Ok(r)
         }
@@ -1062,10 +1056,9 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         &self,
         r: &Register,
         data: Vec<Vec<(u64, Complex<f64>)>>,
-        natural_order: bool,
+        order: Representation,
     ) -> Result<UnitaryOp, CircuitError> {
-        self.parent_builder
-            .make_sparse_mat_op(r, data, natural_order)
+        self.parent_builder.make_sparse_mat_op(r, data, order)
     }
 
     fn make_swap_op(&self, ra: &Register, rb: &Register) -> Result<UnitaryOp, CircuitError> {

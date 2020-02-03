@@ -1,5 +1,5 @@
 use crate::measurement_ops::MeasuredCondition;
-use crate::pipeline::InitialState;
+use crate::pipeline::{InitialState, Representation};
 use crate::sparse_state::SparseQuantumState;
 use crate::state_ops::UnitaryOp;
 use crate::utils::flip_bits;
@@ -94,7 +94,7 @@ impl<P: Precision> QuantumState<P> for TraceState<P> {
         self.state.stochastic_measure(indices, angle)
     }
 
-    fn get_state(self, natural_order: bool) -> Vec<Complex<P>> {
-        self.state.get_state(natural_order)
+    fn into_state(self, order: Representation) -> Vec<Complex<P>> {
+        self.state.into_state(order)
     }
 }

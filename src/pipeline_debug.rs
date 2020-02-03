@@ -2,6 +2,7 @@ use crate::errors::CircuitError;
 use crate::measurement_ops::MeasuredCondition;
 use crate::pipeline::{
     get_required_state_size_from_frontier, run_with_statebuilder, InitialState, QuantumState,
+    Representation,
 };
 use crate::state_ops::{get_index, num_indices, UnitaryOp};
 use crate::{Complex, Precision, Register};
@@ -167,7 +168,7 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
         vec![]
     }
 
-    fn get_state(self, _: bool) -> Vec<Complex<P>> {
+    fn into_state(self, _: Representation) -> Vec<Complex<P>> {
         vec![]
     }
 }

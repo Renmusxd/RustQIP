@@ -1,6 +1,6 @@
 use crate::iterators::{fold_for_op_cols, precision_get_index, precision_num_indices};
 use crate::measurement_ops::MeasuredCondition;
-use crate::pipeline::{get_initial_index_value_iterator, RegisterInitialState};
+use crate::pipeline::{get_initial_index_value_iterator, RegisterInitialState, Representation};
 use crate::sparse_state::utils::{
     consolidate_vec, sparse_measure, sparse_measure_prob, sparse_measure_probs, sparse_soft_measure,
 };
@@ -211,15 +211,14 @@ impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
         probs
     }
 
-    fn get_state(self, natural_order: bool) -> Vec<Complex<P>> {
+    fn into_state(self, order: Representation) -> Vec<Complex<P>> {
         let mut state = vec![];
         let n = self.n as usize;
         state.resize(1 << n, Complex::zero());
         self.state.unwrap().into_iter().for_each(|(indx, val)| {
-            let indx = if natural_order {
-                flip_bits(n, indx)
-            } else {
-                indx
+            let indx = match order {
+                Representation::LittleEndian => flip_bits(n, indx),
+                Representation::BigEndian => indx,
             };
             state[indx as usize] = val;
         });

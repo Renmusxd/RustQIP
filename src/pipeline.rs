@@ -234,6 +234,15 @@ impl<P: Precision> MeasuredResults<P> {
     }
 }
 
+/// Order of qubits returned by `QuantumState::into_state` and other similar methods.
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
+pub enum Representation {
+    /// Qubit with index 0 is the least significant index bit.
+    LittleEndian,
+    /// Qubit with index 0 is the most significant index bit.
+    BigEndian,
+}
+
 /// A trait which represents the state of the qubits
 pub trait QuantumState<P: Precision> {
     /// Make new state with n qubits
@@ -281,9 +290,7 @@ pub trait QuantumState<P: Precision> {
     fn stochastic_measure(&mut self, indices: &[u64], angle: f64) -> Vec<P>;
 
     /// Consume the QuantumState object and return the state as a vector of complex numbers.
-    /// `natural_order` means that qubit with index 0 is the least significant index bit, otherwise
-    /// it's the largest.
-    fn get_state(self, natural_order: bool) -> Vec<Complex<P>>;
+    fn into_state(self, order: Representation) -> Vec<Complex<P>>;
 }
 
 /// A basic representation of a quantum state, given by a vector of complex numbers stored
@@ -351,7 +358,7 @@ impl<P: Precision> LocalQuantumState<P> {
     pub fn new_from_full_state(
         n: u64,
         mut state: Vec<Complex<P>>,
-        natural_order: bool,
+        order: Representation,
         input_region: Option<(usize, usize)>,
         output_region: Option<(usize, usize)>,
         multithread: bool,
@@ -374,12 +381,13 @@ impl<P: Precision> LocalQuantumState<P> {
         state.resize(required_size, Complex::zero());
         let arena = vec![Complex::zero(); required_size];
 
-        let state = if natural_order {
-            let mut state: Vec<_> = state.into_iter().enumerate().collect();
-            state.sort_by_key(|(indx, _)| flip_bits(n as usize, *indx as u64));
-            state.into_iter().map(|(_, c)| c).collect()
-        } else {
-            state
+        let state = match order {
+            Representation::LittleEndian => {
+                let mut state: Vec<_> = state.into_iter().enumerate().collect();
+                state.sort_by_key(|(indx, _)| flip_bits(n as usize, *indx as u64));
+                state.into_iter().map(|(_, c)| c).collect()
+            }
+            Representation::BigEndian => state,
         };
 
         Ok(LocalQuantumState {
@@ -403,22 +411,23 @@ impl<P: Precision> LocalQuantumState<P> {
     }
 
     /// Clone the state in either the `natural_order` or the internal order.
-    pub fn clone_state(&mut self, natural_order: bool) -> Vec<Complex<P>> {
-        if natural_order {
-            let n = self.n;
-            let state = &self.state;
-            let f = |(i, outputloc): (usize, &mut Complex<P>)| {
-                *outputloc = state[flip_bits(n as usize, i as u64) as usize];
-            };
+    pub fn clone_state(&mut self, order: Representation) -> Vec<Complex<P>> {
+        match order {
+            Representation::LittleEndian => {
+                let n = self.n;
+                let state = &self.state;
+                let f = |(i, outputloc): (usize, &mut Complex<P>)| {
+                    *outputloc = state[flip_bits(n as usize, i as u64) as usize];
+                };
 
-            if self.multithread {
-                self.arena.par_iter_mut().enumerate().for_each(f);
-            } else {
-                self.arena.iter_mut().enumerate().for_each(f);
+                if self.multithread {
+                    self.arena.par_iter_mut().enumerate().for_each(f);
+                } else {
+                    self.arena.iter_mut().enumerate().for_each(f);
+                }
+                self.arena.clone()
             }
-            self.arena.clone()
-        } else {
-            self.state.clone()
+            Representation::BigEndian => self.state.clone(),
         }
     }
 
@@ -622,22 +631,23 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
         probs
     }
 
-    fn get_state(mut self, natural_order: bool) -> Vec<Complex<P>> {
-        if natural_order {
-            let n = self.n;
-            let state = self.state;
-            let f = |(i, outputloc): (usize, &mut Complex<P>)| {
-                *outputloc = state[flip_bits(n as usize, i as u64) as usize];
-            };
+    fn into_state(mut self, order: Representation) -> Vec<Complex<P>> {
+        match order {
+            Representation::LittleEndian => {
+                let n = self.n;
+                let state = self.state;
+                let f = |(i, outputloc): (usize, &mut Complex<P>)| {
+                    *outputloc = state[flip_bits(n as usize, i as u64) as usize];
+                };
 
-            if self.multithread {
-                self.arena.par_iter_mut().enumerate().for_each(f);
-            } else {
-                self.arena.iter_mut().enumerate().for_each(f);
+                if self.multithread {
+                    self.arena.par_iter_mut().enumerate().for_each(f);
+                } else {
+                    self.arena.iter_mut().enumerate().for_each(f);
+                }
+                self.arena
             }
-            self.arena
-        } else {
-            self.state
+            Representation::BigEndian => self.state,
         }
     }
 }
