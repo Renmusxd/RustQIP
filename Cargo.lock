@@ -191,7 +191,7 @@ dependencies = [
 
 [[package]]
 name = "qip"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "bencher 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "num 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",

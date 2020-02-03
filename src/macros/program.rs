@@ -524,7 +524,7 @@ pub fn negate_bitmask(b: &mut dyn UnitaryBuilder, r: Register, mask: u64) -> Reg
     b.merge(rs).unwrap()
 }
 
-/// TODO
+/// A class which handles registers for the program macro in order to reduce code duplication.
 #[derive(Default, Debug)]
 pub struct RegisterManager {
     registers: Vec<(String, Vec<Option<Register>>)>,
