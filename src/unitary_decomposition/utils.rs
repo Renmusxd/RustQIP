@@ -195,10 +195,7 @@ pub(crate) fn column_magnitude_sqr<P: Precision>(
 ) -> P {
     sparse_mat
         .par_iter()
-        .map(|v| {
-            sparse_value_at_col(column, v)
-                .map_or_else(P::zero, |v| v.norm_sqr())
-        })
+        .map(|v| sparse_value_at_col(column, v).map_or_else(P::zero, |v| v.norm_sqr()))
         .sum()
 }
 
