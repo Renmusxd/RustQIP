@@ -220,7 +220,7 @@ fn remap_indices(op: UnitaryOp, new_indices: &[u64]) -> UnitaryOp {
 mod inverter_test {
     use super::*;
     use crate::boolean_circuits::arithmetic::{add, add_op};
-    use crate::pipeline::{get_required_state_size_from_frontier, InitialState, Order};
+    use crate::pipeline::{get_required_state_size_from_frontier, InitialState, Representation};
     use crate::utils::flip_bits;
     use crate::{run_debug, run_local_with_init, Complex, QuantumState};
     use num::One;
@@ -244,7 +244,7 @@ mod inverter_test {
                 run_local_with_init::<f64>(&r, &[(indices.clone(), InitialState::Index(indx))])
                     .unwrap();
             let pos = state
-                .into_state(Order::Unnatural)
+                .into_state(Representation::BigEndian)
                 .into_iter()
                 .position(|v| v == Complex::one())
                 .map(|pos| flip_bits(n as usize, pos as u64));
