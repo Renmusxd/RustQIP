@@ -802,10 +802,7 @@ impl UnitaryBuilder for OpBuilder {
             let rs = self.split_all(r);
             let rs = rs
                 .into_iter()
-                .map(|r| {
-                    self.sparse_mat(name, r, mat.clone(), order)
-                        .unwrap()
-                })
+                .map(|r| self.sparse_mat(name, r, mat.clone(), order).unwrap())
                 .collect();
             self.merge_with_op(rs, None)
         } else {
@@ -1007,10 +1004,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
             let rs = self.split_all(r);
             let rs = rs
                 .into_iter()
-                .map(|r| {
-                    self.sparse_mat(name, r, mat.clone(), order)
-                        .unwrap()
-                })
+                .map(|r| self.sparse_mat(name, r, mat.clone(), order).unwrap())
                 .collect();
             self.merge_with_op(rs, None)
         } else {
@@ -1064,8 +1058,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         data: Vec<Vec<(u64, Complex<f64>)>>,
         order: Representation,
     ) -> Result<UnitaryOp, CircuitError> {
-        self.parent_builder
-            .make_sparse_mat_op(r, data, order)
+        self.parent_builder.make_sparse_mat_op(r, data, order)
     }
 
     fn make_swap_op(&self, ra: &Register, rb: &Register) -> Result<UnitaryOp, CircuitError> {

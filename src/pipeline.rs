@@ -375,7 +375,7 @@ impl<P: Precision> LocalQuantumState<P> {
                 state.sort_by_key(|(indx, _)| flip_bits(n as usize, *indx as u64));
                 state.into_iter().map(|(_, c)| c).collect()
             }
-            Representation::BigEndian => state
+            Representation::BigEndian => state,
         };
 
         Ok(LocalQuantumState {
@@ -413,7 +413,7 @@ impl<P: Precision> LocalQuantumState<P> {
                 }
                 self.arena.clone()
             }
-            Representation::BigEndian => self.state.clone()
+            Representation::BigEndian => self.state.clone(),
         }
     }
 
@@ -550,9 +550,7 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
                 }
                 self.arena
             }
-            Representation::BigEndian => {
-                self.state
-            }
+            Representation::BigEndian => self.state,
         }
     }
 }

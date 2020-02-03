@@ -4,12 +4,12 @@ use rayon::prelude::*;
 
 use crate::errors::CircuitError;
 use crate::iterators::*;
+use crate::pipeline::Representation;
 use crate::utils::*;
 use crate::{Complex, Precision};
 use num::One;
 use std::cmp::{max, min};
 use std::fmt;
-use crate::pipeline::Representation;
 
 /// Types of unitary ops which can be applied to a state.
 pub enum UnitaryOp {
@@ -163,7 +163,7 @@ pub fn make_sparse_matrix_op(
                 dat.sort_by_key(|(indx, _)| flip_bits(n, *indx as u64));
                 dat.into_iter().map(|(_, c)| c).collect()
             }
-            Representation::BigEndian => dat
+            Representation::BigEndian => dat,
         };
 
         Ok(UnitaryOp::SparseMatrix(indices, dat))
@@ -177,22 +177,21 @@ pub fn make_sparse_matrix_op(
 pub fn make_sparse_matrix_from_function<F: Fn(u64) -> Vec<(u64, Complex<f64>)>>(
     n: usize,
     f: F,
-    order: Representation
+    order: Representation,
 ) -> Vec<Vec<(u64, Complex<f64>)>> {
     (0..1 << n as u64)
         .map(|indx| {
             let indx = match order {
                 Representation::LittleEndian => flip_bits(n, indx),
-                Representation::BigEndian => indx
+                Representation::BigEndian => indx,
             };
             let v = f(indx);
             match order {
-                Representation::LittleEndian => {
-                    v.into_iter()
-                        .map(|(indx, c)| (flip_bits(n, indx), c))
-                        .collect()
-                }
-                Representation::BigEndian => v
+                Representation::LittleEndian => v
+                    .into_iter()
+                    .map(|(indx, c)| (flip_bits(n, indx), c))
+                    .collect(),
+                Representation::BigEndian => v,
             }
         })
         .collect()
@@ -767,7 +766,9 @@ mod state_ops_tests {
             vec![(3, one)],
             vec![(2, one)],
         ];
-        let op1 = make_sparse_matrix_op(vec![0, 1], expected_dat.clone(), Representation::BigEndian).unwrap();
+        let op1 =
+            make_sparse_matrix_op(vec![0, 1], expected_dat.clone(), Representation::BigEndian)
+                .unwrap();
         let op2 = make_sparse_matrix_op(
             vec![0, 1],
             vec![

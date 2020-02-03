@@ -1,7 +1,8 @@
 use crate::errors::CircuitError;
 use crate::measurement_ops::MeasuredCondition;
 use crate::pipeline::{
-    get_required_state_size_from_frontier, run_with_statebuilder, InitialState, QuantumState, Representation,
+    get_required_state_size_from_frontier, run_with_statebuilder, InitialState, QuantumState,
+    Representation,
 };
 use crate::state_ops::{get_index, num_indices, UnitaryOp};
 use crate::{Complex, Precision, Register};
