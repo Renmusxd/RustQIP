@@ -1,8 +1,12 @@
+#[macro_use]
+use crate::macros;
 use crate::errors::CircuitError;
 /// Common circuits for general usage.
 use crate::{OpBuilder, Register, UnitaryBuilder};
 
 /// Extract a set of indices, provide them to a function, then reinsert them in the correct order.
+/// Deprecated in favor of prgram! macro
+#[deprecated(note = "Please use program! macro instead")]
 pub fn work_on<F>(
     b: &mut dyn UnitaryBuilder,
     r: Register,
@@ -12,23 +16,9 @@ pub fn work_on<F>(
 where
     F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
 {
-    let (selected, remaining) = b.split(r, indices)?;
-    let qs = b.split_all(selected);
-    let qs = f(b, qs)?;
-    if qs.len() != indices.len() {
-        CircuitError::make_err(format!(
-            "Output number of qubits from function ({}) did not match number of indices ({}).",
-            qs.len(),
-            indices.len()
-        ))
-    } else if let Some(remaining) = remaining {
-        b.merge_with_indices(remaining, qs, indices)
-    } else {
-        let mut qs: Vec<(Register, u64)> = qs.into_iter().zip(indices.iter().cloned()).collect();
-        qs.sort_by_key(|(_, indx)| *indx);
-        let qs = qs.into_iter().map(|(r, _)| r).collect();
-        b.merge(qs)
-    }
+    program!(b, r;
+        f r indices;
+    )
 }
 
 /// Makes a pair of Register in the state `|0n>x|0n> + |1n>x|1n>`

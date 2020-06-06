@@ -182,6 +182,10 @@ pub use num::Complex;
 #[macro_use]
 mod rayon_helper;
 
+/// Macros for general ease of use.
+#[macro_use]
+pub mod macros;
+
 /// Quantum analogues of boolean circuits
 pub mod boolean_circuits;
 /// Opbuilder and such
@@ -190,9 +194,6 @@ pub mod builders;
 pub mod common_circuits;
 /// Error values for the library.
 pub mod errors;
-/// Macros for general ease of use.
-#[macro_use]
-pub mod macros;
 /// Efficient iterators for sparse kronprod matrices.
 pub mod iterators;
 /// Functions for measuring states.
