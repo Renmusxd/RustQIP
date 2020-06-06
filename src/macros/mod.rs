@@ -8,7 +8,6 @@ pub mod common_ops;
 /// Tools for inverting functions on qubits.
 #[macro_use]
 pub mod inverter;
-mod register_expression;
 
 pub use inverter::*;
 pub use program::*;
