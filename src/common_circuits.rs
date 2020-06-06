@@ -1,4 +1,3 @@
-#[macro_use]
 use crate::macros;
 use crate::errors::CircuitError;
 /// Common circuits for general usage.
