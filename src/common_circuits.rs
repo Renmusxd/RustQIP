@@ -1,4 +1,3 @@
-use crate::macros;
 use crate::errors::CircuitError;
 /// Common circuits for general usage.
 use crate::{OpBuilder, Register, UnitaryBuilder};
