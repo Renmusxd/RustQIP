@@ -569,11 +569,7 @@ pub trait UnitaryBuilder {
     ) -> Vec<Register>;
 
     /// Debug a register using a function `f` run during circuit execution on the state of `r`
-    fn debug(
-        &mut self,
-        r: Register,
-        f: Box<dyn Fn(Vec<f64>) -> ()>,
-    ) -> Result<Register, CircuitError> {
+    fn debug(&mut self, r: Register, f: Box<dyn Fn(Vec<f64>)>) -> Result<Register, CircuitError> {
         let vf = Box::new(move |mut states: Vec<Vec<f64>>| {
             let state = states.pop().unwrap();
             f(state);
@@ -586,7 +582,7 @@ pub trait UnitaryBuilder {
     fn debug_registers(
         &mut self,
         rs: Vec<Register>,
-        f: Box<dyn Fn(Vec<Vec<f64>>) -> ()>,
+        f: Box<dyn Fn(Vec<Vec<f64>>)>,
     ) -> Result<Vec<Register>, CircuitError>;
 }
 
@@ -890,7 +886,7 @@ impl UnitaryBuilder for OpBuilder {
     fn debug_registers(
         &mut self,
         rs: Vec<Register>,
-        f: Box<dyn Fn(Vec<Vec<f64>>) -> ()>,
+        f: Box<dyn Fn(Vec<Vec<f64>>)>,
     ) -> Result<Vec<Register>, CircuitError> {
         let indices: Vec<Vec<u64>> = rs.iter().map(|r| r.indices.clone()).collect();
         let modifier = StateModifier::new_debug("Debug".to_string(), indices.clone(), f);
@@ -1138,7 +1134,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
     fn debug_registers(
         &mut self,
         rs: Vec<Register>,
-        f: Box<dyn Fn(Vec<Vec<f64>>) -> ()>,
+        f: Box<dyn Fn(Vec<Vec<f64>>)>,
     ) -> Result<Vec<Register>, CircuitError> {
         self.parent_builder.debug_registers(rs, f)
     }

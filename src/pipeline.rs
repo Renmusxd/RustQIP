@@ -33,7 +33,7 @@ pub enum StateModifierType {
     /// Subsections of the circuit which depend on measured values.
     SideChannelModifiers(Vec<MeasurementHandle>, Box<SideChannelModifierFn>),
     /// Debugging op
-    Debug(Vec<Vec<u64>>, Box<dyn Fn(Vec<Vec<f64>>) -> ()>),
+    Debug(Vec<Vec<u64>>, Box<dyn Fn(Vec<Vec<f64>>)>),
 }
 
 impl fmt::Debug for StateModifierType {
@@ -143,7 +143,7 @@ impl StateModifier {
     pub fn new_debug(
         name: String,
         indices: Vec<Vec<u64>>,
-        f: Box<dyn Fn(Vec<Vec<f64>>) -> ()>,
+        f: Box<dyn Fn(Vec<Vec<f64>>)>,
     ) -> StateModifier {
         StateModifier {
             name,
@@ -606,12 +606,12 @@ fn fold_modify_state<P: Precision, QS: QuantumState<P>>(
         }
         StateModifierType::MeasureState(id, indices, angle) => {
             let result = s.measure(indices, None, *angle);
-            mr.results.insert(id.clone(), result);
+            mr.results.insert(*id, result);
             Ok((s, mr))
         }
         StateModifierType::StochasticMeasureState(id, indices, angle) => {
             let result = s.stochastic_measure(indices, *angle);
-            mr.stochastic_results.insert(id.clone(), result);
+            mr.stochastic_results.insert(*id, result);
             Ok((s, mr))
         }
         StateModifierType::SideChannelModifiers(handles, f) => {
