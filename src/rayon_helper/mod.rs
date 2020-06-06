@@ -1,8 +1,8 @@
-#[cfg(feature = "parallelism")]
+#[cfg(feature = "parallel")]
 pub(crate) use rayon::prelude::*;
 
 /// Choose between iter and par_iter
-#[cfg(not(feature = "parallelism"))]
+#[cfg(not(feature = "parallel"))]
 #[macro_export]
 macro_rules! iter {
     ($e:expr) => {
@@ -11,7 +11,7 @@ macro_rules! iter {
 }
 
 /// Choose between iter and par_iter
-#[cfg(feature = "parallelism")]
+#[cfg(feature = "parallel")]
 #[macro_export]
 macro_rules! iter {
     ($e:expr) => {
@@ -20,7 +20,7 @@ macro_rules! iter {
 }
 
 /// Choose between iter_mut and par_iter_mut
-#[cfg(not(feature = "parallelism"))]
+#[cfg(not(feature = "parallel"))]
 #[macro_export]
 macro_rules! iter_mut {
     ($e:expr) => {
@@ -29,7 +29,7 @@ macro_rules! iter_mut {
 }
 
 /// Choose between iter_mut and par_iter_mut
-#[cfg(feature = "parallelism")]
+#[cfg(feature = "parallel")]
 #[macro_export]
 macro_rules! iter_mut {
     ($e:expr) => {
@@ -38,7 +38,7 @@ macro_rules! iter_mut {
 }
 
 /// Choose between into_iter and into_par_iter
-#[cfg(not(feature = "parallelism"))]
+#[cfg(not(feature = "parallel"))]
 #[macro_export]
 macro_rules! into_iter {
     ($e:expr) => {
@@ -47,7 +47,7 @@ macro_rules! into_iter {
 }
 
 /// Choose between into_iter and into_par_iter
-#[cfg(feature = "parallelism")]
+#[cfg(feature = "parallel")]
 #[macro_export]
 macro_rules! into_iter {
     ($e:expr) => {
@@ -56,7 +56,7 @@ macro_rules! into_iter {
 }
 
 /// Choose between sort_by_key and par_sort_by_key
-#[cfg(not(feature = "parallelism"))]
+#[cfg(not(feature = "parallel"))]
 #[macro_export]
 macro_rules! sort_by_key {
     ($e:expr, $f:expr) => {
@@ -65,7 +65,7 @@ macro_rules! sort_by_key {
 }
 
 /// Choose between sort_by_key and par_sort_by_key
-#[cfg(feature = "parallelism")]
+#[cfg(feature = "parallel")]
 #[macro_export]
 macro_rules! sort_by_key {
     ($e:expr, $f:expr) => {
@@ -74,7 +74,7 @@ macro_rules! sort_by_key {
 }
 
 /// Choose between sort_unstable_by_key and par_sort_unstable_by_key
-#[cfg(not(feature = "parallelism"))]
+#[cfg(not(feature = "parallel"))]
 #[macro_export]
 macro_rules! sort_unstable_by {
     ($e:expr, $f:expr) => {
@@ -83,7 +83,7 @@ macro_rules! sort_unstable_by {
 }
 
 /// Choose between sort_by_key and par_sort_by_key
-#[cfg(feature = "parallelism")]
+#[cfg(feature = "parallel")]
 #[macro_export]
 macro_rules! sort_unstable_by {
     ($e:expr, $f:expr) => {
