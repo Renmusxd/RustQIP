@@ -237,9 +237,8 @@ impl<P: Precision> Iterator for FunctionOpIterator<P> {
 
 #[cfg(test)]
 mod iterator_tests {
+    use num::One;
     use crate::state_ops::from_reals;
-
-    use super::num::One;
     use super::*;
 
     #[test]
