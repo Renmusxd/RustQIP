@@ -1,10 +1,8 @@
 /// Contains functions, structs, and enums for storing and manipulating the quantum state.
-extern crate rayon;
-use rayon::prelude::*;
-
 use crate::errors::CircuitError;
 use crate::iterators::*;
 use crate::pipeline::Representation;
+use crate::rayon_helper::*;
 use crate::utils::*;
 use crate::{Complex, Precision};
 use num::One;
@@ -499,7 +497,6 @@ pub fn apply_op<P: Precision>(
     output: &mut [Complex<P>],
     input_offset: u64,
     output_offset: u64,
-    multithread: bool,
 ) {
     let op = clone_as_precision_op::<P>(op);
     let mat_indices: Vec<u64> = (0..precision_num_indices(&op))
@@ -531,11 +528,7 @@ pub fn apply_op<P: Precision>(
     };
 
     // Generate output for each output row
-    if multithread {
-        output.par_iter_mut().enumerate().for_each(row_fn);
-    } else {
-        output.iter_mut().enumerate().for_each(row_fn);
-    }
+    iter_mut!(output).enumerate().for_each(row_fn);
 }
 
 /// Apply `ops` to the `input`, storing the results in `output`. If either start at a nonzero state
@@ -549,18 +542,9 @@ pub fn apply_ops<P: Precision>(
     output: &mut [Complex<P>],
     input_offset: u64,
     output_offset: u64,
-    multithread: bool,
 ) {
     match ops {
-        [op] => apply_op(
-            n,
-            op,
-            input,
-            output,
-            input_offset,
-            output_offset,
-            multithread,
-        ),
+        [op] => apply_op(n, op, input, output, input_offset, output_offset),
         [] => {
             let lower = max(input_offset, output_offset);
             let upper = min(
@@ -572,19 +556,11 @@ pub fn apply_ops<P: Precision>(
             let output_lower = (lower - output_offset) as usize;
             let output_upper = (upper - output_offset) as usize;
 
-            if multithread {
-                let input_iter = input[input_lower..input_upper].par_iter();
-                let output_iter = output[output_lower..output_upper].par_iter_mut();
-                input_iter
-                    .zip(output_iter)
-                    .for_each(|(input, out)| *out = *input);
-            } else {
-                let input_iter = input[input_lower..input_upper].iter();
-                let output_iter = output[output_lower..output_upper].iter_mut();
-                input_iter
-                    .zip(output_iter)
-                    .for_each(|(input, out)| *out = *input);
-            }
+            let input_iter = iter!(input[input_lower..input_upper]);
+            let output_iter = iter_mut!(output[output_lower..output_upper]);
+            input_iter
+                .zip(output_iter)
+                .for_each(|(input, out)| *out = *input);
         }
         _ => {
             let ops: Vec<_> = ops
@@ -626,29 +602,21 @@ pub fn apply_ops<P: Precision>(
             };
 
             // Generate output for each output row
-            if multithread {
-                output.par_iter_mut().enumerate().for_each(row_fn);
-            } else {
-                output.iter_mut().enumerate().for_each(row_fn);
-            }
+            iter_mut!(output).enumerate().for_each(row_fn);
         }
     }
 }
 
 /// Make the full op matrix from `ops`.
 /// Not very efficient, use only for debugging.
-pub fn make_op_matrix<P: Precision>(
-    n: u64,
-    op: &UnitaryOp,
-    multithread: bool,
-) -> Vec<Vec<Complex<P>>> {
+pub fn make_op_matrix<P: Precision>(n: u64, op: &UnitaryOp) -> Vec<Vec<Complex<P>>> {
     let zeros: Vec<P> = (0..1 << n).map(|_| P::zero()).collect();
     (0..1 << n)
         .map(|i| {
             let mut input = from_reals(&zeros);
             let mut output = input.clone();
             input[i] = Complex::one();
-            apply_op(n, op, &input, &mut output, 0, 0, multithread);
+            apply_op(n, op, &input, &mut output, 0, 0);
             output
         })
         .collect()
@@ -705,7 +673,7 @@ mod state_ops_tests {
         let op = UnitaryOp::Matrix(vec![0], from_reals(&[1.0, 0.0, 0.0, 1.0]));
         let input = from_reals(&[1.0, 0.0]);
         let mut output = from_reals(&[0.0, 0.0]);
-        apply_op(1, &op, &input, &mut output, 0, 0, false);
+        apply_op(1, &op, &input, &mut output, 0, 0);
 
         assert_eq!(input, output);
     }
@@ -715,7 +683,7 @@ mod state_ops_tests {
         let op = UnitaryOp::Matrix(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
         let mut input = from_reals(&[1.0, 0.0]);
         let mut output = from_reals(&[0.0, 0.0]);
-        apply_op(1, &op, &input, &mut output, 0, 0, false);
+        apply_op(1, &op, &input, &mut output, 0, 0);
 
         input.reverse();
         assert_eq!(input, output);
@@ -727,14 +695,14 @@ mod state_ops_tests {
 
         let input = from_reals(&[1.0, 0.0, 0.0, 0.0]);
         let mut output = from_reals(&[0.0, 0.0, 0.0, 0.0]);
-        apply_op(2, &op, &input, &mut output, 0, 0, false);
+        apply_op(2, &op, &input, &mut output, 0, 0);
 
         let expected = from_reals(&[0.0, 0.0, 1.0, 0.0]);
         assert_eq!(expected, output);
 
         let op = UnitaryOp::Matrix(vec![1], from_reals(&[0.0, 1.0, 1.0, 0.0]));
         let mut output = from_reals(&[0.0, 0.0, 0.0, 0.0]);
-        apply_op(2, &op, &input, &mut output, 0, 0, false);
+        apply_op(2, &op, &input, &mut output, 0, 0);
 
         let expected = from_reals(&[0.0, 1.0, 0.0, 0.0]);
         assert_eq!(expected, output);
@@ -754,7 +722,7 @@ mod state_ops_tests {
         let input = from_reals(&base_vector);
         let mut output = from_reals(&base_vector);
 
-        apply_ops(n, &r_ops, &input, &mut output, 0, 0, false);
+        apply_ops(n, &r_ops, &input, &mut output, 0, 0);
     }
 
     #[test]

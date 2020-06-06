@@ -1,7 +1,5 @@
-extern crate rayon;
-
+use crate::rayon_helper::*;
 use crate::{Complex, Precision};
-use rayon::prelude::*;
 use std::cmp::max;
 use std::ops::{Add, Mul};
 
@@ -53,7 +51,7 @@ pub(crate) fn apply_phase_to_row<P: Precision>(phi: P, sparse_row: &mut [(u64, C
         im: phi,
     };
     let phase = phi.exp();
-    sparse_row.par_iter_mut().for_each(|(_, val)| {
+    iter_mut!(sparse_row).for_each(|(_, val)| {
         *val = *val * phase;
     })
 }
@@ -95,8 +93,7 @@ pub(crate) fn apply_controlled_rotation<
 
     let mut from_vec = std::mem::replace(&mut sparse_mat[from_row as usize], vec![]);
     // Get the things which now output to |s1>, edit those that still output to |s0>
-    let mut from_branched: Vec<_> = from_vec
-        .par_iter_mut()
+    let mut from_branched: Vec<_> = iter_mut!(from_vec)
         .map(|(col, val)| {
             let v = val.clone() * s;
             *val = val.clone() * c;
@@ -106,8 +103,7 @@ pub(crate) fn apply_controlled_rotation<
 
     let mut to_vec = std::mem::replace(&mut sparse_mat[to_row as usize], vec![]);
     // Get the things which now output to |s0>, edit those that still output to |s1>
-    let mut to_branched: Vec<_> = to_vec
-        .par_iter_mut()
+    let mut to_branched: Vec<_> = iter_mut!(to_vec)
         .map(|(col, val)| {
             let v = val.clone() * (-s);
             *val = val.clone() * c;
@@ -183,8 +179,7 @@ pub(crate) fn row_magnitude_sqr<P: Precision>(
     row: u64,
     sparse_mat: &[Vec<(u64, Complex<P>)>],
 ) -> P {
-    sparse_mat[row as usize]
-        .par_iter()
+    iter!(sparse_mat[row as usize])
         .map(|(_, val)| val.norm_sqr())
         .sum()
 }
@@ -193,8 +188,7 @@ pub(crate) fn column_magnitude_sqr<P: Precision>(
     column: u64,
     sparse_mat: &[Vec<(u64, Complex<P>)>],
 ) -> P {
-    sparse_mat
-        .par_iter()
+    iter!(sparse_mat)
         .map(|v| sparse_value_at_col(column, v).map_or_else(P::zero, |v| v.norm_sqr()))
         .sum()
 }

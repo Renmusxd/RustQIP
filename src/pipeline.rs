@@ -1,16 +1,13 @@
-extern crate rayon;
-
 use std::cmp::{max, Ordering};
 use std::collections::HashMap;
 use std::collections::{BinaryHeap, VecDeque};
-
-use rayon::prelude::*;
 
 use crate::errors::CircuitError;
 use crate::measurement_ops::{
     measure, measure_prob, measure_probs, prob_magnitude, soft_measure, MeasuredCondition,
 };
 use crate::qubits::Parent;
+use crate::rayon_helper::*;
 use crate::state_ops::*;
 use crate::utils::flip_bits;
 use crate::*;
@@ -293,7 +290,6 @@ pub struct LocalQuantumState<P: Precision> {
     n: u64,
     state: Vec<Complex<P>>,
     arena: Vec<Complex<P>>,
-    multithread: bool,
 }
 
 impl<P: Precision> LocalQuantumState<P> {
@@ -302,7 +298,6 @@ impl<P: Precision> LocalQuantumState<P> {
     fn new_from_initial_states_and_multithread(
         n: u64,
         states: &[RegisterInitialState<P>],
-        multithread: bool,
     ) -> LocalQuantumState<P> {
         let max_init_n = states
             .iter()
@@ -347,7 +342,6 @@ impl<P: Precision> LocalQuantumState<P> {
             n,
             state: cvec,
             arena,
-            multithread,
         }
     }
 
@@ -356,7 +350,6 @@ impl<P: Precision> LocalQuantumState<P> {
         n: u64,
         state: Vec<Complex<P>>,
         order: Representation,
-        multithread: bool,
     ) -> Result<LocalQuantumState<P>, CircuitError> {
         if state.len() != 1 << n as usize {
             let message = format!(
@@ -378,12 +371,7 @@ impl<P: Precision> LocalQuantumState<P> {
             Representation::BigEndian => state,
         };
 
-        Ok(LocalQuantumState {
-            n,
-            state,
-            arena,
-            multithread,
-        })
+        Ok(LocalQuantumState { n, state, arena })
     }
 
     /// Return a reference to the internal state.
@@ -406,11 +394,7 @@ impl<P: Precision> LocalQuantumState<P> {
                     *outputloc = state[flip_bits(n as usize, i as u64) as usize];
                 };
 
-                if self.multithread {
-                    self.arena.par_iter_mut().enumerate().for_each(f);
-                } else {
-                    self.arena.iter_mut().enumerate().for_each(f);
-                }
+                iter_mut!(self.arena).enumerate().for_each(f);
                 self.arena.clone()
             }
             Representation::BigEndian => self.state.clone(),
@@ -430,11 +414,6 @@ impl<P: Precision> LocalQuantumState<P> {
             });
         }
     }
-
-    /// Set whether the state will use multithreading.
-    pub fn set_multithreading(&mut self, multithread: bool) {
-        self.multithread = multithread;
-    }
 }
 
 impl<P: Precision> Clone for LocalQuantumState<P> {
@@ -443,7 +422,6 @@ impl<P: Precision> Clone for LocalQuantumState<P> {
             n: self.n,
             state: self.state.clone(),
             arena: self.arena.clone(),
-            multithread: self.multithread,
         }
     }
 }
@@ -469,7 +447,7 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
     /// Build a local state using a set of initial states for subsets of the qubits.
     /// These initial states are made from the qubit handles.
     fn new_from_initial_states(n: u64, states: &[RegisterInitialState<P>]) -> LocalQuantumState<P> {
-        Self::new_from_initial_states_and_multithread(n, states, true)
+        Self::new_from_initial_states_and_multithread(n, states)
     }
 
     fn n(&self) -> u64 {
@@ -477,15 +455,7 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
     }
 
     fn apply_op_with_name(&mut self, _name: Option<&str>, op: &UnitaryOp) {
-        apply_op(
-            self.n,
-            op,
-            &self.state,
-            &mut self.arena,
-            0,
-            0,
-            self.multithread,
-        );
+        apply_op(self.n, op, &self.state, &mut self.arena, 0, 0);
         std::mem::swap(&mut self.state, &mut self.arena);
     }
 
@@ -503,7 +473,6 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
             &mut self.arena,
             None,
             measured,
-            self.multithread,
         );
         self.rotate_basis(indices, -angle);
 
@@ -516,20 +485,20 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
         let m = if let Some(m) = measured {
             m
         } else {
-            soft_measure(self.n, indices, &self.state, None, self.multithread)
+            soft_measure(self.n, indices, &self.state, None)
         };
-        let p = measure_prob(self.n, m, indices, &self.state, None, self.multithread);
+        let p = measure_prob(self.n, m, indices, &self.state, None);
         self.rotate_basis(indices, -angle);
         (m, p)
     }
 
     fn state_magnitude(&self) -> P {
-        prob_magnitude(&self.state, self.multithread)
+        prob_magnitude(&self.state)
     }
 
     fn stochastic_measure(&mut self, indices: &[u64], angle: f64) -> Vec<P> {
         self.rotate_basis(indices, angle);
-        let probs = measure_probs(self.n, indices, &self.state, None, self.multithread);
+        let probs = measure_probs(self.n, indices, &self.state, None);
         self.rotate_basis(indices, -angle);
         probs
     }
@@ -543,11 +512,7 @@ impl<P: Precision> QuantumState<P> for LocalQuantumState<P> {
                     *outputloc = state[flip_bits(n as usize, i as u64) as usize];
                 };
 
-                if self.multithread {
-                    self.arena.par_iter_mut().enumerate().for_each(f);
-                } else {
-                    self.arena.iter_mut().enumerate().for_each(f);
-                }
+                iter_mut!(self.arena).enumerate().for_each(f);
                 self.arena
             }
             Representation::BigEndian => self.state,

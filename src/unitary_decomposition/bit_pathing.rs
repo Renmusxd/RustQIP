@@ -1,6 +1,6 @@
 use crate::errors::CircuitError;
+use crate::rayon_helper::*;
 use crate::unitary_decomposition::utils::gray_code;
-use rayon::prelude::*;
 
 pub(crate) struct BitPather {
     n: u64,
@@ -48,8 +48,7 @@ impl BitPather {
         endpoints: &[u64],
     ) -> Vec<u64> {
         let contained_values: Vec<_> = nodes.iter().map(|(c, _)| *c).collect();
-        let mut new_vals: Vec<(u64, Vec<u64>)> = nodes
-            .into_par_iter()
+        let mut new_vals: Vec<(u64, Vec<u64>)> = into_iter!(nodes)
             .map(|(val, path)| {
                 (0..self.n).fold(vec![], |mut entries, indx| {
                     let mask = 1 << indx;
@@ -71,7 +70,7 @@ impl BitPather {
             })
             .flatten()
             .collect();
-        new_vals.par_sort_by_key(|(c, _)| self.reverse_lookup[(*c) as usize]);
+        sort_by_key!(new_vals, |(c, _)| self.reverse_lookup[(*c) as usize]);
         let result =
             new_vals
                 .into_iter()
@@ -120,7 +119,7 @@ impl BitPather {
             if !nonzeros.contains(&target) {
                 nonzeros.push(target);
             }
-            nonzeros.par_sort_by_key(|row| self.reverse_lookup[(*row) as usize]);
+            sort_by_key!(nonzeros, |row| self.reverse_lookup[(*row) as usize]);
             nonzeros.retain(|v| self.reverse_lookup[(*v) as usize] >= target_index);
             let mut path = vec![];
             while !nonzeros.is_empty() {

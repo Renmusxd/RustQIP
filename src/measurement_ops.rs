@@ -1,18 +1,12 @@
-extern crate rand;
-extern crate rayon;
+use crate::rayon_helper::*;
 use crate::utils::extract_bits;
 use crate::{Complex, Precision};
 use num::Zero;
-use rayon::prelude::*;
 use std::cmp::{max, min};
 
 /// Get total magnitude of state.
-pub fn prob_magnitude<P: Precision>(input: &[Complex<P>], multithread: bool) -> P {
-    if multithread {
-        input.par_iter().map(Complex::<P>::norm_sqr).sum()
-    } else {
-        input.iter().map(Complex::<P>::norm_sqr).sum()
-    }
+pub fn prob_magnitude<P: Precision>(input: &[Complex<P>]) -> P {
+    iter!(input).map(Complex::<P>::norm_sqr).sum()
 }
 
 /// Calculate the probability of a given measurement. `measured` gives the bits (as a u64) which has
@@ -32,16 +26,16 @@ pub fn prob_magnitude<P: Precision>(input: &[Complex<P>], multithread: bool) -> 
 /// // Make the state |10>, index 0 is always |1> and index 1 is always |0>
 /// let input = from_reals(&[0.0, 0.0, 1.0, 0.0]);
 ///
-/// let p = measure_prob(2, 0, &[0], &input, None, false);
+/// let p = measure_prob(2, 0, &[0], &input, None);
 /// assert_eq!(p, 0.0);
 ///
-/// let p = measure_prob(2, 1, &[0], &input, None, false);
+/// let p = measure_prob(2, 1, &[0], &input, None);
 /// assert_eq!(p, 1.0);
 ///
-/// let p = measure_prob(2, 1, &[0, 1], &input, None, false);
+/// let p = measure_prob(2, 1, &[0, 1], &input, None);
 /// assert_eq!(p, 1.0);
 ///
-/// let p = measure_prob(2, 2, &[1, 0], &input, None, false);
+/// let p = measure_prob(2, 2, &[1, 0], &input, None);
 /// assert_eq!(p, 1.0);
 /// ```
 pub fn measure_prob<P: Precision>(
@@ -50,7 +44,6 @@ pub fn measure_prob<P: Precision>(
     indices: &[u64],
     input: &[Complex<P>],
     input_offset: Option<u64>,
-    multithread: bool,
 ) -> P {
     let input_offset = input_offset.unwrap_or(0);
     let template: u64 = indices
@@ -87,11 +80,8 @@ pub fn measure_prob<P: Precision>(
     };
 
     let r = 0u64..1 << remaining_indices.len();
-    if multithread {
-        r.into_par_iter().filter_map(f).sum()
-    } else {
-        r.filter_map(f).sum()
-    }
+
+    into_iter!(r).filter_map(f).sum()
 }
 
 /// Get probability for each possible measurement of `indices` on `input`.
@@ -100,19 +90,13 @@ pub fn measure_probs<P: Precision>(
     indices: &[u64],
     input: &[Complex<P>],
     input_offset: Option<u64>,
-    multithread: bool,
 ) -> Vec<P> {
     // If there aren't many indices, put the parallelism on the larger list inside measure_prob.
     // Otherwise use parallelism on the super iteration.
     let r = 0u64..1 << indices.len();
-    if multithread && (indices.len() as u64 > (n >> 1)) {
-        r.into_par_iter()
-            .map(|measured| measure_prob(n, measured, indices, input, input_offset, false))
-            .collect()
-    } else {
-        r.map(|measured| measure_prob(n, measured, indices, input, input_offset, multithread))
-            .collect()
-    }
+    into_iter!(r)
+        .map(|measured| measure_prob(n, measured, indices, input, input_offset))
+        .collect()
 }
 
 /// Sample a measurement from a state `input`. b
@@ -130,13 +114,13 @@ pub fn measure_probs<P: Precision>(
 /// // Make the state |10>, index 0 is always |1> and index 1 is always |0>
 /// let input = from_reals(&[0.0, 0.0, 1.0, 0.0]);
 ///
-/// let m = soft_measure(2, &[0], &input, None, false);
+/// let m = soft_measure(2, &[0], &input, None);
 /// assert_eq!(m, 1);
-/// let m = soft_measure(2, &[1], &input, None, false);
+/// let m = soft_measure(2, &[1], &input, None);
 /// assert_eq!(m, 0);
-/// let m = soft_measure(2, &[0, 1], &input, None, false);
+/// let m = soft_measure(2, &[0, 1], &input, None);
 /// assert_eq!(m, 0b01);
-/// let m = soft_measure(2, &[1, 0], &input, None, false);
+/// let m = soft_measure(2, &[1, 0], &input, None);
 /// assert_eq!(m, 0b10);
 /// ```
 pub fn soft_measure<P: Precision>(
@@ -144,12 +128,11 @@ pub fn soft_measure<P: Precision>(
     indices: &[u64],
     input: &[Complex<P>],
     input_offset: Option<u64>,
-    multithread: bool,
 ) -> u64 {
     let input_offset = input_offset.unwrap_or(0);
     let mut r = P::from(rand::random::<f64>()).unwrap()
         * if input.len() < (1 << n) as usize {
-            prob_magnitude(input, multithread)
+            prob_magnitude(input)
         } else {
             P::one()
         };
@@ -184,23 +167,22 @@ pub fn measure<P: Precision>(
     output: &mut [Complex<P>],
     offsets: Option<(u64, u64)>,
     measured: Option<MeasuredCondition<P>>,
-    multithread: bool,
 ) -> (u64, P) {
     let input_offset = offsets.map(|(i, _)| i);
     let m = if let Some(measured) = &measured {
         measured.measured
     } else {
-        soft_measure(n, indices, input, input_offset, multithread)
+        soft_measure(n, indices, input, input_offset)
     };
 
     let p = if let Some(measured_prob) = measured.and_then(|m| m.prob) {
         measured_prob
     } else {
-        measure_prob(n, m, indices, input, input_offset, multithread)
+        measure_prob(n, m, indices, input, input_offset)
     };
     let measured = (m, p);
 
-    measure_state(n, indices, measured, input, output, offsets, multithread);
+    measure_state(n, indices, measured, input, output, offsets);
     measured
 }
 
@@ -215,7 +197,6 @@ pub fn measure_state<P: Precision>(
     input: &[Complex<P>],
     output: &mut [Complex<P>],
     offsets: Option<(u64, u64)>,
-    multithread: bool,
 ) {
     let (measured, measured_prob) = measured;
     let (input_offset, output_offset) = offsets.unwrap_or((0, 0));
@@ -257,15 +238,9 @@ pub fn measure_state<P: Precision>(
             }
         };
 
-        if multithread {
-            let input_iter = input[input_lower..input_upper].par_iter();
-            let output_iter = output[output_lower..output_upper].par_iter_mut();
-            input_iter.zip(output_iter).enumerate().for_each(f);
-        } else {
-            let input_iter = input[input_lower..input_upper].iter();
-            let output_iter = output[output_lower..output_upper].iter_mut();
-            input_iter.zip(output_iter).enumerate().for_each(f);
-        }
+        let input_iter = iter!(input[input_lower..input_upper]);
+        let output_iter = iter_mut!(output[output_lower..output_upper]);
+        input_iter.zip(output_iter).enumerate().for_each(f);
     }
 }
 
@@ -293,11 +268,11 @@ mod measurement_tests {
         let n = 2;
         let m = 0;
         let input = from_reals(&[0.5, 0.5, 0.5, 0.5]);
-        let p = measure_prob(n, m, &[0], &input, None, false);
+        let p = measure_prob(n, m, &[0], &input, None);
         assert_eq!(p, 0.5);
 
         let mut output = input.clone();
-        measure_state(n, &[0], (m, p), &input, &mut output, None, false);
+        measure_state(n, &[0], (m, p), &input, &mut output, None);
 
         let half: f64 = 1.0 / 2.0;
         approx_eq(
@@ -312,11 +287,11 @@ mod measurement_tests {
         let n = 2;
         let m = 1;
         let input = from_reals(&[0.5, 0.5, 0.5, 0.5]);
-        let p = measure_prob(n, m, &[0], &input, None, false);
+        let p = measure_prob(n, m, &[0], &input, None);
         assert_eq!(p, 0.5);
 
         let mut output = input.clone();
-        measure_state(n, &[0], (m, p), &input, &mut output, None, false);
+        measure_state(n, &[0], (m, p), &input, &mut output, None);
 
         let half: f64 = 1.0 / 2.0;
         approx_eq(
@@ -331,7 +306,7 @@ mod measurement_tests {
         let n = 2;
         let m = 1;
         let input = from_reals(&[0.5, 0.5, 0.5, 0.5]);
-        let p = measure_probs(n, &[m], &input, None, false);
+        let p = measure_probs(n, &[m], &input, None);
         assert_eq!(p, vec![0.5, 0.5]);
     }
 }

@@ -19,7 +19,7 @@ fn make_ops_matrix(n: u64, ops: &Vec<&UnitaryOp>) -> Vec<Vec<Complex<f64>>> {
             let output = input.clone();
             input[i] = Complex { re: 1.0, im: 0.0 };
             let (input, _) = ops.iter().fold((input, output), |(input, mut output), op| {
-                apply_op(n, op, &input, &mut output, 0, 0, true);
+                apply_op(n, op, &input, &mut output, 0, 0);
                 (output, input)
             });
             input
@@ -43,7 +43,7 @@ fn bench_identity(b: &mut Bencher) {
     let input = from_reals(&base_vector);
     let mut output = from_reals(&base_vector);
 
-    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0, false));
+    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
 }
 
 fn bench_hadamard(b: &mut Bencher) {
@@ -63,7 +63,7 @@ fn bench_hadamard(b: &mut Bencher) {
     let input = from_reals(&base_vector);
     let mut output = from_reals(&base_vector);
 
-    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0, false));
+    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
 }
 
 fn bench_cidentity(b: &mut Bencher) {
@@ -76,7 +76,7 @@ fn bench_cidentity(b: &mut Bencher) {
     let input = from_reals(&base_vector);
     let mut output = from_reals(&base_vector);
 
-    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0, false));
+    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
 }
 
 fn bench_identity_larger(b: &mut Bencher) {
@@ -95,7 +95,7 @@ fn bench_identity_larger(b: &mut Bencher) {
     let input = from_reals(&base_vector);
     let mut output = from_reals(&base_vector);
 
-    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0, false));
+    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
 }
 
 fn bench_hadamard_larger(b: &mut Bencher) {
@@ -115,7 +115,7 @@ fn bench_hadamard_larger(b: &mut Bencher) {
     let input = from_reals(&base_vector);
     let mut output = from_reals(&base_vector);
 
-    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0, false));
+    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
 }
 
 fn bench_cidentity_larger(b: &mut Bencher) {
@@ -129,7 +129,7 @@ fn bench_cidentity_larger(b: &mut Bencher) {
     let input = from_reals(&base_vector);
     let mut output = from_reals(&base_vector);
 
-    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0, false));
+    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
 }
 
 fn bench_cidentity_giant(b: &mut Bencher) {
@@ -144,7 +144,7 @@ fn bench_cidentity_giant(b: &mut Bencher) {
     let input = from_reals(&base_vector);
     let mut output = from_reals(&base_vector);
 
-    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0, false));
+    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
 }
 
 fn bench_cidentity_giant_halfprec(b: &mut Bencher) {
@@ -159,7 +159,7 @@ fn bench_cidentity_giant_halfprec(b: &mut Bencher) {
     let input = from_reals(&base_vector);
     let mut output = from_reals(&base_vector);
 
-    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0, false));
+    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
 }
 
 fn bench_apply_two_swaps_small(b: &mut Bencher) {
@@ -174,8 +174,8 @@ fn bench_apply_two_swaps_small(b: &mut Bencher) {
     let mut output = from_reals(&base_vector);
 
     b.iter(|| {
-        apply_op(n, &op1, &input, &mut output, 0, 0, false);
-        apply_op(n, &op2, &input, &mut output, 0, 0, false);
+        apply_op(n, &op1, &input, &mut output, 0, 0);
+        apply_op(n, &op2, &input, &mut output, 0, 0);
     });
 }
 
@@ -194,7 +194,7 @@ fn bench_apply_two_swaps_small_multiops(b: &mut Bencher) {
     let mut output = from_reals(&base_vector);
 
     b.iter(|| {
-        apply_ops(n, &[r_op1, r_op2], &input, &mut output, 0, 0, false);
+        apply_ops(n, &[r_op1, r_op2], &input, &mut output, 0, 0);
     });
 }
 
@@ -210,8 +210,8 @@ fn bench_apply_two_swaps_large(b: &mut Bencher) {
     let mut output = from_reals(&base_vector);
 
     b.iter(|| {
-        apply_op(n, &op1, &input, &mut output, 0, 0, false);
-        apply_op(n, &op2, &input, &mut output, 0, 0, false);
+        apply_op(n, &op1, &input, &mut output, 0, 0);
+        apply_op(n, &op2, &input, &mut output, 0, 0);
     });
 }
 
@@ -230,7 +230,7 @@ fn bench_apply_two_swaps_large_multiops(b: &mut Bencher) {
     let mut output = from_reals(&base_vector);
 
     b.iter(|| {
-        apply_ops(n, &[r_op1, r_op2], &input, &mut output, 0, 0, false);
+        apply_ops(n, &[r_op1, r_op2], &input, &mut output, 0, 0);
     });
 }
 
@@ -248,7 +248,7 @@ fn bench_apply_many_swaps_small(b: &mut Bencher) {
 
     b.iter(|| {
         ops.iter()
-            .for_each(|op| apply_op(n, op, &input, &mut output, 0, 0, false))
+            .for_each(|op| apply_op(n, op, &input, &mut output, 0, 0))
     });
 }
 
@@ -266,7 +266,7 @@ fn bench_apply_many_swaps_small_multiops(b: &mut Bencher) {
     let mut output = from_reals(&base_vector);
 
     b.iter(|| {
-        apply_ops(n, &r_ops, &input, &mut output, 0, 0, false);
+        apply_ops(n, &r_ops, &input, &mut output, 0, 0);
     });
 }
 
@@ -284,7 +284,7 @@ fn bench_apply_many_swaps_large(b: &mut Bencher) {
 
     b.iter(|| {
         ops.iter()
-            .for_each(|op| apply_op(n, op, &input, &mut output, 0, 0, false))
+            .for_each(|op| apply_op(n, op, &input, &mut output, 0, 0))
     });
 }
 
@@ -302,7 +302,7 @@ fn bench_apply_many_swaps_large_multiops(b: &mut Bencher) {
     let mut output = from_reals(&base_vector);
 
     b.iter(|| {
-        apply_ops(n, &r_ops, &input, &mut output, 0, 0, false);
+        apply_ops(n, &r_ops, &input, &mut output, 0, 0);
     });
 }
 
@@ -317,7 +317,7 @@ fn bench_identity_sparse(b: &mut Bencher) {
     let input = from_reals(&base_vector);
     let mut output = from_reals(&base_vector);
 
-    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0, false));
+    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
 }
 
 fn bench_identity_larger_sparse(b: &mut Bencher) {
@@ -331,7 +331,7 @@ fn bench_identity_larger_sparse(b: &mut Bencher) {
     let input = from_reals(&base_vector);
     let mut output = from_reals(&base_vector);
 
-    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0, false));
+    b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
 }
 
 benchmark_group!(

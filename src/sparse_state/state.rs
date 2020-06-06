@@ -1,6 +1,7 @@
 use crate::iterators::{fold_for_op_cols, precision_get_index, precision_num_indices};
 use crate::measurement_ops::MeasuredCondition;
 use crate::pipeline::{create_state_entry, InitialState, Representation};
+use crate::rayon_helper::*;
 use crate::sparse_state::utils::{
     consolidate_vec, sparse_measure, sparse_measure_prob, sparse_measure_probs, sparse_soft_measure,
 };
@@ -11,7 +12,6 @@ use crate::state_ops::{
 use crate::utils::flip_bits;
 use crate::{Complex, Precision, QuantumState};
 use num::{One, Zero};
-use rayon::prelude::*;
 use std::cmp::max;
 
 /// A quantum state which doesn't track zero values.
@@ -129,12 +129,9 @@ impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
                 acc
             })
         };
-        let flat = if self.multithread {
-            state.par_iter().map(f).flatten().collect()
-        } else {
-            state.iter().map(f).flatten().collect()
-        };
-        self.state = Some(consolidate_vec(flat, self.multithread));
+
+        let flat = iter!(state).map(f).flatten().collect();
+        self.state = Some(consolidate_vec(flat));
     }
 
     fn measure(
@@ -145,8 +142,7 @@ impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
     ) -> (u64, P) {
         self.rotate_basis(indices, angle);
         let state = self.state.take().unwrap();
-        let (measured_result, new_state) =
-            sparse_measure(self.n, indices, state, measured, self.multithread);
+        let (measured_result, new_state) = sparse_measure(self.n, indices, state, measured);
         self.state = Some(new_state);
         self.rotate_basis(indices, -angle);
         measured_result
@@ -158,9 +154,9 @@ impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
         let m = if let Some(m) = measured {
             m
         } else {
-            sparse_soft_measure(self.n, indices, state, self.multithread)
+            sparse_soft_measure(self.n, indices, state)
         };
-        let p = sparse_measure_prob(self.n, m, indices, state, self.multithread);
+        let p = sparse_measure_prob(self.n, m, indices, state);
         self.rotate_basis(indices, -angle);
         (m, p)
     }
@@ -179,7 +175,7 @@ impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
     fn stochastic_measure(&mut self, indices: &[u64], angle: f64) -> Vec<P> {
         self.rotate_basis(indices, angle);
         let state = self.state.as_ref().unwrap();
-        let probs = sparse_measure_probs(self.n, indices, state, self.multithread);
+        let probs = sparse_measure_probs(self.n, indices, state);
         self.rotate_basis(indices, -angle);
         probs
     }

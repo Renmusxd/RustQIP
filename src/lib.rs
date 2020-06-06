@@ -178,6 +178,10 @@ pub use self::qubits::Register;
 pub use self::types::Precision;
 pub use num::Complex;
 
+/// Macros for controlling parallel versus non-parallel
+#[macro_use]
+mod rayon_helper;
+
 /// Quantum analogues of boolean circuits
 pub mod boolean_circuits;
 /// Opbuilder and such

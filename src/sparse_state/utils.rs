@@ -1,8 +1,8 @@
 use crate::measurement_ops::MeasuredCondition;
+use crate::rayon_helper::*;
 use crate::state_ops::{full_to_sub, sub_to_full};
 use crate::utils::{extract_bits, flip_bits};
 use crate::{Complex, Precision};
-use rayon::prelude::*;
 use std::ops::Add;
 
 pub(crate) fn consolidate_vec<
@@ -10,13 +10,8 @@ pub(crate) fn consolidate_vec<
     V: Add<Output = V> + Send + Sync,
 >(
     mut v: Vec<(K, V)>,
-    multithread: bool,
 ) -> Vec<(K, V)> {
-    if multithread {
-        v.par_sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
-    } else {
-        v.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
-    }
+    sort_unstable_by!(v, |(a, _), (b, _)| a.cmp(b));
     v.into_iter().fold(vec![], |mut acc, (indx, val)| {
         let last_indx = acc.last().map(|(indx, _)| indx);
         match last_indx {
@@ -30,17 +25,9 @@ pub(crate) fn consolidate_vec<
     })
 }
 
-pub(crate) fn sparse_prob_magnitude<P: Precision>(
-    state: &[(u64, Complex<P>)],
-    multithread: bool,
-) -> P {
-    if multithread {
-        let p: P = state.par_iter().map(|(_, v)| v.norm_sqr()).sum();
-        p.sqrt()
-    } else {
-        let p: P = state.iter().map(|(_, v)| v.norm_sqr()).sum();
-        p.sqrt()
-    }
+pub(crate) fn sparse_prob_magnitude<P: Precision>(state: &[(u64, Complex<P>)]) -> P {
+    let p: P = iter!(state).map(|(_, v)| v.norm_sqr()).sum();
+    p.sqrt()
 }
 
 fn sparse_measure_state<P: Precision>(
@@ -48,7 +35,6 @@ fn sparse_measure_state<P: Precision>(
     indices: &[u64],
     measured: (u64, P),
     state: Vec<(u64, Complex<P>)>,
-    multithread: bool,
 ) -> Vec<(u64, Complex<P>)> {
     let (m, measured_prob) = measured;
     let p_mult = P::one() / measured_prob.sqrt();
@@ -61,11 +47,8 @@ fn sparse_measure_state<P: Precision>(
             None
         }
     };
-    if multithread {
-        state.into_par_iter().filter_map(f).collect()
-    } else {
-        state.into_iter().filter_map(f).collect()
-    }
+
+    into_iter!(state).filter_map(f).collect()
 }
 
 pub(crate) type MeasurementAndNewState<P> = ((u64, P), Vec<(u64, Complex<P>)>);
@@ -74,22 +57,21 @@ pub(crate) fn sparse_measure<P: Precision>(
     indices: &[u64],
     state: Vec<(u64, Complex<P>)>,
     measured: Option<MeasuredCondition<P>>,
-    multithread: bool,
 ) -> MeasurementAndNewState<P> {
     let m = if let Some(measured) = &measured {
         measured.measured
     } else {
-        sparse_soft_measure(n, indices, &state, multithread)
+        sparse_soft_measure(n, indices, &state)
     };
 
     let p = if let Some(measured_prob) = measured.and_then(|m| m.prob) {
         measured_prob
     } else {
-        sparse_measure_prob(n, m, indices, &state, multithread)
+        sparse_measure_prob(n, m, indices, &state)
     };
     let measured = (m, p);
 
-    let state = sparse_measure_state(n, indices, measured, state, multithread);
+    let state = sparse_measure_state(n, indices, measured, state);
     (measured, state)
 }
 
@@ -97,9 +79,8 @@ pub(crate) fn sparse_soft_measure<P: Precision>(
     n: u64,
     indices: &[u64],
     state: &[(u64, Complex<P>)],
-    multithread: bool,
 ) -> u64 {
-    let mut r = P::from(rand::random::<f64>()).unwrap() * sparse_prob_magnitude(state, multithread);
+    let mut r = P::from(rand::random::<f64>()).unwrap() * sparse_prob_magnitude(state);
     let mut measured_indx = 0;
     for (i, c) in state.iter() {
         r = r - c.norm_sqr();
@@ -117,7 +98,6 @@ pub(crate) fn sparse_measure_prob<P: Precision>(
     m: u64,
     indices: &[u64],
     state: &[(u64, Complex<P>)],
-    multithread: bool,
 ) -> P {
     let mask = sub_to_full(n, indices, std::u64::MAX, 0);
     let rev_m = flip_bits(indices.len(), m);
@@ -128,26 +108,19 @@ pub(crate) fn sparse_measure_prob<P: Precision>(
             None
         }
     };
-    if multithread {
-        state.par_iter().filter_map(f).sum()
-    } else {
-        state.iter().filter_map(f).sum()
-    }
+
+    iter!(state).filter_map(f).sum()
 }
 
 pub(crate) fn sparse_measure_probs<P: Precision>(
     n: u64,
     indices: &[u64],
     state: &[(u64, Complex<P>)],
-    multithread: bool,
 ) -> Vec<P> {
     let r = 0u64..1 << indices.len();
-    let f = |m: u64| -> P { sparse_measure_prob(n, m, indices, state, false) };
-    if multithread {
-        r.into_par_iter().map(f).collect()
-    } else {
-        r.map(f).collect()
-    }
+    let f = |m: u64| -> P { sparse_measure_prob(n, m, indices, state) };
+
+    into_iter!(r).map(f).collect()
 }
 
 #[cfg(test)]
@@ -185,10 +158,10 @@ mod sparse_tests {
         let n = 2;
         let m = 0;
         let state = make_state(&[0, 1, 2, 3], &[0.5, 0.5, 0.5, 0.5]);
-        let p = sparse_measure_prob(n, m, &[0], &state, false);
+        let p = sparse_measure_prob(n, m, &[0], &state);
         assert_eq!(p, 0.5);
 
-        let output = sparse_measure_state(n, &[0], (m, p), state, false);
+        let output = sparse_measure_state(n, &[0], (m, p), state);
 
         let half: f64 = 1.0 / 2.0;
         approx_eq(
@@ -203,10 +176,10 @@ mod sparse_tests {
         let n = 2;
         let m = 1;
         let state = make_state(&[0, 1, 2, 3], &[0.5, 0.5, 0.5, 0.5]);
-        let p = sparse_measure_prob(n, m, &[0], &state, false);
+        let p = sparse_measure_prob(n, m, &[0], &state);
         assert_eq!(p, 0.5);
 
-        let output = sparse_measure_state(n, &[0], (m, p), state, false);
+        let output = sparse_measure_state(n, &[0], (m, p), state);
 
         let half: f64 = 1.0 / 2.0;
         approx_eq(
@@ -221,7 +194,7 @@ mod sparse_tests {
         let n = 2;
         let m = 1;
         let state = make_state(&[0, 1, 2, 3], &[0.5, 0.5, 0.5, 0.5]);
-        let p = sparse_measure_probs(n, &[m], &state, false);
+        let p = sparse_measure_probs(n, &[m], &state);
         assert_eq!(p, vec![0.5, 0.5]);
     }
 }

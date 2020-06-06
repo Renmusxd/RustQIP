@@ -1,5 +1,3 @@
-extern crate rayon;
-
 use num::Float;
 use std::fmt::Display;
 use std::iter::Sum;
