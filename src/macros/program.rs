@@ -234,12 +234,6 @@ macro_rules! program {
         $args.push(tmp_r);
     };
 
-    // This is not efficient, but the best I can do without fancy custom structs or, more
-    // importantly, the ability to make identifiers in macros.
-    // Luckily it's O(n^2) where n can't be too big because the actual circuit simulation is
-    // O(2^n).
-    // for each register in output, for each qubit in the register, find the correct spot in the
-    // input register arrays where it originally came from.
     (@replace_registers($builder:expr, $reg_man:ident, $to_replace:ident)) => {
         $reg_man.return_registers($builder, $to_replace);
     };
