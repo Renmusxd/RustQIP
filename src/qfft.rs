@@ -1,8 +1,6 @@
-extern crate num;
-
 use num::complex::Complex;
+use num::{One, Zero};
 
-use self::num::{One, Zero};
 use crate::{Register, UnitaryBuilder};
 
 /// Apply the QFFT circuit to a given Register using the builder.

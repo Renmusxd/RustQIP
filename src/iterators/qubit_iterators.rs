@@ -1,10 +1,8 @@
-extern crate num;
-
 use std::marker::PhantomData;
 
 use num::complex::Complex;
+use num::One;
 
-use self::num::One;
 use crate::types::Precision;
 use crate::utils::*;
 

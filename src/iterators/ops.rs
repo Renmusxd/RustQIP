@@ -1,4 +1,3 @@
-extern crate num;
 use crate::types::Precision;
 use num::Complex;
 use std::fmt;

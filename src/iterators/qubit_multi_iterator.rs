@@ -1,7 +1,7 @@
-extern crate num;
-use self::num::One;
-use crate::types::Precision;
 use num::Complex;
+use num::One;
+
+use crate::types::Precision;
 
 /// Iterator which provides the indices of nonzero columns for a given row for a collection of ops.
 #[derive(Debug)]

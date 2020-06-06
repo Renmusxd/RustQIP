@@ -1,10 +1,8 @@
-extern crate num;
-
-use self::num::Zero;
 use super::ops::PrecisionUnitaryOp;
 use super::qubit_iterators::*;
 use crate::iterators::{precision_num_indices, MultiOpIterator};
 use crate::types::Precision;
+use num::Zero;
 use num::Complex;
 
 /// Using the function `f` which maps from a column and `row` to a complex value for the op matrix,
