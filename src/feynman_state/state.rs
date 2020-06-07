@@ -170,18 +170,9 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
             unimplemented!()
         };
 
-        match measured {
+        let measured = match measured {
             Some(measured) => {
-                let pops = self.make_precision_ops();
-                let substate = &self.substate;
-                let p = measure_prob_fn(
-                    self.substate.n,
-                    measured,
-                    indices,
-                    Some(self.substate.input_offset),
-                    |index| substate.rec_calculate_amplitude(index, &pops, true)
-                );
-                (measured, p)
+                measured
             },
             None => {
                 let r: P = P::from(rand::random::<f64>()).unwrap() * self.substate.mag;
@@ -190,7 +181,7 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
                         let p = self.calculate_amplitude(i).norm_sqr();
                         let r = r - p;
                         if r <= P::zero() {
-                            Err((i, p))
+                            Err(i)
                         } else {
                             Ok(r)
                         }
@@ -198,7 +189,17 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
                     .err()
                     .unwrap()
             }
-        }
+        };
+        let pops = self.make_precision_ops();
+        let substate = &self.substate;
+        let p = measure_prob_fn(
+            self.substate.n,
+            measured,
+            indices,
+            Some(self.substate.input_offset),
+            |index| substate.rec_calculate_amplitude(index, &pops, true)
+        );
+        (measured, p)
     }
 
     fn state_magnitude(&self) -> P {
