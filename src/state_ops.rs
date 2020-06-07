@@ -8,8 +8,10 @@ use crate::{Complex, Precision};
 use num::One;
 use std::cmp::{max, min};
 use std::fmt;
+use std::rc::Rc;
 
 /// Types of unitary ops which can be applied to a state.
+#[derive(Clone)]
 pub enum UnitaryOp {
     /// Indices, Matrix data
     Matrix(Vec<u64>, Vec<Complex<f64>>),
@@ -23,39 +25,8 @@ pub enum UnitaryOp {
     Function(
         Vec<u64>,
         Vec<u64>,
-        Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
+        Rc<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ),
-}
-
-/// Cannot clone functions, so converts them to sparse matrices.
-impl Clone for UnitaryOp {
-    fn clone(&self) -> Self {
-        match self {
-            UnitaryOp::Matrix(indices, mat) => UnitaryOp::Matrix(indices.clone(), mat.clone()),
-            UnitaryOp::SparseMatrix(indices, mat) => {
-                let mat = mat.to_vec();
-                UnitaryOp::SparseMatrix(indices.clone(), mat)
-            }
-            UnitaryOp::Swap(a_indices, b_indices) => {
-                UnitaryOp::Swap(a_indices.clone(), b_indices.clone())
-            }
-            UnitaryOp::Control(c_indices, op_indices, op) => {
-                UnitaryOp::Control(c_indices.clone(), op_indices.clone(), op.clone())
-            }
-            UnitaryOp::Function(x_indices, y_indices, f) => {
-                let n = (x_indices.len() + y_indices.len()) as u64;
-                let mat = (0..1 << n)
-                    .map(|col| {
-                        let (row, phase) = f(col);
-                        let val = Complex { re: 0.0, im: phase };
-                        vec![(row, val.exp())]
-                    })
-                    .collect();
-                let indices = x_indices.iter().chain(y_indices.iter()).cloned().collect();
-                invert_op(UnitaryOp::SparseMatrix(indices, mat))
-            }
-        }
-    }
 }
 
 impl fmt::Debug for UnitaryOp {
@@ -248,7 +219,7 @@ pub fn make_control_op(mut c_indices: Vec<u64>, op: UnitaryOp) -> Result<Unitary
 pub fn make_function_op(
     input_indices: Vec<u64>,
     output_indices: Vec<u64>,
-    f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
+    f: Rc<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
 ) -> Result<UnitaryOp, CircuitError> {
     if input_indices.is_empty() || output_indices.is_empty() {
         CircuitError::make_str_err("Input and Output indices must not be empty")
@@ -483,7 +454,7 @@ pub(crate) fn clone_as_precision_op<P: Precision>(op: &UnitaryOp) -> PrecisionUn
             Box::new(clone_as_precision_op(op)),
         ),
         UnitaryOp::Function(inputs, outputs, f) => {
-            PrecisionUnitaryOp::Function(inputs.clone(), outputs.clone(), f)
+            PrecisionUnitaryOp::Function(inputs.clone(), outputs.clone(), f.as_ref())
         }
     }
 }

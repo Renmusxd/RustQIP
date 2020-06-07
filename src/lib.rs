@@ -194,6 +194,8 @@ pub mod builders;
 pub mod common_circuits;
 /// Error values for the library.
 pub mod errors;
+/// A state which favors memory in exchange for computation time.
+pub mod feynman_state;
 /// Efficient iterators for sparse kronprod matrices.
 pub mod iterators;
 /// Functions for measuring states.

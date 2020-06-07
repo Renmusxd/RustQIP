@@ -90,3 +90,21 @@ macro_rules! sort_unstable_by {
         $e.par_sort_unstable_by($f)
     };
 }
+
+/// Convert the iterator to par_iter if allowed
+#[cfg(not(feature = "parallel"))]
+#[macro_export]
+macro_rules! bridge {
+    ($e:expr) => {
+        $e
+    };
+}
+
+/// Convert the iterator to par_iter if allowed
+#[cfg(feature = "parallel")]
+#[macro_export]
+macro_rules! bridge {
+    ($e:expr) => {
+        $e.par_bridge()
+    };
+}

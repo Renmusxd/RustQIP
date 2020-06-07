@@ -427,12 +427,34 @@ impl<P: Precision> Clone for LocalQuantumState<P> {
 }
 
 /// An initial state supplier for building quantum states.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum InitialState<P: Precision> {
     /// A fully qualified state, each |x> has an amplitude
     FullState(Vec<Complex<P>>),
     /// A single index with the whole weight.
     Index(u64),
+}
+
+impl<P: Precision> InitialState<P> {
+    pub(crate) fn get_amplitude(&self, m: u64) -> Complex<P> {
+        match &self {
+            InitialState::FullState(v) => v[m as usize],
+            InitialState::Index(index) => {
+                if *index == m {
+                    Complex::one()
+                } else {
+                    Complex::zero()
+                }
+            }
+        }
+    }
+
+    pub(crate) fn get_magnitude(&self) -> P {
+        match &self {
+            InitialState::Index(_) => P::one(),
+            InitialState::FullState(v) => v.iter().map(|c| c.norm_sqr()).sum::<P>().sqrt(),
+        }
+    }
 }
 
 /// A set of indices and their initial state.

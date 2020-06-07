@@ -5,6 +5,7 @@ use crate::state_ops::*;
 use crate::Complex;
 use num::Zero;
 use std::fmt;
+use std::rc::Rc;
 
 /// A function which takes a builder, a Register, and a set of measured values, and constructs a
 /// circuit, outputting the resulting Register.
@@ -261,7 +262,7 @@ pub trait UnitaryBuilder {
         name: &str,
         r_in: Register,
         r_out: Register,
-        f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
+        f: Rc<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<(Register, Register), CircuitError>;
 
     /// A controlled x, using `cr` as control and `r` as input.
@@ -432,7 +433,7 @@ pub trait UnitaryBuilder {
         &self,
         r_in: &Register,
         r_out: &Register,
-        f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
+        f: Rc<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<UnitaryOp, CircuitError> {
         make_function_op(r_in.indices.clone(), r_out.indices.clone(), f)
     }
@@ -593,7 +594,7 @@ pub fn apply_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
     r_out: Register,
     f: F,
 ) -> Result<(Register, Register), CircuitError> {
-    b.apply_function("f", r_in, r_out, Box::new(f))
+    b.apply_function("f", r_in, r_out, Rc::new(f))
 }
 
 /// Helper function for Boxing static functions and building sparse mats using the given
@@ -604,7 +605,7 @@ pub fn apply_sparse_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
     r_out: Register,
     f: F,
 ) -> Result<(Register, Register), CircuitError> {
-    b.apply_function("f", r_in, r_out, Box::new(f))
+    b.apply_function("f", r_in, r_out, Rc::new(f))
 }
 
 /// A basic builder for unitary and non-unitary ops.
@@ -812,7 +813,7 @@ impl UnitaryBuilder for OpBuilder {
         name: &str,
         r_in: Register,
         r_out: Register,
-        f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
+        f: Rc<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<(Register, Register), CircuitError> {
         let op = self.make_function_op(&r_in, &r_out, f)?;
         let in_indices = r_in.indices.clone();
@@ -1023,7 +1024,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         name: &str,
         r_in: Register,
         r_out: Register,
-        f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
+        f: Rc<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<(Register, Register), CircuitError> {
         let op = self.make_function_op(&r_in, &r_out, f)?;
         let in_indices = r_in.indices.clone();
@@ -1065,7 +1066,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         &self,
         r_in: &Register,
         r_out: &Register,
-        f: Box<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
+        f: Rc<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
     ) -> Result<UnitaryOp, CircuitError> {
         self.parent_builder.make_function_op(r_in, r_out, f)
     }

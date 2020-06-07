@@ -45,6 +45,30 @@ pub fn measure_prob<P: Precision>(
     input: &[Complex<P>],
     input_offset: Option<u64>,
 ) -> P {
+    measure_prob_fn(n, measured, indices, input_offset, |index| {
+        if index >= input.len() as u64 {
+            Complex::zero()
+        } else {
+            input[index as usize]
+        }
+    })
+}
+
+/// Calculate the probability of a given measurement. `measured` gives the bits (as a u64) which has
+/// been measured from the qubits at `indices` in the order supplied by `indices`.
+/// `input_offset` gives the actual index of the lowest indexed entry in `input` in case it's split
+/// across multiple vectors (as for distributed computation). `input_length` is the length of the
+/// number of allowed indexible
+pub fn measure_prob_fn<F, P: Precision>(
+    n: u64,
+    measured: u64,
+    indices: &[u64],
+    input_offset: Option<u64>,
+    f: F,
+) -> P
+where
+    F: Fn(u64) -> Complex<P> + Send + Sync,
+{
     let input_offset = input_offset.unwrap_or(0);
     let template: u64 = indices
         .iter()
@@ -60,7 +84,7 @@ pub fn measure_prob<P: Precision>(
         let tmp_index: u64 =
             remaining_indices
                 .iter()
-                .clone()
+                .cloned()
                 .enumerate()
                 .fold(0, |acc, (i, index)| -> u64 {
                     let sel_bit = (remaining_index_bits >> i as u64) & 1;
@@ -71,16 +95,16 @@ pub fn measure_prob<P: Precision>(
             None
         } else {
             let index = index - input_offset;
-            if index >= input.len() as u64 || input[index as usize] == Complex::zero() {
+            let amp = f(index);
+            if amp == Complex::zero() {
                 None
             } else {
-                Some(input[index as usize].norm_sqr())
+                Some(amp.norm_sqr())
             }
         }
     };
 
     let r = 0u64..1 << remaining_indices.len();
-
     into_iter!(r).filter_map(f).sum()
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "qip"
-version = "0.12.2"
+version = "0.13.0"
 authors = ["Sumner Hearth <sumnernh@gmail.com>"]
 description = "A library for efficient quantum computing simulations."
 repository = "https://github.com/Renmusxd/RustQIP"
@@ -18,7 +18,6 @@ parallel = ["rayon"]
 num = "^0.2"
 rand = "^0.7"
 rayon = {version = "^1.3", optional = true }
-
 
 [dev-dependencies]
 bencher = "^0.1"
