@@ -1,14 +1,16 @@
 use crate::iterators::{
-    par_sum_from_iterator, precision_get_index, precision_num_indices,
-    sum_for_op_cols, PrecisionUnitaryOp,
+    par_sum_from_iterator, precision_get_index, precision_num_indices, sum_for_op_cols,
+    PrecisionUnitaryOp,
 };
 use crate::measurement_ops::{measure_prob_fn, MeasuredCondition};
 use crate::pipeline::{InitialState, Representation};
 use crate::rayon_helper::*;
 use crate::state_ops::{clone_as_precision_op, full_to_sub, sub_to_full, UnitaryOp};
-use crate::utils::flip_bits;
+use crate::utils::{extract_bits, flip_bits};
 use crate::{Precision, QuantumState};
 use num::{Complex, Zero};
+
+const DEFAULT_DEPTH: u64 = 5;
 
 /// TODO
 #[derive(Debug)]
@@ -24,6 +26,7 @@ struct FeynmanThreadSafeState<P: Precision> {
     input_offset: u64,
     output_offset: u64,
     initial_state: Vec<(Vec<u64>, InitialState<P>)>,
+    noninit_mask: u64,
 }
 
 #[derive(Debug)]
@@ -57,9 +60,11 @@ impl<P: Precision> FeynmanState<P> {
             .collect()
     }
 
-    fn calculate_amplitude(&self, m: u64) -> Complex<P> {
+    /// Calculate the amplitude of a given state.
+    pub fn calculate_amplitude(&self, m: u64) -> Complex<P> {
         let pops = self.make_precision_ops();
-        self.substate.rec_calculate_amplitude(m, &pops, true)
+        self.substate
+            .rec_calculate_amplitude(m, &pops, DEFAULT_DEPTH)
     }
 }
 
@@ -68,18 +73,23 @@ impl<P: Precision> FeynmanThreadSafeState<P> {
         &self,
         m: u64,
         ops: &[FeynmanPrecisionOp<P>],
-        allowed_parallel: bool,
+        parallel_depth: u64,
     ) -> Complex<P> {
         match ops {
             [] => {
-                // Get values from initial state
-                self.initial_state
-                    .iter()
-                    .map(|(indices, init)| {
-                        let subindex = full_to_sub(self.n, indices, m);
-                        init.get_amplitude(subindex)
-                    })
-                    .product()
+                // Check that the uninitialized bits are 0
+                if m & self.noninit_mask == 0 {
+                    // Get values from initial state
+                    self.initial_state
+                        .iter()
+                        .map(|(indices, init)| {
+                            let subindex = full_to_sub(self.n, indices, m);
+                            init.get_amplitude(subindex)
+                        })
+                        .product()
+                } else {
+                    Complex::zero()
+                }
             }
             slice => {
                 let head = &slice[0..slice.len() - 1];
@@ -87,16 +97,21 @@ impl<P: Precision> FeynmanThreadSafeState<P> {
                     FeynmanPrecisionOp::OP(op, mat_indices) => {
                         // Maps from a op matrix column (from 0 to 2^nindices) to the value at that column
                         // for the row calculated above.
+                        let next_depth = if parallel_depth > 0 {
+                            parallel_depth - 1
+                        } else {
+                            0
+                        };
                         let f = |(i, val): (u64, Complex<P>)| -> Complex<P> {
                             let colbits = sub_to_full(self.n, mat_indices, i, m);
-                            val * self.rec_calculate_amplitude(colbits, head, false)
+                            val * self.rec_calculate_amplitude(colbits, head, next_depth)
                         };
 
                         let nindices = mat_indices.len() as u64;
                         let matrow = full_to_sub(self.n, mat_indices, m);
 
                         // We only want to allow parallelism for the top level.
-                        if allowed_parallel {
+                        if parallel_depth > 0 {
                             par_sum_from_iterator(nindices, matrow, op, f)
                         } else {
                             sum_for_op_cols(nindices, matrow, op, f)
@@ -104,7 +119,7 @@ impl<P: Precision> FeynmanThreadSafeState<P> {
                     }
                     FeynmanPrecisionOp::MEASUREMENT(measured, indices, p) => {
                         if *measured == full_to_sub(self.n, indices, m) {
-                            self.rec_calculate_amplitude(m, head, false) / p.sqrt()
+                            self.rec_calculate_amplitude(m, head, parallel_depth) / p.sqrt()
                         } else {
                             Complex::zero()
                         }
@@ -122,12 +137,19 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
 
     fn new_from_initial_states(n: u64, states: &[(Vec<u64>, InitialState<P>)]) -> Self {
         let mag = states.iter().map(|(_, s)| s.get_magnitude()).product();
+
+        let mask = states.iter().fold(u64::MAX, |mask, (indices, _)| {
+            let submask = !sub_to_full(n, indices, u64::MAX, 0);
+            mask & submask
+        });
+
         let substate = FeynmanThreadSafeState {
             n,
             mag,
             input_offset: 0,
             output_offset: 0,
             initial_state: states.to_vec(),
+            noninit_mask: mask,
         };
         Self {
             ops: vec![],
@@ -171,12 +193,10 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
         };
 
         let measured = match measured {
-            Some(measured) => {
-                measured
-            },
+            Some(measured) => measured,
             None => {
                 let r: P = P::from(rand::random::<f64>()).unwrap() * self.substate.mag;
-                (0..1 << self.substate.n)
+                let m = (0..1 << self.substate.n)
                     .try_fold(r, |r, i| {
                         let p = self.calculate_amplitude(i).norm_sqr();
                         let r = r - p;
@@ -187,7 +207,12 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
                         }
                     })
                     .err()
-                    .unwrap()
+                    .unwrap();
+                let indices: Vec<_> = indices
+                    .iter()
+                    .map(|indx| self.substate.n - 1 - *indx)
+                    .collect();
+                extract_bits(m, &indices)
             }
         };
         let pops = self.make_precision_ops();
@@ -197,7 +222,7 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
             measured,
             indices,
             Some(self.substate.input_offset),
-            |index| substate.rec_calculate_amplitude(index, &pops, true)
+            |index| substate.rec_calculate_amplitude(index, &pops, 0),
         );
         (measured, p)
     }
@@ -214,16 +239,18 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
 
         let pops = self.make_precision_ops();
         let substate = &self.substate;
-        let r = 0u64 .. 1 << indices.len() as u64;
-        into_iter!(r).map(|m| {
-            measure_prob_fn(
-                substate.n,
-                m,
-                indices,
-                Some(substate.input_offset),
-                |index| substate.rec_calculate_amplitude(index, &pops, true)
-            )
-        }).collect()
+        let r = 0u64..1 << indices.len() as u64;
+        into_iter!(r)
+            .map(|m| {
+                measure_prob_fn(
+                    substate.n,
+                    m,
+                    indices,
+                    Some(substate.input_offset),
+                    |index| substate.rec_calculate_amplitude(index, &pops, 0),
+                )
+            })
+            .collect()
     }
 
     fn into_state(self, order: Representation) -> Vec<Complex<P>> {
@@ -234,6 +261,229 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
             Representation::BigEndian => (0..1 << self.substate.n)
                 .map(|m| self.calculate_amplitude(m))
                 .collect(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod feynmann_test {
+    use super::*;
+    use crate::state_ops::make_matrix_op;
+    use crate::CircuitError;
+    use num::One;
+
+    fn lower_bits_state() -> Vec<Complex<f64>> {
+        vec![
+            Complex::new(0.5, 0.0),
+            Complex::new(0.5, 0.0),
+            Complex::new(0.5, 0.0),
+            Complex::new(0.5, 0.0),
+            Complex::zero(),
+            Complex::zero(),
+            Complex::zero(),
+            Complex::zero(),
+        ]
+    }
+
+    #[test]
+    fn test_empty_initial_conditions() {
+        let n = 3;
+        let state = FeynmanState::<f64>::new(n);
+
+        assert_eq!(state.calculate_amplitude(0), Complex::one());
+        for i in 1..1 << n {
+            assert_eq!(state.calculate_amplitude(i), Complex::zero())
+        }
+    }
+
+    #[test]
+    fn test_index_initial_conditions() {
+        let n = 3;
+        let init = [(vec![0, 1, 2], InitialState::Index(1))];
+        let state = FeynmanState::<f64>::new_from_initial_states(n, &init);
+
+        assert_eq!(state.calculate_amplitude(0), Complex::zero());
+        assert_eq!(state.calculate_amplitude(1), Complex::one());
+        for i in 2..1 << n {
+            assert_eq!(state.calculate_amplitude(i), Complex::zero())
+        }
+
+        let init = [(vec![0, 1, 2], InitialState::Index(6))];
+        let state = FeynmanState::<f64>::new_from_initial_states(n, &init);
+
+        for i in 0..6 {
+            assert_eq!(state.calculate_amplitude(i), Complex::zero())
+        }
+        assert_eq!(state.calculate_amplitude(6), Complex::one());
+        for i in 7..1 << n {
+            assert_eq!(state.calculate_amplitude(i), Complex::zero())
+        }
+    }
+
+    #[test]
+    fn test_product_index_initial_conditions() {
+        let n = 3;
+        let init = [
+            (vec![1], InitialState::Index(1)),
+            (vec![2], InitialState::Index(1)),
+        ];
+        let state = FeynmanState::<f64>::new_from_initial_states(n, &init);
+
+        for i in 0..3 {
+            assert_eq!(state.calculate_amplitude(i), Complex::zero())
+        }
+        assert_eq!(state.calculate_amplitude(3), Complex::one());
+        for i in 4..1 << n {
+            assert_eq!(state.calculate_amplitude(i), Complex::zero())
+        }
+    }
+
+    #[test]
+    fn test_fully_initial_conditions() {
+        let n = 3;
+        let init = [(vec![0, 1, 2], InitialState::FullState(lower_bits_state()))];
+        let state = FeynmanState::<f64>::new_from_initial_states(n, &init);
+
+        for i in 0..4 {
+            assert_eq!(state.calculate_amplitude(i), Complex::new(0.5, 0.0))
+        }
+        for i in 4..1 << n {
+            assert_eq!(state.calculate_amplitude(i), Complex::zero())
+        }
+    }
+
+    #[test]
+    fn test_product_initial_conditions() {
+        let n = 3;
+        let init = [
+            (
+                vec![0],
+                InitialState::FullState(vec![Complex::one(), Complex::zero()]),
+            ),
+            (
+                vec![1],
+                InitialState::FullState(vec![Complex::zero(), Complex::one()]),
+            ),
+            (
+                vec![2],
+                InitialState::FullState(vec![Complex::one(), Complex::zero()]),
+            ),
+        ];
+        let state = FeynmanState::<f64>::new_from_initial_states(n, &init);
+
+        for i in 0..2 {
+            assert_eq!(state.calculate_amplitude(i), Complex::zero());
+        }
+        assert_eq!(state.calculate_amplitude(2), Complex::one());
+        for i in 3..1 << n {
+            assert_eq!(state.calculate_amplitude(i), Complex::zero());
+        }
+    }
+
+    #[test]
+    fn test_into_state() {
+        let n = 3;
+        let init_state = lower_bits_state();
+        let init = [(vec![0, 1, 2], InitialState::FullState(init_state.clone()))];
+        let state = FeynmanState::<f64>::new_from_initial_states(n, &init);
+        assert_eq!(state.into_state(Representation::BigEndian), init_state)
+    }
+
+    #[test]
+    fn test_stochastic_measure() {
+        let n = 3;
+        let init_state = lower_bits_state();
+        let init = [(vec![0, 1, 2], InitialState::FullState(init_state.clone()))];
+        let mut state = FeynmanState::<f64>::new_from_initial_states(n, &init);
+        assert_eq!(
+            state.stochastic_measure(&vec![1, 2], 0.0),
+            vec![0.25, 0.25, 0.25, 0.25]
+        )
+    }
+
+    #[test]
+    fn test_bitflip_op_apply() -> Result<(), CircuitError> {
+        let n = 3;
+        let init = [(vec![0, 1, 2], InitialState::FullState(lower_bits_state()))];
+        let mut state = FeynmanState::<f64>::new_from_initial_states(n, &init);
+
+        for i in 0..4 {
+            assert_eq!(state.calculate_amplitude(i), Complex::new(0.5, 0.0))
+        }
+        for i in 4..1 << n {
+            assert_eq!(state.calculate_amplitude(i), Complex::zero())
+        }
+
+        // bitflip the largest bit
+        let op = make_matrix_op(
+            vec![0],
+            vec![
+                Complex::zero(),
+                Complex::one(),
+                Complex::one(),
+                Complex::zero(),
+            ],
+        )?;
+        state.apply_op(&op);
+
+        for i in 0..4 {
+            assert_eq!(state.calculate_amplitude(i), Complex::zero())
+        }
+        for i in 4..1 << n {
+            assert_eq!(state.calculate_amplitude(i), Complex::new(0.5, 0.0))
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_measure_op_apply() {
+        let n = 3;
+        let init = [(vec![0, 1, 2], InitialState::FullState(lower_bits_state()))];
+        let mut state = FeynmanState::<f64>::new_from_initial_states(n, &init);
+
+        let (m, p) = state.measure(&[0], None, 0.0);
+
+        assert_eq!(m, 0);
+        assert_eq!(p, 1.0);
+
+        let (m, p) = state.measure(
+            &[1],
+            Some(MeasuredCondition {
+                measured: 0,
+                prob: None,
+            }),
+            0.0,
+        );
+
+        assert_eq!(m, 0);
+        assert_eq!(p, 0.5);
+    }
+
+    #[test]
+    fn test_measure_effect() {
+        let n = 3;
+        let init = [(vec![0, 1, 2], InitialState::FullState(lower_bits_state()))];
+        let mut state = FeynmanState::<f64>::new_from_initial_states(n, &init);
+
+        let (m, p) = state.measure(
+            &[1],
+            Some(MeasuredCondition {
+                measured: 0,
+                prob: None,
+            }),
+            0.0,
+        );
+
+        assert_eq!(m, 0);
+        assert_eq!(p, 0.5);
+
+        let c = Complex::new(std::f64::consts::FRAC_1_SQRT_2, 0.0);
+        for i in 0..2 {
+            // Off by ~1e16
+            assert!((state.calculate_amplitude(i) - c).norm() < 1e-10);
+        }
+        for i in 3..1 << n {
+            assert_eq!(state.calculate_amplitude(i), Complex::zero())
         }
     }
 }

@@ -29,3 +29,7 @@ harness = false
 [[bench]]
 name = "circuit_bench"
 harness = false
+
+[[bench]]
+name = "feynman_bench"
+harness = false
