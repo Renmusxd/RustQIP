@@ -12,10 +12,15 @@ use num::{Complex, Zero};
 
 const DEFAULT_DEPTH: u64 = 5;
 
-/// TODO
+/// The FeynmanState backend calculates state amplitudes using the feynman path integral
+/// which means it is exponential with circuit depth, but has memory overhead linear with circuit
+/// depth and independent of number of qubits. This means this state is good for large but shallow
+/// circuits. If m is the number of qubits which have ops applied, allowing each qubit to be counted
+/// multiple time, then the runtime is O(2^m).
 #[derive(Debug)]
 pub struct FeynmanState<P: Precision> {
     ops: Vec<FeynmanOp<P>>,
+    parallel_depth: u64,
     substate: FeynmanThreadSafeState<P>,
 }
 
@@ -42,6 +47,29 @@ enum FeynmanPrecisionOp<'a, P: Precision> {
 }
 
 impl<P: Precision> FeynmanState<P> {
+    fn new_from_initial_states_and_depth(n: u64, states: &[(Vec<u64>, InitialState<P>)], parallel_depth: u64) -> Self {
+        let mag = states.iter().map(|(_, s)| s.get_magnitude()).product();
+
+        let mask = states.iter().fold(u64::MAX, |mask, (indices, _)| {
+            let submask = !sub_to_full(n, indices, u64::MAX, 0);
+            mask & submask
+        });
+
+        let substate = FeynmanThreadSafeState {
+            n,
+            mag,
+            input_offset: 0,
+            output_offset: 0,
+            initial_state: states.to_vec(),
+            noninit_mask: mask,
+        };
+        Self {
+            ops: vec![],
+            parallel_depth,
+            substate,
+        }
+    }
+
     fn make_precision_ops(&self) -> Vec<FeynmanPrecisionOp<P>> {
         self.ops
             .iter()
@@ -64,7 +92,7 @@ impl<P: Precision> FeynmanState<P> {
     pub fn calculate_amplitude(&self, m: u64) -> Complex<P> {
         let pops = self.make_precision_ops();
         self.substate
-            .rec_calculate_amplitude(m, &pops, DEFAULT_DEPTH)
+            .rec_calculate_amplitude(m, &pops, self.parallel_depth)
     }
 }
 
@@ -136,25 +164,7 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
     }
 
     fn new_from_initial_states(n: u64, states: &[(Vec<u64>, InitialState<P>)]) -> Self {
-        let mag = states.iter().map(|(_, s)| s.get_magnitude()).product();
-
-        let mask = states.iter().fold(u64::MAX, |mask, (indices, _)| {
-            let submask = !sub_to_full(n, indices, u64::MAX, 0);
-            mask & submask
-        });
-
-        let substate = FeynmanThreadSafeState {
-            n,
-            mag,
-            input_offset: 0,
-            output_offset: 0,
-            initial_state: states.to_vec(),
-            noninit_mask: mask,
-        };
-        Self {
-            ops: vec![],
-            substate,
-        }
+        Self::new_from_initial_states_and_depth(n, states, DEFAULT_DEPTH)
     }
 
     fn n(&self) -> u64 {
@@ -187,10 +197,7 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
     }
 
     fn soft_measure(&mut self, indices: &[u64], measured: Option<u64>, angle: f64) -> (u64, P) {
-        // TODO add angle usage
-        if angle != 0.0 {
-            unimplemented!()
-        };
+        self.rotate_basis(indices, angle);
 
         let measured = match measured {
             Some(measured) => measured,
@@ -224,6 +231,8 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
             Some(self.substate.input_offset),
             |index| substate.rec_calculate_amplitude(index, &pops, 0),
         );
+
+        self.rotate_basis(indices, -angle);
         (measured, p)
     }
 
@@ -232,15 +241,12 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
     }
 
     fn stochastic_measure(&mut self, indices: &[u64], angle: f64) -> Vec<P> {
-        // TODO add angle usage
-        if angle != 0.0 {
-            unimplemented!()
-        };
+        self.rotate_basis(indices, angle);
 
         let pops = self.make_precision_ops();
         let substate = &self.substate;
         let r = 0u64..1 << indices.len() as u64;
-        into_iter!(r)
+        let res = into_iter!(r)
             .map(|m| {
                 measure_prob_fn(
                     substate.n,
@@ -250,7 +256,9 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
                     |index| substate.rec_calculate_amplitude(index, &pops, 0),
                 )
             })
-            .collect()
+            .collect();
+        self.rotate_basis(indices, -angle);
+        res
     }
 
     fn into_state(self, order: Representation) -> Vec<Complex<P>> {

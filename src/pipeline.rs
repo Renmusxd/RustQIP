@@ -280,6 +280,20 @@ pub trait QuantumState<P: Precision> {
 
     /// Consume the QuantumState object and return the state as a vector of complex numbers.
     fn into_state(self, order: Representation) -> Vec<Complex<P>>;
+
+    /// Rotate to a new computational basis:
+    /// `|0'> =  cos(angle)|0> + sin(angle)|1>`
+    /// `|1'> = -sin(angle)|0> + cos(angle)|1>`
+    fn rotate_basis(&mut self, indices: &[u64], angle: f64) {
+        if angle != 0.0 {
+            let (sangle, cangle) = angle.sin_cos();
+            let basis_mat = from_reals(&[cangle, -sangle, sangle, cangle]);
+            indices.iter().for_each(|indx| {
+                let op = make_matrix_op(vec![*indx], basis_mat.clone()).unwrap();
+                self.apply_op(&op);
+            });
+        }
+    }
 }
 
 /// A basic representation of a quantum state, given by a vector of complex numbers stored
@@ -398,20 +412,6 @@ impl<P: Precision> LocalQuantumState<P> {
                 self.arena.clone()
             }
             Representation::BigEndian => self.state.clone(),
-        }
-    }
-
-    /// Rotate to a new computational basis:
-    /// `|0'> =  cos(angle)|0> + sin(angle)|1>`
-    /// `|1'> = -sin(angle)|0> + cos(angle)|1>`
-    pub fn rotate_basis(&mut self, indices: &[u64], angle: f64) {
-        if angle != 0.0 {
-            let (sangle, cangle) = angle.sin_cos();
-            let basis_mat = from_reals(&[cangle, -sangle, sangle, cangle]);
-            indices.iter().for_each(|indx| {
-                let op = make_matrix_op(vec![*indx], basis_mat.clone()).unwrap();
-                self.apply_op(&op);
-            });
         }
     }
 }
