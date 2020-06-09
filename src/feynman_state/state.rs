@@ -47,7 +47,11 @@ enum FeynmanPrecisionOp<'a, P: Precision> {
 }
 
 impl<P: Precision> FeynmanState<P> {
-    fn new_from_initial_states_and_depth(n: u64, states: &[(Vec<u64>, InitialState<P>)], parallel_depth: u64) -> Self {
+    fn new_from_initial_states_and_depth(
+        n: u64,
+        states: &[(Vec<u64>, InitialState<P>)],
+        parallel_depth: u64,
+    ) -> Self {
         let mag = states.iter().map(|(_, s)| s.get_magnitude()).product();
 
         let mask = states.iter().fold(u64::MAX, |mask, (indices, _)| {
