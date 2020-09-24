@@ -1,3 +1,4 @@
+use crate::feynman_state::memoization::FeynmanMemory;
 use crate::iterators::{
     par_sum_from_iterator, precision_get_index, precision_num_indices, sum_for_op_cols,
     PrecisionUnitaryOp,
@@ -22,6 +23,7 @@ pub struct FeynmanState<P: Precision> {
     ops: Vec<FeynmanOp<P>>,
     parallel_depth: u64,
     substate: FeynmanThreadSafeState<P>,
+    memory_size: usize,
 }
 
 #[derive(Debug)]
@@ -35,13 +37,13 @@ struct FeynmanThreadSafeState<P: Precision> {
 }
 
 #[derive(Debug)]
-enum FeynmanOp<P: Precision> {
+pub(crate) enum FeynmanOp<P: Precision> {
     OP(UnitaryOp),
     MEASUREMENT(u64, Vec<u64>, P),
 }
 
 #[derive(Debug)]
-enum FeynmanPrecisionOp<'a, P: Precision> {
+pub(crate) enum FeynmanPrecisionOp<'a, P: Precision> {
     OP(PrecisionUnitaryOp<'a, P>, Vec<u64>),
     MEASUREMENT(u64, Vec<u64>, P),
 }
@@ -71,6 +73,7 @@ impl<P: Precision> FeynmanState<P> {
             ops: vec![],
             parallel_depth,
             substate,
+            memory_size: 0,
         }
     }
 
@@ -92,11 +95,35 @@ impl<P: Precision> FeynmanState<P> {
             .collect()
     }
 
+    fn make_memory_container(
+        &self,
+        pops: &[FeynmanPrecisionOp<P>],
+    ) -> Option<(usize, FeynmanMemory<P>)> {
+        if self.memory_size > 0 && self.ops.len() > 1 {
+            let memory_depth = pops.len() / 2;
+            let sub_ops = &pops[..memory_depth];
+            let mut mem = FeynmanMemory::<P>::new(self.memory_size, sub_ops);
+            // TODO consider doing this recursively to cut down total runtime.
+            mem.iter_mut().for_each(|(i, c)| {
+                *c = self.substate.rec_calculate_amplitude(
+                    i as u64,
+                    sub_ops,
+                    self.parallel_depth,
+                    &None,
+                );
+            });
+            Some((memory_depth, mem))
+        } else {
+            None
+        }
+    }
+
     /// Calculate the amplitude of a given state.
     pub fn calculate_amplitude(&self, m: u64) -> Complex<P> {
         let pops = self.make_precision_ops();
+        let memory = self.make_memory_container(&pops);
         self.substate
-            .rec_calculate_amplitude(m, &pops, self.parallel_depth)
+            .rec_calculate_amplitude(m, &pops, self.parallel_depth, &memory)
     }
 }
 
@@ -106,7 +133,16 @@ impl<P: Precision> FeynmanThreadSafeState<P> {
         m: u64,
         ops: &[FeynmanPrecisionOp<P>],
         parallel_depth: u64,
+        memory: &Option<(usize, FeynmanMemory<P>)>,
     ) -> Complex<P> {
+        if let Some((memory_depth, memory)) = memory {
+            if ops.len() == *memory_depth {
+                if let Some(result) = memory.get(m as usize) {
+                    return *result;
+                }
+            }
+        }
+
         match ops {
             [] => {
                 // Check that the uninitialized bits are 0
@@ -136,7 +172,7 @@ impl<P: Precision> FeynmanThreadSafeState<P> {
                         };
                         let f = |(i, val): (u64, Complex<P>)| -> Complex<P> {
                             let colbits = sub_to_full(self.n, mat_indices, i, m);
-                            val * self.rec_calculate_amplitude(colbits, head, next_depth)
+                            val * self.rec_calculate_amplitude(colbits, head, next_depth, memory)
                         };
 
                         let nindices = mat_indices.len() as u64;
@@ -151,7 +187,7 @@ impl<P: Precision> FeynmanThreadSafeState<P> {
                     }
                     FeynmanPrecisionOp::MEASUREMENT(measured, indices, p) => {
                         if *measured == full_to_sub(self.n, indices, m) {
-                            self.rec_calculate_amplitude(m, head, parallel_depth) / p.sqrt()
+                            self.rec_calculate_amplitude(m, head, parallel_depth, memory) / p.sqrt()
                         } else {
                             Complex::zero()
                         }
@@ -203,13 +239,19 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
     fn soft_measure(&mut self, indices: &[u64], measured: Option<u64>, angle: f64) -> (u64, P) {
         self.rotate_basis(indices, angle);
 
+        let pops = self.make_precision_ops();
+        let memory = self.make_memory_container(&pops);
+        let substate = &self.substate;
         let measured = match measured {
             Some(measured) => measured,
             None => {
                 let r: P = P::from(rand::random::<f64>()).unwrap() * self.substate.mag;
                 let m = (0..1 << self.substate.n)
                     .try_fold(r, |r, i| {
-                        let p = self.calculate_amplitude(i).norm_sqr();
+                        let p = self
+                            .substate
+                            .rec_calculate_amplitude(i, &pops, DEFAULT_DEPTH, &memory)
+                            .norm_sqr();
                         let r = r - p;
                         if r <= P::zero() {
                             Err(i)
@@ -226,14 +268,12 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
                 extract_bits(m, &indices)
             }
         };
-        let pops = self.make_precision_ops();
-        let substate = &self.substate;
         let p = measure_prob_fn(
             self.substate.n,
             measured,
             indices,
             Some(self.substate.input_offset),
-            |index| substate.rec_calculate_amplitude(index, &pops, 0),
+            |index| substate.rec_calculate_amplitude(index, &pops, 0, &memory),
         );
 
         self.rotate_basis(indices, -angle);
@@ -248,6 +288,7 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
         self.rotate_basis(indices, angle);
 
         let pops = self.make_precision_ops();
+        let memory = self.make_memory_container(&pops);
         let substate = &self.substate;
         let r = 0u64..1 << indices.len() as u64;
         let res = into_iter!(r)
@@ -257,7 +298,7 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
                     m,
                     indices,
                     Some(substate.input_offset),
-                    |index| substate.rec_calculate_amplitude(index, &pops, 0),
+                    |index| substate.rec_calculate_amplitude(index, &pops, 0, &memory),
                 )
             })
             .collect();
