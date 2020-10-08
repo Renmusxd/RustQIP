@@ -916,7 +916,7 @@ impl<'a> fmt::Debug for ConditionalContextBuilder<'a> {
 
 impl<'a> ConditionalContextBuilder<'a> {
     /// Release the Register used to build this builder
-    pub fn release_register(self: Self) -> Register {
+    pub fn release_register(self) -> Register {
         match self.conditioned_register {
             Some(r) => r,
             None => panic!("Conditional context builder failed to populate register."),
