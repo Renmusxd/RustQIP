@@ -455,19 +455,11 @@ macro_rules! wrap_fn {
         wrap_fn!(@unwrap_regs($func, $rs) $($tail)*);
         let $name = $rs.pop().ok_or_else(|| $crate::CircuitError::new(format!("Error unwrapping {} for {}", stringify!($name), stringify!($func))))?;
     };
-    (@wrap_regs($rs:ident) $name:ident) => {
-        $rs.push($name);
-    };
-    (@wrap_regs($rs:ident) $name:ident, $($tail:tt)*) => {
-        $rs.push($name);
-        wrap_fn!(@wrap_regs($rs) $($tail)*);
-    };
     (@result_body($builder:expr, $func:expr, $rs:ident) $($tail:tt)*) => {
         {
             wrap_fn!(@unwrap_regs($func, $rs) $($tail)*);
             let wrap_fn!(@names () <- $($tail)*) = wrap_fn!(@invoke($func, $builder) () <- $($tail)*) ?;
-            let mut $rs: Vec<$crate::Register> = vec![];
-            wrap_fn!(@wrap_regs($rs) $($tail)*);
+            let $rs: Vec<$crate::Register> = vec![$($tail)*];
             Ok($rs)
         }
     };
@@ -475,8 +467,7 @@ macro_rules! wrap_fn {
         {
             wrap_fn!(@unwrap_regs($func, $rs) $($tail)*);
             let wrap_fn!(@names () <- $($tail)*) = wrap_fn!(@invoke($func, $builder) () <- $($tail)*);
-            let mut $rs: Vec<$crate::Register> = vec![];
-            wrap_fn!(@wrap_regs($rs) $($tail)*);
+            let $rs: Vec<$crate::Register> = vec![$($tail)*];
             Ok($rs)
         }
     };

@@ -38,14 +38,14 @@ struct FeynmanThreadSafeState<P: Precision> {
 
 #[derive(Debug)]
 pub(crate) enum FeynmanOp<P: Precision> {
-    OP(UnitaryOp),
-    MEASUREMENT(u64, Vec<u64>, P),
+    Op(UnitaryOp),
+    Measurement(u64, Vec<u64>, P),
 }
 
 #[derive(Debug)]
 pub(crate) enum FeynmanPrecisionOp<'a, P: Precision> {
-    OP(PrecisionUnitaryOp<'a, P>, Vec<u64>),
-    MEASUREMENT(u64, Vec<u64>, P),
+    Op(PrecisionUnitaryOp<'a, P>, Vec<u64>),
+    Measurement(u64, Vec<u64>, P),
 }
 
 impl<P: Precision> FeynmanState<P> {
@@ -81,15 +81,15 @@ impl<P: Precision> FeynmanState<P> {
         self.ops
             .iter()
             .map(|op| match op {
-                FeynmanOp::OP(op) => {
+                FeynmanOp::Op(op) => {
                     let pop = clone_as_precision_op(op);
                     let mat_indices: Vec<u64> = (0..precision_num_indices(&pop))
                         .map(|i| precision_get_index(&pop, i))
                         .collect();
-                    FeynmanPrecisionOp::OP(pop, mat_indices)
+                    FeynmanPrecisionOp::Op(pop, mat_indices)
                 }
-                FeynmanOp::MEASUREMENT(m, indices, p) => {
-                    FeynmanPrecisionOp::MEASUREMENT(*m, indices.clone(), *p)
+                FeynmanOp::Measurement(m, indices, p) => {
+                    FeynmanPrecisionOp::Measurement(*m, indices.clone(), *p)
                 }
             })
             .collect()
@@ -162,7 +162,7 @@ impl<P: Precision> FeynmanThreadSafeState<P> {
             slice => {
                 let head = &slice[0..slice.len() - 1];
                 match &slice[slice.len() - 1] {
-                    FeynmanPrecisionOp::OP(op, mat_indices) => {
+                    FeynmanPrecisionOp::Op(op, mat_indices) => {
                         // Maps from a op matrix column (from 0 to 2^nindices) to the value at that column
                         // for the row calculated above.
                         let next_depth = if parallel_depth > 0 {
@@ -185,7 +185,7 @@ impl<P: Precision> FeynmanThreadSafeState<P> {
                             sum_for_op_cols(nindices, matrow, op, f)
                         }
                     }
-                    FeynmanPrecisionOp::MEASUREMENT(measured, indices, p) => {
+                    FeynmanPrecisionOp::Measurement(measured, indices, p) => {
                         if *measured == full_to_sub(self.n, indices, m) {
                             self.rec_calculate_amplitude(m, head, parallel_depth, memory) / p.sqrt()
                         } else {
@@ -212,7 +212,7 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
     }
 
     fn apply_op_with_name(&mut self, _name: Option<&str>, op: &UnitaryOp) {
-        self.ops.push(FeynmanOp::OP(op.clone()))
+        self.ops.push(FeynmanOp::Op(op.clone()))
     }
 
     fn measure(
@@ -232,7 +232,7 @@ impl<P: Precision> QuantumState<P> for FeynmanState<P> {
             None => self.soft_measure(indices, None, angle),
         };
         self.ops
-            .push(FeynmanOp::MEASUREMENT(m, indices.to_vec(), p));
+            .push(FeynmanOp::Measurement(m, indices.to_vec(), p));
         (m, p)
     }
 
