@@ -231,7 +231,7 @@ impl<P: Precision> Iterator for FunctionOpIterator<P> {
             self.last_col = Some(colbits);
         };
         self.last_col
-            .map(|col| (col, Complex::from_polar(&P::one(), &self.theta)))
+            .map(|col| (col, Complex::from_polar(P::one(), self.theta)))
     }
 }
 

@@ -15,9 +15,9 @@ default = ["parallel"]
 parallel = ["rayon"]
 
 [dependencies]
-num = "^0.2"
-rand = "^0.7"
-rayon = {version = "^1.3", optional = true }
+num = "^0.4"
+rand = "^0.8"
+rayon = {version = "^1.5", optional = true }
 
 [dev-dependencies]
 bencher = "^0.1"
