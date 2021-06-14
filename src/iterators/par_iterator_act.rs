@@ -17,11 +17,11 @@ where
 {
     match &op {
         PrecisionUnitaryOp::Matrix(_, data) => {
-            let iter = bridge!(MatrixOpIterator::new(row, nindices, &data));
+            let iter = bridge!(MatrixOpIterator::new(row, nindices, data));
             iter.map(f).sum()
         }
         PrecisionUnitaryOp::SparseMatrix(_, data) => {
-            let iter = bridge!(SparseMatrixOpIterator::new(row, &data));
+            let iter = bridge!(SparseMatrixOpIterator::new(row, data));
             iter.map(f).sum()
         }
         PrecisionUnitaryOp::Swap(_, _) => {
@@ -55,7 +55,7 @@ where
 {
     match &op {
         PrecisionUnitaryOp::Matrix(_, data) => {
-            let iter_builder = |row: u64| MatrixOpIterator::new(row, n_op_indices, &data);
+            let iter_builder = |row: u64| MatrixOpIterator::new(row, n_op_indices, data);
             let iter = bridge!(ControlledOpIterator::new(
                 row,
                 n_control_indices,
@@ -65,7 +65,7 @@ where
             iter.map(f).sum()
         }
         PrecisionUnitaryOp::SparseMatrix(_, data) => {
-            let iter_builder = |row: u64| SparseMatrixOpIterator::new(row, &data);
+            let iter_builder = |row: u64| SparseMatrixOpIterator::new(row, data);
             let iter = bridge!(ControlledOpIterator::new(
                 row,
                 n_control_indices,

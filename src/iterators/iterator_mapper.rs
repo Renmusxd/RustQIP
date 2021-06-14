@@ -74,9 +74,9 @@ where
     F: FnOnce(&mut dyn Iterator<Item = (u64, Complex<P>)>) -> T,
 {
     match &op {
-        PrecisionUnitaryOp::Matrix(_, data) => f(&mut MatrixOpIterator::new(row, nindices, &data)),
+        PrecisionUnitaryOp::Matrix(_, data) => f(&mut MatrixOpIterator::new(row, nindices, data)),
         PrecisionUnitaryOp::SparseMatrix(_, data) => {
-            f(&mut SparseMatrixOpIterator::new(row, &data))
+            f(&mut SparseMatrixOpIterator::new(row, data))
         }
         PrecisionUnitaryOp::Swap(_, _) => f(&mut SwapOpIterator::new(row, nindices)),
         PrecisionUnitaryOp::Function(inputs, outputs, op_f) => {
@@ -104,7 +104,7 @@ where
 {
     match &op {
         PrecisionUnitaryOp::Matrix(_, data) => {
-            let iter_builder = |row: u64| MatrixOpIterator::new(row, n_op_indices, &data);
+            let iter_builder = |row: u64| MatrixOpIterator::new(row, n_op_indices, data);
             f(&mut ControlledOpIterator::new(
                 row,
                 n_control_indices,
@@ -113,7 +113,7 @@ where
             ))
         }
         PrecisionUnitaryOp::SparseMatrix(_, data) => {
-            let iter_builder = |row: u64| SparseMatrixOpIterator::new(row, &data);
+            let iter_builder = |row: u64| SparseMatrixOpIterator::new(row, data);
             f(&mut ControlledOpIterator::new(
                 row,
                 n_control_indices,

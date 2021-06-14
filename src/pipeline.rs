@@ -834,7 +834,7 @@ pub fn make_circuit_matrix<P: Precision>(
         .map(|indx| {
             let indx = flip_bits(n as usize, indx);
             let (state, _) =
-                run_local_with_init(&r, &[(indices.clone(), InitialState::Index(indx))]).unwrap();
+                run_local_with_init(r, &[(indices.clone(), InitialState::Index(indx))]).unwrap();
             (0..state.state.len())
                 .map(|i| {
                     let indx = if natural_order {

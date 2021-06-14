@@ -84,7 +84,7 @@ fn consolidate_column<P: Precision>(
 
     let path = pathfinder.path(column, &nonzeros)?;
     let results = if path.is_empty() {
-        let phi = sparse_value_at_coords(column as usize, column, &sparse_mat)
+        let phi = sparse_value_at_coords(column as usize, column, sparse_mat)
             .map_or_else(P::zero, |c| c.to_polar().1);
         if phi != P::zero() {
             apply_phase_to_row(-phi, &mut sparse_mat[column as usize]);
@@ -166,7 +166,7 @@ fn consolidate_column<P: Precision>(
                     }
                 }
 
-                let phi = sparse_value_at_coords(to_code as usize, column, &sparse_mat)
+                let phi = sparse_value_at_coords(to_code as usize, column, sparse_mat)
                     .map_or_else(P::zero, |c| c.to_polar().1);
                 if phi != P::zero() {
                     apply_phase_to_row(-phi, &mut sparse_mat[to_code as usize]);

@@ -112,10 +112,10 @@ impl<P: Precision> QuantumState<P> for PrintPipeline<P> {
                 println!()
             }
             _ => {
-                let indices: Vec<u64> = (0..num_indices(op)).map(|i| get_index(op, i)).collect();
+                let mut indices = (0..num_indices(op)).map(|i| get_index(op, i));
                 let mut tmp: Vec<String> = vec![];
                 for i in 0u64..self.n {
-                    if indices.contains(&i) {
+                    if indices.any(|x| x == i) {
                         tmp.push("o".to_string())
                     } else {
                         tmp.push("|".to_string())

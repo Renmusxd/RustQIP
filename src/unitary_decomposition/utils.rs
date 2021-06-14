@@ -11,10 +11,10 @@ pub(crate) fn gray_code(n: u64) -> Vec<u64> {
         vec![0, 1]
     } else {
         let subgray = gray_code(n - 1);
-        let reflected: Vec<_> = subgray.clone().into_iter().rev().collect();
+        let reflected = subgray.clone().into_iter().rev();
         let lhs = subgray;
-        let rhs: Vec<_> = reflected.into_iter().map(|x| x | (1 << (n - 1))).collect();
-        lhs.into_iter().chain(rhs.into_iter()).collect()
+        let rhs = reflected.into_iter().map(|x| x | (1 << (n - 1)));
+        lhs.into_iter().chain(rhs).collect()
     }
 }
 
@@ -91,7 +91,7 @@ pub(crate) fn apply_controlled_rotation<
     // So apply to the existing sparse mat by finding things which output |s0> and |s1>
     let (s, c) = theta.sin_cos();
 
-    let mut from_vec = std::mem::replace(&mut sparse_mat[from_row as usize], vec![]);
+    let mut from_vec = std::mem::take(&mut sparse_mat[from_row as usize]);
     // Get the things which now output to |s1>, edit those that still output to |s0>
     let mut from_branched: Vec<_> = iter_mut!(from_vec)
         .map(|(col, val)| {
@@ -101,7 +101,7 @@ pub(crate) fn apply_controlled_rotation<
         })
         .collect();
 
-    let mut to_vec = std::mem::replace(&mut sparse_mat[to_row as usize], vec![]);
+    let mut to_vec = std::mem::take(&mut sparse_mat[to_row as usize]);
     // Get the things which now output to |s0>, edit those that still output to |s1>
     let mut to_branched: Vec<_> = iter_mut!(to_vec)
         .map(|(col, val)| {

@@ -542,8 +542,8 @@ pub fn apply_ops<P: Precision>(
             let mat_indices: Vec<u64> = ops
                 .iter()
                 .map(|op| -> Vec<u64> {
-                    (0..precision_num_indices(&op))
-                        .map(|i| precision_get_index(&op, i))
+                    (0..precision_num_indices(op))
+                        .map(|i| precision_get_index(op, i))
                         .collect()
                 })
                 .flatten()
