@@ -72,7 +72,10 @@
 //! # The Program Macro
 //! While the borrow checker included in rust is a wonderful tool for checking that our registers
 //! are behaving, it can be cumbersome. For that reason qip also includes a macro which provides an
-//! API similar to that which you would see in quantum computing textbooks
+//! API similar to that which you would see in quantum computing textbooks.
+//! *Notice that due to a design choice in rust's `macro_rules!` we use vertical bars to group qubits
+//! and a comma must appear before the closing bar. This may be fixed in the future using procedural
+//! macros.*
 //! ```
 //! use qip::*;
 //! # fn main() -> Result<(), CircuitError> {
