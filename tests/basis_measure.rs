@@ -1,14 +1,10 @@
 extern crate num;
 extern crate qip;
 
-use qip::*;
+mod utils;
 
-fn assert_almost_eq(a: f64, b: f64, prec: i32) {
-    let mult = 10.0f64.powi(prec);
-    let (a, b) = (a * mult, b * mult);
-    let (a, b) = (a.round(), b.round());
-    assert_eq!(a / mult, b / mult);
-}
+use qip::*;
+use utils::assert_almost_eq;
 
 #[test]
 fn test_measure_true() -> Result<(), CircuitError> {

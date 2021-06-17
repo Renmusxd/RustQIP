@@ -1,8 +1,12 @@
 extern crate qip;
+
+mod utils;
+
 use qip::common_circuits::epr_pair;
 use qip::errors::CircuitError;
 use qip::pipeline::MeasurementHandle;
 use qip::*;
+use utils::assert_almost_eq;
 
 fn run_alice(b: &mut OpBuilder, epr_alice: Register, initial_angle: f64) -> MeasurementHandle {
     // Set up the qubits
@@ -54,13 +58,6 @@ fn run_bob(
     // ps[1] = sin(theta)^2
     // theta = atan(sqrt(ps[1]/ps[0]))
     Ok(ps[1].sqrt().atan2(ps[0].sqrt()))
-}
-
-fn assert_almost_eq(a: f64, b: f64, prec: i32) {
-    let mult = 10.0f64.powi(prec);
-    let (a, b) = (a * mult, b * mult);
-    let (a, b) = (a.round(), b.round());
-    assert_eq!(a / mult, b / mult);
 }
 
 #[test]
