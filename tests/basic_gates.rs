@@ -3,14 +3,7 @@ extern crate qip;
 
 use crate::pipeline::Representation;
 use qip::{state_ops::from_reals, *};
-
-// TODO: remove this if #23 lands
-fn assert_almost_eq(a: f64, b: f64, prec: i32) {
-    let mult = 10.0f64.powi(prec);
-    let (a, b) = (a * mult, b * mult);
-    let (a, b) = (a.round(), b.round());
-    assert_eq!(a / mult, b / mult);
-}
+mod utils;
 
 /// The gates we will be testing
 enum Gate {
@@ -264,7 +257,7 @@ fn hadamard() -> Result<(), CircuitError> {
     // map |0> to (|0> + |1>)/sqrt(2)
     // can't reliable get measurement as we are in superposition but can test
     // probabilities
-    assert_almost_eq(result.likelihood, 0.5, 10);
+    utils::assert_almost_eq(result.likelihood, 0.5, 10);
 
     // we can also make sure the imaginary parts of the state are unchanged
     assert_eq!(0.0, result.output_state[0].im);
@@ -279,7 +272,7 @@ fn hadamard() -> Result<(), CircuitError> {
     // map |1> to (|0> - |1>)/sqrt(2)
     // can't reliable get measurement as we are in superposition but can test
     // probabilities
-    assert_almost_eq(result.likelihood, 0.5, 10);
+    utils::assert_almost_eq(result.likelihood, 0.5, 10);
 
     // we can also make sure the imaginary parts of the state are unchanged
     assert_eq!(0.0, result.output_state[0].im);
