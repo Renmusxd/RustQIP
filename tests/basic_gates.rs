@@ -1,9 +1,10 @@
 extern crate num;
 extern crate qip;
 
+mod utils;
+
 use crate::pipeline::Representation;
 use qip::{state_ops::from_reals, *};
-mod utils;
 
 /// The gates we will be testing
 enum Gate {
