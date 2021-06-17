@@ -1,16 +1,12 @@
 extern crate num;
 extern crate qip;
 
+mod utils;
+
 use qip::pipeline::MeasurementHandle;
 use qip::qubits::RegisterHandle;
 use qip::*;
-
-fn assert_almost_eq(a: f64, b: f64, prec: i32) {
-    let mult = 10.0f64.powi(prec);
-    let (a, b) = (a * mult, b * mult);
-    let (a, b) = (a.round(), b.round());
-    assert_eq!(a / mult, b / mult);
-}
+use utils::assert_almost_eq;
 
 fn setup_cswap_circuit(
     vec_n: u64,
