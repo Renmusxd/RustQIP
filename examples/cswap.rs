@@ -1,6 +1,3 @@
-extern crate num;
-extern crate qip;
-
 use qip::*;
 
 fn main() -> Result<(), CircuitError> {

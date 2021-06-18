@@ -18,18 +18,3 @@ parallel = ["rayon"]
 num = "^0.4"
 rand = "^0.8"
 rayon = {version = "^1.5", optional = true }
-
-[dev-dependencies]
-bencher = "^0.1"
-
-[[bench]]
-name = "state_bench"
-harness = false
-
-[[bench]]
-name = "circuit_bench"
-harness = false
-
-[[bench]]
-name = "feynman_bench"
-harness = false

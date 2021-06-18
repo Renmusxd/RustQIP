@@ -75,9 +75,7 @@ where
 {
     match &op {
         PrecisionUnitaryOp::Matrix(_, data) => f(&mut MatrixOpIterator::new(row, nindices, data)),
-        PrecisionUnitaryOp::SparseMatrix(_, data) => {
-            f(&mut SparseMatrixOpIterator::new(row, data))
-        }
+        PrecisionUnitaryOp::SparseMatrix(_, data) => f(&mut SparseMatrixOpIterator::new(row, data)),
         PrecisionUnitaryOp::Swap(_, _) => f(&mut SwapOpIterator::new(row, nindices)),
         PrecisionUnitaryOp::Function(inputs, outputs, op_f) => {
             let input_n = inputs.len() as u64;

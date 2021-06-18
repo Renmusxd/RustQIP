@@ -1,6 +1,3 @@
-extern crate num;
-extern crate qip;
-
 mod utils;
 
 use qip::pipeline::MeasurementHandle;

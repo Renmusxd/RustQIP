@@ -1,6 +1,3 @@
-extern crate num;
-extern crate qip;
-
 use qip::builders::apply_function;
 use qip::pipeline::LocalQuantumState;
 use qip::*;

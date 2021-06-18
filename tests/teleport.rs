@@ -1,5 +1,3 @@
-extern crate qip;
-
 mod utils;
 
 use qip::common_circuits::epr_pair;

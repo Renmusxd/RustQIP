@@ -1,8 +1,7 @@
-extern crate qip;
-extern crate rand;
 use qip::common_circuits::epr_pair;
 use qip::pipeline::MeasurementHandle;
 use qip::*;
+use rand;
 
 fn run_alice(
     b: &mut OpBuilder,

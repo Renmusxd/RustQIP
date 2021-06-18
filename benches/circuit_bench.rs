@@ -1,9 +1,4 @@
-#[macro_use]
-extern crate bencher;
-extern crate num;
-extern crate qip;
-
-use bencher::Bencher;
+#![feature(test)]
 
 use qip::boolean_circuits::arithmetic::exp_mod;
 use qip::pipeline::run_with_init;
@@ -37,57 +32,59 @@ fn exp_mod_circuit(
     Ok((r, ha, hb, hm, hp))
 }
 
-fn bench_exp_mod_circuit_base(bencher: &mut Bencher) {
-    let n = 2;
-    let k = 1;
-    let (r, ha, hb, hm, hp) = exp_mod_circuit(n, k).unwrap();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    extern crate test;
+    use test::Bencher;
 
-    let a = 1;
-    let b = 1;
-    let m = 3;
-    let p = 1;
+    #[bench]
+    fn bench_exp_mod_circuit_base(bencher: &mut Bencher) {
+        let n = 2;
+        let k = 1;
+        let (r, ha, hb, hm, hp) = exp_mod_circuit(n, k).unwrap();
 
-    bencher.iter(|| {
-        run_with_init::<f64, SparseQuantumState<f64>>(
-            &r,
-            &[
-                ha.make_init_from_index(a).unwrap(),
-                hb.make_init_from_index(b).unwrap(),
-                hm.make_init_from_index(m).unwrap(),
-                hp.make_init_from_index(p).unwrap(),
-            ],
-        )
-        .unwrap();
-    });
+        let a = 1;
+        let b = 1;
+        let m = 3;
+        let p = 1;
+
+        bencher.iter(|| {
+            run_with_init::<f64, SparseQuantumState<f64>>(
+                &r,
+                &[
+                    ha.make_init_from_index(a).unwrap(),
+                    hb.make_init_from_index(b).unwrap(),
+                    hm.make_init_from_index(m).unwrap(),
+                    hp.make_init_from_index(p).unwrap(),
+                ],
+            )
+            .unwrap();
+        });
+    }
+
+    #[bench]
+    fn bench_exp_mod_circuit_rec(bencher: &mut Bencher) {
+        let n = 2;
+        let k = 2;
+        let (r, ha, hb, hm, hp) = exp_mod_circuit(n, k).unwrap();
+
+        let a = 1;
+        let b = 1;
+        let m = 3;
+        let p = 1;
+
+        bencher.iter(|| {
+            run_with_init::<f64, SparseQuantumState<f64>>(
+                &r,
+                &[
+                    ha.make_init_from_index(a).unwrap(),
+                    hb.make_init_from_index(b).unwrap(),
+                    hm.make_init_from_index(m).unwrap(),
+                    hp.make_init_from_index(p).unwrap(),
+                ],
+            )
+            .unwrap();
+        });
+    }
 }
-
-fn bench_exp_mod_circuit_rec(bencher: &mut Bencher) {
-    let n = 2;
-    let k = 2;
-    let (r, ha, hb, hm, hp) = exp_mod_circuit(n, k).unwrap();
-
-    let a = 1;
-    let b = 1;
-    let m = 3;
-    let p = 1;
-
-    bencher.iter(|| {
-        run_with_init::<f64, SparseQuantumState<f64>>(
-            &r,
-            &[
-                ha.make_init_from_index(a).unwrap(),
-                hb.make_init_from_index(b).unwrap(),
-                hm.make_init_from_index(m).unwrap(),
-                hp.make_init_from_index(p).unwrap(),
-            ],
-        )
-        .unwrap();
-    });
-}
-
-benchmark_group!(
-    benches,
-    bench_exp_mod_circuit_base,
-    bench_exp_mod_circuit_rec,
-);
-benchmark_main!(benches);

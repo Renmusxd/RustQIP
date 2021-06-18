@@ -1,5 +1,3 @@
-extern crate qip;
-
 use qip::common_circuits::epr_pair;
 use qip::errors::CircuitError;
 use qip::*;
