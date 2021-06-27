@@ -407,7 +407,7 @@ mod arithmetic_tests {
 
     fn assert_on_registers<
         F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
-        G: Fn(Vec<u64>, Vec<u64>, u64) ,
+        G: Fn(Vec<u64>, Vec<u64>, u64),
     >(
         b: &mut OpBuilder,
         rs: Vec<Register>,
@@ -677,13 +677,13 @@ mod arithmetic_tests {
 
     #[test]
     fn test_mod_times() -> Result<(), CircuitError> {
-        let n = 2;
-        let k = 2;
+        let circuit_n = 2;
+        let mod_k = 2;
         let mut b = OpBuilder::new();
-        let ra = b.register(n + 1)?;
-        let rb = b.register(k)?;
-        let rm = b.register(n)?;
-        let rp = b.register(n + 1)?;
+        let ra = b.register(circuit_n + 1)?;
+        let rb = b.register(mod_k)?;
+        let rm = b.register(circuit_n)?;
+        let rp = b.register(circuit_n + 1)?;
 
         assert_on_registers_and_filter(
             &mut b,
@@ -704,7 +704,7 @@ mod arithmetic_tests {
                 assert_eq!(q_b, b);
                 assert_eq!(q_m, m);
                 assert_eq!(q_p, (p + a * b) % m);
-                assert_eq!(full >> (3 * n + k + 2), 0);
+                assert_eq!(full >> (3 * circuit_n + mod_k + 2), 0);
             },
             |befores| {
                 let a = befores[0];
@@ -718,11 +718,11 @@ mod arithmetic_tests {
 
     #[test]
     fn test_mod_squared() -> Result<(), CircuitError> {
-        let n = 2;
+        let circuit_n = 2;
         let mut b = OpBuilder::new();
-        let ra = b.register(n + 1)?;
-        let rm = b.register(n)?;
-        let rs = b.register(n + 1)?;
+        let ra = b.register(circuit_n + 1)?;
+        let rm = b.register(circuit_n)?;
+        let rs = b.register(circuit_n + 1)?;
 
         assert_on_registers_and_filter(
             &mut b,
@@ -742,7 +742,7 @@ mod arithmetic_tests {
                 assert_eq!(q_a, a);
                 assert_eq!(q_m, m);
                 assert_eq!(q_s, (s + a * a) % m);
-                assert_eq!(full >> (3 * n + 1), 0);
+                assert_eq!(full >> (3 * circuit_n + 1), 0);
             },
             |befores| {
                 let a = befores[0];

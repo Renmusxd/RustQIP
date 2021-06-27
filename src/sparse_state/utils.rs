@@ -159,7 +159,7 @@ mod sparse_tests {
         let m = 0;
         let state = make_state(&[0, 1, 2, 3], &[0.5, 0.5, 0.5, 0.5]);
         let p = sparse_measure_prob(n, m, &[0], &state);
-        assert_eq!(p, 0.5);
+        assert!((p - 0.5f64).abs() < f64::EPSILON);
 
         let output = sparse_measure_state(n, &[0], (m, p), state);
 
@@ -177,7 +177,7 @@ mod sparse_tests {
         let m = 1;
         let state = make_state(&[0, 1, 2, 3], &[0.5, 0.5, 0.5, 0.5]);
         let p = sparse_measure_prob(n, m, &[0], &state);
-        assert_eq!(p, 0.5);
+        assert!((p - 0.5f64).abs() < f64::EPSILON);
 
         let output = sparse_measure_state(n, &[0], (m, p), state);
 

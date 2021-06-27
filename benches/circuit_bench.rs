@@ -40,9 +40,9 @@ mod tests {
 
     #[bench]
     fn bench_exp_mod_circuit_base(bencher: &mut Bencher) {
-        let n = 2;
-        let k = 1;
-        let (r, ha, hb, hm, hp) = exp_mod_circuit(n, k).unwrap();
+        let circuit_n = 2;
+        let mod_k = 1;
+        let (reg, ha, hb, hm, hp) = exp_mod_circuit(circuit_n, mod_k).unwrap();
 
         let a = 1;
         let b = 1;
@@ -51,7 +51,7 @@ mod tests {
 
         bencher.iter(|| {
             run_with_init::<f64, SparseQuantumState<f64>>(
-                &r,
+                &reg,
                 &[
                     ha.make_init_from_index(a).unwrap(),
                     hb.make_init_from_index(b).unwrap(),
@@ -65,9 +65,9 @@ mod tests {
 
     #[bench]
     fn bench_exp_mod_circuit_rec(bencher: &mut Bencher) {
-        let n = 2;
-        let k = 2;
-        let (r, ha, hb, hm, hp) = exp_mod_circuit(n, k).unwrap();
+        let circuit_n = 2;
+        let mod_k = 2;
+        let (reg, ha, hb, hm, hp) = exp_mod_circuit(circuit_n, mod_k).unwrap();
 
         let a = 1;
         let b = 1;
@@ -76,7 +76,7 @@ mod tests {
 
         bencher.iter(|| {
             run_with_init::<f64, SparseQuantumState<f64>>(
-                &r,
+                &reg,
                 &[
                     ha.make_init_from_index(a).unwrap(),
                     hb.make_init_from_index(b).unwrap(),

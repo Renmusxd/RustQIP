@@ -66,11 +66,11 @@ fn test_cswap_orthogonal() -> Result<(), CircuitError> {
 }
 
 /// sin((2 * pi * i * w / L) + d) normalized
-fn sin_wave(n: u64, w: f64, d: f64) -> Vec<Complex<f64>> {
-    let l = 1 << n;
-    let state: Vec<_> = (0..l)
+fn sin_wave(n: u64, freq: f64, d: f64) -> Vec<Complex<f64>> {
+    let len = 1 << n;
+    let state: Vec<_> = (0..len)
         .map(|i| -> Complex<f64> {
-            let v = (d + (std::f64::consts::PI * w * i as f64 / l as f64)).sin();
+            let v = (d + (std::f64::consts::PI * freq * i as f64 / len as f64)).sin();
             Complex { re: v, im: 0.0 }
         })
         .collect();

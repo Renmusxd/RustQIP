@@ -293,7 +293,7 @@ mod measurement_tests {
         let m = 0;
         let input = from_reals(&[0.5, 0.5, 0.5, 0.5]);
         let p = measure_prob(n, m, &[0], &input, None);
-        assert_eq!(p, 0.5);
+        assert!((p - 0.5f64).abs() < f64::EPSILON);
 
         let mut output = input.clone();
         measure_state(n, &[0], (m, p), &input, &mut output, None);
@@ -312,7 +312,7 @@ mod measurement_tests {
         let m = 1;
         let input = from_reals(&[0.5, 0.5, 0.5, 0.5]);
         let p = measure_prob(n, m, &[0], &input, None);
-        assert_eq!(p, 0.5);
+        assert!((p - 0.5f64).abs() < f64::EPSILON);
 
         let mut output = input.clone();
         measure_state(n, &[0], (m, p), &input, &mut output, None);

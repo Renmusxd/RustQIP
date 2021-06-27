@@ -497,7 +497,7 @@ mod feynmann_test {
         let (m, p) = state.measure(&[0], None, 0.0);
 
         assert_eq!(m, 0);
-        assert_eq!(p, 1.0);
+        assert!((p - 1.0).abs() < f64::EPSILON);
 
         let (m, p) = state.measure(
             &[1],
@@ -509,7 +509,7 @@ mod feynmann_test {
         );
 
         assert_eq!(m, 0);
-        assert_eq!(p, 0.5);
+        assert!((p - 0.5).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -528,7 +528,7 @@ mod feynmann_test {
         );
 
         assert_eq!(m, 0);
-        assert_eq!(p, 0.5);
+        assert!((p - 0.5).abs() < f64::EPSILON);
 
         let c = Complex::new(std::f64::consts::FRAC_1_SQRT_2, 0.0);
         for i in 0..2 {

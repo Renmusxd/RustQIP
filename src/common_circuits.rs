@@ -54,6 +54,7 @@ mod common_circuit_tests {
     use super::*;
     use crate::run_debug;
 
+    #[allow(deprecated)]
     #[test]
     fn test_work_on() -> Result<(), CircuitError> {
         let mut b = OpBuilder::new();
