@@ -358,7 +358,7 @@ mod arithmetic_tests {
 
     fn assert_on_registers_and_filter<
         F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
-        G: Fn(Vec<u64>, Vec<u64>, u64) -> (),
+        G: Fn(Vec<u64>, Vec<u64>, u64),
         FilterFn: Fn(&[u64]) -> bool,
     >(
         b: &mut OpBuilder,
@@ -407,7 +407,7 @@ mod arithmetic_tests {
 
     fn assert_on_registers<
         F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
-        G: Fn(Vec<u64>, Vec<u64>, u64) -> (),
+        G: Fn(Vec<u64>, Vec<u64>, u64) ,
     >(
         b: &mut OpBuilder,
         rs: Vec<Register>,

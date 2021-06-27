@@ -20,7 +20,7 @@ struct GateResult {
 }
 
 /// Run a qubit with provided initial state and gate
-fn run(input_state: &Vec<num::Complex<f64>>, gate: Option<Gate>) -> GateResult {
+fn run(input_state: &[num::Complex<f64>], gate: Option<Gate>) -> GateResult {
     let mut b = OpBuilder::new();
     let q = b.qubit();
     let h = q.handle();
@@ -63,7 +63,7 @@ fn no_gates() -> Result<(), CircuitError> {
     let result = run(&input_state, None);
 
     assert_eq!(result.measurement, 0);
-    assert_eq!(result.likelihood, 1.0);
+    utils::assert_almost_eq(result.likelihood, 1.0, 6);
     assert_eq!(result.output_state, input_state);
 
     // create initial state |1>
@@ -72,7 +72,7 @@ fn no_gates() -> Result<(), CircuitError> {
     let result = run(&input_state, None);
 
     assert_eq!(result.measurement, 1);
-    assert_eq!(result.likelihood, 1.0);
+    utils::assert_almost_eq(result.likelihood, 1.0, 6);
     assert_eq!(result.output_state, input_state);
 
     Ok(())
@@ -91,13 +91,13 @@ fn pauli_x() -> Result<(), CircuitError> {
     let result = run(&input_state, Some(Gate::PauliX));
 
     assert_eq!(result.measurement, 1);
-    assert_eq!(result.likelihood, 1.0);
+    utils::assert_almost_eq(result.likelihood, 1.0, 10);
 
     // map |0> to |1>
-    assert_eq!(0.0, result.output_state[0].re);
-    assert_eq!(0.0, result.output_state[0].im);
-    assert_eq!(1.0, result.output_state[1].re);
-    assert_eq!(0.0, result.output_state[1].im);
+    utils::assert_almost_eq(0.0, result.output_state[0].re, 10);
+    utils::assert_almost_eq(0.0, result.output_state[0].im, 10);
+    utils::assert_almost_eq(1.0, result.output_state[1].re, 10);
+    utils::assert_almost_eq(0.0, result.output_state[1].im, 10);
 
     // create initial state |1>
     let input_state = from_reals(&[0.0, 1.0]);
@@ -105,13 +105,13 @@ fn pauli_x() -> Result<(), CircuitError> {
     let result = run(&input_state, Some(Gate::PauliX));
 
     assert_eq!(result.measurement, 0);
-    assert_eq!(result.likelihood, 1.0);
+    utils::assert_almost_eq(result.likelihood, 1.0, 10);
 
     // map |1> to |0>
-    assert_eq!(1.0, result.output_state[0].re);
-    assert_eq!(0.0, result.output_state[0].im);
-    assert_eq!(0.0, result.output_state[1].re);
-    assert_eq!(0.0, result.output_state[1].im);
+    utils::assert_almost_eq(1.0, result.output_state[0].re, 10);
+    utils::assert_almost_eq(0.0, result.output_state[0].im, 10);
+    utils::assert_almost_eq(0.0, result.output_state[1].re, 10);
+    utils::assert_almost_eq(0.0, result.output_state[1].im, 10);
 
     Ok(())
 }
@@ -129,13 +129,13 @@ fn pauli_y() -> Result<(), CircuitError> {
     let result = run(&input_state, Some(Gate::PauliY));
 
     assert_eq!(result.measurement, 1);
-    assert_eq!(result.likelihood, 1.0);
+    utils::assert_almost_eq(result.likelihood, 1.0, 10);
 
     // map |0> to i|1>
-    assert_eq!(0.0, result.output_state[0].re);
-    assert_eq!(0.0, result.output_state[0].im);
-    assert_eq!(0.0, result.output_state[1].re);
-    assert_eq!(1.0, result.output_state[1].im);
+    utils::assert_almost_eq(0.0, result.output_state[0].re, 10);
+    utils::assert_almost_eq(0.0, result.output_state[0].im, 10);
+    utils::assert_almost_eq(0.0, result.output_state[1].re, 10);
+    utils::assert_almost_eq(1.0, result.output_state[1].im, 10);
 
     // create initial state |1>
     let input_state = from_reals(&[0.0, 1.0]);
@@ -143,13 +143,13 @@ fn pauli_y() -> Result<(), CircuitError> {
     let result = run(&input_state, Some(Gate::PauliY));
 
     assert_eq!(result.measurement, 0);
-    assert_eq!(result.likelihood, 1.0);
+    utils::assert_almost_eq(result.likelihood, 1.0, 10);
 
     // map |1> to -i|0>
-    assert_eq!(0.0, result.output_state[0].re);
-    assert_eq!(-1.0, result.output_state[0].im);
-    assert_eq!(0.0, result.output_state[1].re);
-    assert_eq!(0.0, result.output_state[1].im);
+    utils::assert_almost_eq(0.0, result.output_state[0].re, 10);
+    utils::assert_almost_eq(-1.0, result.output_state[0].im, 10);
+    utils::assert_almost_eq(0.0, result.output_state[1].re, 10);
+    utils::assert_almost_eq(0.0, result.output_state[1].im, 10);
 
     Ok(())
 }
@@ -167,7 +167,7 @@ fn pauli_z() -> Result<(), CircuitError> {
     let result = run(&input_state, Some(Gate::PauliZ));
 
     assert_eq!(result.measurement, 0);
-    assert_eq!(result.likelihood, 1.0);
+    utils::assert_almost_eq(result.likelihood, 1.0, 10);
 
     // unchanged
     assert_eq!(input_state, result.output_state);
@@ -178,13 +178,13 @@ fn pauli_z() -> Result<(), CircuitError> {
     let result = run(&input_state, Some(Gate::PauliZ));
 
     assert_eq!(result.measurement, 1);
-    assert_eq!(result.likelihood, 1.0);
+    utils::assert_almost_eq(result.likelihood, 1.0, 10);
 
     // map |1> to |-1>
-    assert_eq!(0.0, result.output_state[0].re);
-    assert_eq!(0.0, result.output_state[0].im);
-    assert_eq!(-1.0, result.output_state[1].re);
-    assert_eq!(0.0, result.output_state[1].im);
+    utils::assert_almost_eq(0.0, result.output_state[0].re, 10);
+    utils::assert_almost_eq(0.0, result.output_state[0].im, 10);
+    utils::assert_almost_eq(-1.0, result.output_state[1].re, 10);
+    utils::assert_almost_eq(0.0, result.output_state[1].im, 10);
 
     Ok(())
 }
@@ -204,7 +204,7 @@ fn phase_shifts() -> Result<(), CircuitError> {
 
     // probabilities are unchanged
     assert_eq!(result.measurement, 0);
-    assert_eq!(result.likelihood, 1.0);
+    utils::assert_almost_eq(result.likelihood, 1.0, 10);
 
     // map |0> to |0>
     // TODO: This is not working, research why.
@@ -218,7 +218,7 @@ fn phase_shifts() -> Result<(), CircuitError> {
 
     // probabilities are unchanged
     assert_eq!(result.measurement, 1);
-    assert_eq!(result.likelihood, 1.0);
+    utils::assert_almost_eq(result.likelihood, 1.0, 10);
 
     // map |1> to e^(i*theta)|-1>
     assert_ne!(input_state, result.output_state);
@@ -231,7 +231,7 @@ fn phase_shifts() -> Result<(), CircuitError> {
 
     // probabilities are unchanged
     assert_eq!(result.measurement, 1);
-    assert_eq!(result.likelihood, 1.0);
+    utils::assert_almost_eq(result.likelihood, 1.0, 10);
 
     // map to e^(i*theta)|-1> to |1>
     assert_eq!(input_state, result.output_state);
@@ -258,8 +258,8 @@ fn hadamard() -> Result<(), CircuitError> {
     utils::assert_almost_eq(result.likelihood, 0.5, 10);
 
     // we can also make sure the imaginary parts of the state are unchanged
-    assert_eq!(0.0, result.output_state[0].im);
-    assert_eq!(0.0, result.output_state[1].im);
+    utils::assert_almost_eq(0.0, result.output_state[0].im, 10);
+    utils::assert_almost_eq(0.0, result.output_state[1].im, 10);
 
     // create initial state |1>
     let input_state = from_reals(&[0.0, 1.0]);
@@ -273,8 +273,8 @@ fn hadamard() -> Result<(), CircuitError> {
     utils::assert_almost_eq(result.likelihood, 0.5, 10);
 
     // we can also make sure the imaginary parts of the state are unchanged
-    assert_eq!(0.0, result.output_state[0].im);
-    assert_eq!(0.0, result.output_state[1].im);
+    utils::assert_almost_eq(0.0, result.output_state[0].im, 10);
+    utils::assert_almost_eq(0.0, result.output_state[1].im, 10);
 
     Ok(())
 }

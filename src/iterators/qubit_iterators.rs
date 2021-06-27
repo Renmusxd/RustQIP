@@ -246,7 +246,7 @@ mod iterator_tests {
         let n = 1u64;
         let mat: Vec<Vec<f64>> = (0..1 << n)
             .map(|i| -> Vec<f64> {
-                let d = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
+                let d = from_reals(&[0.0, 1.0, 1.0, 0.0]);
                 let it = MatrixOpIterator::new(i, n, &d);
                 let v: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
                 it.fold(v, |mut v, (indx, _)| {
@@ -310,7 +310,7 @@ mod iterator_tests {
     fn test_c_iterator() {
         let n = 2u64;
 
-        let d = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
+        let d = from_reals(&[0.0, 1.0, 1.0, 0.0]);
         let builder = |r: u64| MatrixOpIterator::new(r, n >> 1, &d);
 
         let mat: Vec<Vec<f64>> = (0..1 << n)

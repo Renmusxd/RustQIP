@@ -446,10 +446,10 @@ mod feynmann_test {
     fn test_stochastic_measure() {
         let n = 3;
         let init_state = lower_bits_state();
-        let init = [(vec![0, 1, 2], InitialState::FullState(init_state.clone()))];
+        let init = [(vec![0, 1, 2], InitialState::FullState(init_state))];
         let mut state = FeynmanState::<f64>::new_from_initial_states(n, &init);
         assert_eq!(
-            state.stochastic_measure(&vec![1, 2], 0.0),
+            state.stochastic_measure(&[1, 2], 0.0),
             vec![0.25, 0.25, 0.25, 0.25]
         )
     }

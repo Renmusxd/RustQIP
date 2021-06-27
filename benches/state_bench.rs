@@ -6,7 +6,7 @@ use qip::state_ops::*;
 
 /// Make the full op matrix from `ops`.
 /// Not very efficient, use only for debugging.
-fn make_ops_matrix(n: u64, ops: &Vec<&UnitaryOp>) -> Vec<Vec<Complex<f64>>> {
+fn make_ops_matrix(n: u64, ops: &[&UnitaryOp]) -> Vec<Vec<Complex<f64>>> {
     let zeros: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     (0..1 << n)
         .map(|i| {
@@ -32,10 +32,10 @@ mod tests {
     fn bench_identity(b: &mut Bencher) {
         let n = 3;
 
-        let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
+        let mat = from_reals(&[1.0, 0.0, 0.0, 1.0]);
 
         let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
-        let ops_ref = ops.iter().collect();
+        let ops_ref = ops.iter().collect::<Vec<_>>();
 
         let mat_nested = make_ops_matrix(n, &ops_ref);
         let mat = mat_nested.into_iter().flatten().collect();
@@ -53,10 +53,10 @@ mod tests {
         let n = 3;
 
         let mult = (1.0 / 2.0f64).sqrt();
-        let mat = from_reals(&vec![mult, mult, mult, -mult]);
+        let mat = from_reals(&[mult, mult, mult, -mult]);
 
         let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
-        let ops_ref = ops.iter().collect();
+        let ops_ref = ops.iter().collect::<Vec<_>>();
 
         let mat_nested = make_ops_matrix(n, &ops_ref);
         let mat = mat_nested.into_iter().flatten().collect();
@@ -73,7 +73,7 @@ mod tests {
     fn bench_cidentity(b: &mut Bencher) {
         let n = 3;
 
-        let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
+        let mat = from_reals(&[1.0, 0.0, 0.0, 1.0]);
         let op = make_control_op((0..n - 1).collect(), Matrix(vec![n - 1], mat)).unwrap();
 
         let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
@@ -87,10 +87,10 @@ mod tests {
     fn bench_identity_larger(b: &mut Bencher) {
         let n = 8;
 
-        let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
+        let mat = from_reals(&[1.0, 0.0, 0.0, 1.0]);
 
         let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
-        let ops_ref = ops.iter().collect();
+        let ops_ref = ops.iter().collect::<Vec<_>>();
 
         let mat_nested = make_ops_matrix(n, &ops_ref);
         let mat = mat_nested.into_iter().flatten().collect();
@@ -108,10 +108,10 @@ mod tests {
         let n = 8;
 
         let mult = (1.0 / 2.0f64).sqrt();
-        let mat = from_reals(&vec![mult, mult, mult, -mult]);
+        let mat = from_reals(&[mult, mult, mult, -mult]);
 
         let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
-        let ops_ref = ops.iter().collect();
+        let ops_ref = ops.iter().collect::<Vec<_>>();
 
         let mat_nested = make_ops_matrix(n, &ops_ref);
         let mat = mat_nested.into_iter().flatten().collect();
@@ -128,7 +128,7 @@ mod tests {
     fn bench_cidentity_larger(b: &mut Bencher) {
         let n = 8;
 
-        let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
+        let mat = from_reals(&[1.0, 0.0, 0.0, 1.0]);
         let op = make_matrix_op(vec![n - 1], mat).unwrap();
         let op = make_control_op((0..n - 1).collect(), op).unwrap();
 
@@ -143,7 +143,7 @@ mod tests {
     fn bench_cidentity_giant(b: &mut Bencher) {
         let n = 16;
 
-        let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
+        let mat = from_reals(&[1.0, 0.0, 0.0, 1.0]);
         let c_indices = (0..n - 1).collect();
         let op = make_matrix_op(vec![n - 1], mat).unwrap();
         let op = make_control_op(c_indices, op).unwrap();
@@ -159,7 +159,7 @@ mod tests {
     fn bench_cidentity_giant_halfprec(b: &mut Bencher) {
         let n = 16;
 
-        let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
+        let mat = from_reals(&[1.0, 0.0, 0.0, 1.0]);
         let c_indices = (0..n - 1).collect();
         let op = make_matrix_op(vec![n - 1], mat).unwrap();
         let op = make_control_op(c_indices, op).unwrap();
@@ -175,7 +175,7 @@ mod tests {
     fn bench_apply_two_swaps_small(b: &mut Bencher) {
         let n = 3;
 
-        let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
+        let mat = from_reals(&[0.0, 1.0, 1.0, 0.0]);
         let op1 = make_matrix_op(vec![0], mat.clone()).unwrap();
         let op2 = make_matrix_op(vec![1], mat).unwrap();
 
@@ -193,7 +193,7 @@ mod tests {
     fn bench_apply_two_swaps_small_multiops(b: &mut Bencher) {
         let n = 3;
 
-        let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
+        let mat = from_reals(&[0.0, 1.0, 1.0, 0.0]);
         let op1 = make_matrix_op(vec![0], mat.clone()).unwrap();
         let op2 = make_matrix_op(vec![1], mat).unwrap();
 
@@ -213,7 +213,7 @@ mod tests {
     fn bench_apply_two_swaps_large(b: &mut Bencher) {
         let n = 16;
 
-        let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
+        let mat = from_reals(&[0.0, 1.0, 1.0, 0.0]);
         let op1 = make_matrix_op(vec![0], mat.clone()).unwrap();
         let op2 = make_matrix_op(vec![1], mat).unwrap();
 
@@ -231,7 +231,7 @@ mod tests {
     fn bench_apply_two_swaps_large_multiops(b: &mut Bencher) {
         let n = 16;
 
-        let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
+        let mat = from_reals(&[0.0, 1.0, 1.0, 0.0]);
         let op1 = make_matrix_op(vec![0], mat.clone()).unwrap();
         let op2 = make_matrix_op(vec![1], mat).unwrap();
 
@@ -251,7 +251,7 @@ mod tests {
     fn bench_apply_many_swaps_small(b: &mut Bencher) {
         let n = 5;
 
-        let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
+        let mat = from_reals(&[0.0, 1.0, 1.0, 0.0]);
         let ops: Vec<_> = (0..n)
             .map(|indx| make_matrix_op(vec![indx], mat.clone()).unwrap())
             .collect();
@@ -270,7 +270,7 @@ mod tests {
     fn bench_apply_many_swaps_small_multiops(b: &mut Bencher) {
         let n = 5;
 
-        let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
+        let mat = from_reals(&[0.0, 1.0, 1.0, 0.0]);
         let ops: Vec<_> = (0..n)
             .map(|indx| make_matrix_op(vec![indx], mat.clone()).unwrap())
             .collect();
@@ -289,7 +289,7 @@ mod tests {
     fn bench_apply_many_swaps_large(b: &mut Bencher) {
         let n = 10;
 
-        let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
+        let mat = from_reals(&[0.0, 1.0, 1.0, 0.0]);
         let ops: Vec<_> = (0..n)
             .map(|indx| make_matrix_op(vec![indx], mat.clone()).unwrap())
             .collect();
@@ -308,7 +308,7 @@ mod tests {
     fn bench_apply_many_swaps_large_multiops(b: &mut Bencher) {
         let n = 10;
 
-        let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
+        let mat = from_reals(&[0.0, 1.0, 1.0, 0.0]);
         let ops: Vec<_> = (0..n)
             .map(|indx| make_matrix_op(vec![indx], mat.clone()).unwrap())
             .collect();

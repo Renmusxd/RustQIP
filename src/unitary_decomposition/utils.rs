@@ -240,7 +240,7 @@ mod unitary_decomp_tests {
     #[test]
     fn test_transpose() {
         let mat = vec![vec![(0, 1), (1, 2)], vec![(0, 3), (1, 4)]];
-        let transpose_mat = transpose_sparse(mat.clone());
+        let transpose_mat = transpose_sparse(mat);
         let expected_mat = vec![vec![(0, 1), (1, 3)], vec![(0, 2), (1, 4)]];
         assert_eq!(transpose_mat, expected_mat);
     }

@@ -17,7 +17,7 @@ mod tests {
         let indices = (0..n).collect::<Vec<_>>();
         let mut state = FeynmanState::<f64>::new(n);
 
-        let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
+        let mat = from_reals(&[1.0, 0.0, 0.0, 1.0]);
         let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
         ops.iter().for_each(|op| state.apply_op(op));
 
@@ -31,7 +31,7 @@ mod tests {
         let mut state = FeynmanState::<f64>::new(n);
 
         let mult = (1.0 / 2.0f64).sqrt();
-        let mat = from_reals(&vec![mult, mult, mult, -mult]);
+        let mat = from_reals(&[mult, mult, mult, -mult]);
         let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
         ops.iter().for_each(|op| state.apply_op(op));
 
@@ -44,7 +44,7 @@ mod tests {
         let indices = (0..n).collect::<Vec<_>>();
         let mut state = FeynmanState::<f64>::new(n);
 
-        let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
+        let mat = from_reals(&[1.0, 0.0, 0.0, 1.0]);
         let op = make_control_op((0..n - 1).collect(), Matrix(vec![n - 1], mat)).unwrap();
         state.apply_op(&op);
 
@@ -57,7 +57,7 @@ mod tests {
         let indices = (0..n).collect::<Vec<_>>();
         let mut state = FeynmanState::<f64>::new(n);
 
-        let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
+        let mat = from_reals(&[1.0, 0.0, 0.0, 1.0]);
         let c_indices = (0..n - 1).collect();
         let op = make_matrix_op(vec![n - 1], mat).unwrap();
         let op = make_control_op(c_indices, op).unwrap();
@@ -73,7 +73,7 @@ mod tests {
         let mut state = FeynmanState::<f64>::new(n);
 
         let mult = (1.0 / 2.0f64).sqrt();
-        let mat = from_reals(&vec![mult, mult, mult, -mult]);
+        let mat = from_reals(&[mult, mult, mult, -mult]);
 
         let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
         ops.iter().for_each(|op| state.apply_op(op));
@@ -88,14 +88,14 @@ mod tests {
 
         for _ in 0..3 {
             let mult = (1.0 / 2.0f64).sqrt();
-            let mat = from_reals(&vec![mult, mult, mult, -mult]);
+            let mat = from_reals(&[mult, mult, mult, -mult]);
             for i in 0..n {
                 let op = make_matrix_op(vec![i], mat.clone()).unwrap();
                 state.apply_op(&op);
             }
         }
-        let mat = from_reals(&vec![1.0, 0.0, 0.0, 1.0]);
-        let op = make_matrix_op(vec![0], mat.clone()).unwrap();
+        let mat = from_reals(&[1.0, 0.0, 0.0, 1.0]);
+        let op = make_matrix_op(vec![0], mat).unwrap();
         state.apply_op(&op);
 
         b.iter(|| state.calculate_amplitude(0));

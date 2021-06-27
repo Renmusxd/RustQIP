@@ -599,8 +599,8 @@ mod state_ops_tests {
 
     #[test]
     fn test_get_bit() {
-        assert_eq!(get_bit(1, 1), false);
-        assert_eq!(get_bit(1, 0), true);
+        assert!(!get_bit(1, 1));
+        assert!(get_bit(1, 0));
     }
 
     #[test]
@@ -683,7 +683,7 @@ mod state_ops_tests {
     fn test_many_mat_swap() {
         let n = 5;
 
-        let mat = from_reals(&vec![0.0, 1.0, 1.0, 0.0]);
+        let mat = from_reals(&[0.0, 1.0, 1.0, 0.0]);
         let ops: Vec<_> = (0..n)
             .map(|indx| UnitaryOp::Matrix(vec![indx], mat.clone()))
             .collect();

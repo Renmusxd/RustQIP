@@ -1,7 +1,6 @@
 use qip::common_circuits::epr_pair;
 use qip::pipeline::MeasurementHandle;
 use qip::*;
-use rand;
 
 fn run_alice(
     b: &mut OpBuilder,
@@ -35,11 +34,11 @@ fn run_bob(
         &[handle],
         Box::new(|b, q, measured| {
             // Based on the classical bits sent by Alice, Bob should apply a gate
-            match measured {
-                &[0b00] => Ok(q),
-                &[0b10] => Ok(b.x(q)),
-                &[0b01] => Ok(b.z(q)),
-                &[0b11] => Ok(b.y(q)),
+            match *measured {
+                [0b00] => Ok(q),
+                [0b10] => Ok(b.x(q)),
+                [0b01] => Ok(b.z(q)),
+                [0b11] => Ok(b.y(q)),
                 _ => panic!("Shouldn't be possible"),
             }
         }),

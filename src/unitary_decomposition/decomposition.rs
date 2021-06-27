@@ -349,7 +349,7 @@ mod unitary_decomp_tests {
             .map_err(|_| CircuitError::new("Failed to decompose matrix".to_string()))?;
         let rebuilt = reconstruct_unitary(2, &ops, &base);
 
-        let flat_r = flat_round(rebuilt.clone(), 10);
+        let flat_r = flat_round(rebuilt, 10);
         assert_eq!(flat_v, flat_r);
         Ok(())
     }
@@ -375,7 +375,7 @@ mod unitary_decomp_tests {
             .map_err(|_| CircuitError::new("Failed to decompose".to_string()))?;
         let rebuilt = reconstruct_unitary(2, &ops, &base);
 
-        let flat_r = flat_round(rebuilt.clone(), 10);
+        let flat_r = flat_round(rebuilt, 10);
         assert_eq!(flat_v, flat_r);
         Ok(())
     }
@@ -401,7 +401,7 @@ mod unitary_decomp_tests {
             .map_err(|_| CircuitError::new("Failed to decompose".to_string()))?;
         let rebuilt = reconstruct_unitary(2, &ops, &base);
 
-        let flat_r = flat_round(rebuilt.clone(), 10);
+        let flat_r = flat_round(rebuilt, 10);
         assert_eq!(flat_v, flat_r);
         Ok(())
     }
@@ -422,7 +422,7 @@ mod unitary_decomp_tests {
             .map_err(|_| CircuitError::new("Failed to decompose".to_string()))?;
         let rebuilt = reconstruct_unitary(2, &ops, &base);
 
-        let flat_r = flat_round(rebuilt.clone(), 10);
+        let flat_r = flat_round(rebuilt, 10);
         assert_eq!(flat_v, flat_r);
         Ok(())
     }
@@ -448,7 +448,7 @@ mod unitary_decomp_tests {
             .map_err(|_| CircuitError::new("Failed to decompose".to_string()))?;
         let rebuilt = reconstruct_unitary(2, &ops, &base);
 
-        let flat_r = flat_round(rebuilt.clone(), 10);
+        let flat_r = flat_round(rebuilt, 10);
         assert_eq!(flat_v, flat_r);
         Ok(())
     }
@@ -466,7 +466,7 @@ mod unitary_decomp_tests {
             .map_err(|_| CircuitError::new("Failed to decompose".to_string()))?;
         let rebuilt = reconstruct_unitary(n, &ops, &base);
 
-        let flat_r = flat_round(rebuilt.clone(), 10);
+        let flat_r = flat_round(rebuilt, 10);
         assert_eq!(flat_v, flat_r);
         Ok(())
     }
@@ -485,7 +485,7 @@ mod unitary_decomp_tests {
             .map_err(|_| CircuitError::new("Failed to decompose".to_string()))?;
         let rebuilt = reconstruct_unitary(n, &ops, &base);
 
-        let flat_r = flat_round(rebuilt.clone(), 10);
+        let flat_r = flat_round(rebuilt, 10);
         assert_eq!(flat_v, flat_r);
         Ok(())
     }
