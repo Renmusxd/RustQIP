@@ -1,6 +1,17 @@
 use qip::common_circuits::epr_pair;
 use qip::*;
 
+/// Encode the two classical bits Alice wants to communicate to Bob.
+///
+/// Depending on the classical bits combination a different gate is applied:
+/// 00: Do nothing (or apply Identity gate)
+/// 01: Apply Pauli-X gate
+/// 10: Apply Pauli-Z gate
+/// 11: Apply Pauli-Y gate (or apply Pauli-Z gate followed by a Pauli-X gate)
+///
+/// Returns Alice qubit with applied gate.
+///
+/// https://en.wikipedia.org/wiki/Superdense_coding#Encoding
 fn run_alice(b: &mut OpBuilder, epr_alice: Register, bit_a: bool, bit_b: bool) -> Register {
     match (bit_a, bit_b) {
         (false, false) => epr_alice,
@@ -10,6 +21,18 @@ fn run_alice(b: &mut OpBuilder, epr_alice: Register, bit_a: bool, bit_b: bool) -
     }
 }
 
+/// Decode the message Alice transmitted to Bob.
+///
+/// Bob applies the restoration operation on his qubit and the one transmitted
+/// by Alice to decode the original message. After restoration:
+/// |00>: 00
+/// |10>: 10
+/// |01>: 01
+/// |11>: 11
+///
+/// Returns a pair of classical bits.
+///
+/// https://en.wikipedia.org/wiki/Superdense_coding#Decoding
 fn run_bob(b: &mut OpBuilder, r_alice: Register, epr_bob: Register) -> (bool, bool) {
     let (r_alice, r_bob) = b.cnot(r_alice, epr_bob);
     let r_alice = b.hadamard(r_alice);
@@ -22,6 +45,14 @@ fn run_bob(b: &mut OpBuilder, r_alice: Register, epr_bob: Register) -> (bool, bo
     ((m & 2) == 2, (m & 1) == 1)
 }
 
+/// Superdense coding example: Packing two classical bits into one qubit.
+///
+/// - A third party (Charlie) entangles two qubits, sending one to Alice and the other to Bob.
+/// - Alice wants to send a message to Bob, she encodes the entangled qubit she owns and sends it to Bob.
+/// - Bob now has the two entangled qubits, after decoding he can read the message Alice sent.
+/// - Alice makes no measurement but Bob does, destroying the entanglement at that time.
+///
+/// https://en.wikipedia.org/wiki/Superdense_coding
 fn main() -> Result<(), CircuitError> {
     let bits_a = vec![true, false, true, false];
     let bits_b = vec![true, true, false, false];
