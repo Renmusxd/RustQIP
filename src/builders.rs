@@ -263,7 +263,13 @@ pub trait UnitaryBuilder {
         r_in: Register,
         r_out: Register,
         f: Rc<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
-    ) -> Result<(Register, Register), CircuitError>;
+    ) -> Result<(Register, Register), CircuitError> {
+        let op = self.make_function_op(&r_in, &r_out, f)?;
+        let in_indices = r_in.indices.clone();
+        let r = self.merge_with_op(vec![r_in, r_out], Some((name.to_string(), op)))?;
+        let (r_in, r_out) = self.split_absolute(r, &in_indices)?;
+        Ok((r_in, r_out.unwrap()))
+    }
 
     /// A controlled x, using `cr` as control and `r` as input.
     fn cx(&mut self, cr: Register, r: Register) -> (Register, Register) {
@@ -808,20 +814,6 @@ impl UnitaryBuilder for OpBuilder {
         }
     }
 
-    fn apply_function(
-        &mut self,
-        name: &str,
-        r_in: Register,
-        r_out: Register,
-        f: Rc<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
-    ) -> Result<(Register, Register), CircuitError> {
-        let op = self.make_function_op(&r_in, &r_out, f)?;
-        let in_indices = r_in.indices.clone();
-        let r = self.merge_with_op(vec![r_in, r_out], Some((name.to_string(), op)))?;
-        let (r_in, r_out) = self.split_absolute(r, &in_indices)?;
-        Ok((r_in, r_out.unwrap()))
-    }
-
     fn split_absolute(
         &mut self,
         r: Register,
@@ -1017,20 +1009,6 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         let r = self.merge_with_op(vec![ra, rb], Some(("swap".to_string(), op)))?;
         let (ra, rb) = self.split_absolute(r, &ra_indices)?;
         Ok((ra, rb.unwrap()))
-    }
-
-    fn apply_function(
-        &mut self,
-        name: &str,
-        r_in: Register,
-        r_out: Register,
-        f: Rc<dyn Fn(u64) -> (u64, f64) + Send + Sync>,
-    ) -> Result<(Register, Register), CircuitError> {
-        let op = self.make_function_op(&r_in, &r_out, f)?;
-        let in_indices = r_in.indices.clone();
-        let r = self.merge_with_op(vec![r_in, r_out], Some((name.to_string(), op)))?;
-        let (r_in, r_out) = self.split_absolute(r, &in_indices)?;
-        Ok((r_in, r_out.unwrap()))
     }
 
     fn split_absolute(
