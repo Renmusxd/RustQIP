@@ -299,6 +299,24 @@ pub trait UnitaryBuilder {
         let cr = b.release_register();
         (cr, r)
     }
+
+    /// A controlled-controlled-not (Toffoli) gate, using `cr1` and `cr2` as control and `r` as input.
+    fn ccnot(
+        &mut self,
+        cr1: Register,
+        cr2: Register,
+        r: Register,
+    ) -> (Register, Register, Register) {
+        let mut b1 = self.with_condition(cr1);
+        let mut b2 = b1.with_condition(cr2);
+        let r = b2.not(r);
+
+        let cr2 = b2.release_register();
+        let cr1 = b1.release_register();
+
+        (cr1, cr2, r)
+    }
+
     /// Swap `ra` and `rb` controlled by `cr`.
     fn cswap(
         &mut self,
