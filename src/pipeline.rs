@@ -220,6 +220,11 @@ impl<P: Precision> MeasuredResults<P> {
         self.results.get(&handle.get_id()).cloned()
     }
 
+    /// Retrieve the set of measurements for a given handle.
+    pub fn get_stochastic_measurements(&self, handle: u64) -> Option<&[P]> {
+        self.stochastic_results.get(&handle).map(|x| x.as_slice())
+    }
+
     /// Clone the stochastic set of measurements for a given handle.
     pub fn clone_stochastic_measurements(&self, handle: u64) -> Option<Vec<P>> {
         self.stochastic_results.get(&handle).cloned()
