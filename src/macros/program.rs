@@ -283,6 +283,31 @@ macro_rules! program {
         program!(@skip_to_next_program($builder, $reg_man) $($tail)*)
     };
 
+    // Start parsing a program of the form "control function(arg) [register <indices>, ...];"
+    (@program($builder:expr, $reg_man:ident) control $func:ident($funcargs:expr) $($tail:tt)*) => {
+        program!(@program($builder, $reg_man) control(!0) $func($funcargs) $($tail)*)
+    };
+    // Start parsing a program of the form "control function(arg) [register <indices>, ...];"
+    (@program($builder:expr, $reg_man:ident) control($control:expr) $func:ident($funcargs:expr) $($tail:tt)*) => {
+        // Get all args
+        let mut tmp_acc_vec: Vec<$crate::Register> = vec![];
+        program!(@args_acc($builder, $reg_man, tmp_acc_vec) $($tail)*);
+        let tmp_cr = tmp_acc_vec.remove(0);
+
+        let tmp_cr = $crate::negate_bitmask($builder, tmp_cr, $control);
+        let mut tmp_cb = $builder.with_condition(tmp_cr);
+
+        // Now all the args are in acc_vec
+        let mut tmp_results: Vec<$crate::Register> = $func(&mut tmp_cb, tmp_acc_vec, $funcargs)?;
+
+        let tmp_cr = tmp_cb.release_register();
+        let tmp_cr = $crate::negate_bitmask($builder, tmp_cr, $control);
+
+        tmp_results.push(tmp_cr);
+        program!(@replace_registers($builder, $reg_man, tmp_results));
+        program!(@skip_to_next_program($builder, $reg_man) $($tail)*);
+    };
+
     // Start parsing a program of the form "control function [register <indices>, ...];"
     (@program($builder:expr, $reg_man:ident) control $func:ident $($tail:tt)*) => {
         program!(@program($builder, $reg_man) control(!0) $func $($tail)*)
@@ -307,6 +332,19 @@ macro_rules! program {
         program!(@replace_registers($builder, $reg_man, tmp_results));
         program!(@skip_to_next_program($builder, $reg_man) $($tail)*);
     };
+
+    // Start parsing a program of the form "function(arg) [register <indices>, ...];"
+    (@program($builder:expr, $reg_man:ident) $func:ident($funcargs:expr) $($tail:tt)*) => {
+        // Get all args
+        let mut acc_vec: Vec<Register> = vec![];
+        program!(@args_acc($builder, $reg_man, acc_vec) $($tail)*);
+
+        // Now all the args are in acc_vec
+        let tmp_results: Vec<Register> = $func($builder, acc_vec, $funcargs)?;
+        program!(@replace_registers($builder, $reg_man, tmp_results));
+        program!(@skip_to_next_program($builder, $reg_man) $($tail)*);
+    };
+
     // Start parsing a program of the form "function [register <indices>, ...];"
     (@program($builder:expr, $reg_man:ident) $func:ident $($tail:tt)*) => {
         // Get all args
@@ -455,6 +493,22 @@ macro_rules! wrap_fn {
         wrap_fn!(@unwrap_regs($func, $rs) $($tail)*);
         let $name = $rs.pop().ok_or_else(|| $crate::CircuitError::new(format!("Error unwrapping {} for {}", stringify!($name), stringify!($func))))?;
     };
+    (@result_body($builder:expr, $func:expr, $rs:ident, $arg:ident) $($tail:tt)*) => {
+        {
+            wrap_fn!(@unwrap_regs($func, $rs) $($tail)*);
+            let wrap_fn!(@names () <- $($tail)*) = wrap_fn!(@invoke($func, $builder) () <- $($tail)*, $arg) ?;
+            let $rs: Vec<$crate::Register> = vec![$($tail)*];
+            Ok($rs)
+        }
+    };
+    (@raw_body($builder:expr, $func:expr, $rs:ident, $arg:ident) $($tail:tt)*) => {
+        {
+            wrap_fn!(@unwrap_regs($func, $rs) $($tail)*);
+            let wrap_fn!(@names () <- $($tail)*) = wrap_fn!(@invoke($func, $builder) () <- $($tail)*, $arg);
+            let $rs: Vec<$crate::Register> = vec![$($tail)*];
+            Ok($rs)
+        }
+    };
     (@result_body($builder:expr, $func:expr, $rs:ident) $($tail:tt)*) => {
         {
             wrap_fn!(@unwrap_regs($func, $rs) $($tail)*);
@@ -469,6 +523,28 @@ macro_rules! wrap_fn {
             let wrap_fn!(@names () <- $($tail)*) = wrap_fn!(@invoke($func, $builder) () <- $($tail)*);
             let $rs: Vec<$crate::Register> = vec![$($tail)*];
             Ok($rs)
+        }
+    };
+    (pub $newfunc:ident($arg:ident: $argtype:ident), ($func:expr), $($tail:tt)*) => {
+        /// Wrapped version of function
+        pub fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+            wrap_fn!(@result_body(b, $func, rs, $arg) $($tail)*)
+        }
+    };
+    (pub $newfunc:ident($arg:ident: $argtype:ident), $func:expr, $($tail:tt)*) => {
+        /// Wrapped version of function
+        pub fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+            wrap_fn!(@raw_body(b, $func, rs, $arg) $($tail)*)
+        }
+    };
+    ($newfunc:ident($arg:ident: $argtype:ident), ($func:expr), $($tail:tt)*) => {
+        fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+            wrap_fn!(@result_body(b, $func, rs, $arg) $($tail)*)
+        }
+    };
+    ($newfunc:ident($arg:ident: $argtype:ident), $func:expr, $($tail:tt)*) => {
+        fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+            wrap_fn!(@raw_body(b, $func, rs, $arg) $($tail)*)
         }
     };
     (pub $newfunc:ident, ($func:expr), $($tail:tt)*) => {
@@ -1225,6 +1301,30 @@ mod common_circuit_tests {
         let r = b.merge(vec![ra, rb])?;
         run_debug(&r)?;
         let basic_circuit = make_circuit_matrix::<f64>(n, &r, true);
+        assert_eq!(macro_circuit, basic_circuit);
+        Ok(())
+    }
+
+    #[test]
+    fn wrap_unitary_fn_arg() -> Result<(), CircuitError> {
+        wrap_fn!(wrapped_rz(theta: f64), UnitaryBuilder::rz, r);
+
+        let mut b = OpBuilder::new();
+        let r = b.qubit();
+
+        let r = program!(&mut b, r;
+            wrapped_rz(1.0) r;
+        )?;
+
+        run_debug(&r)?;
+        // Compare to expected value
+        let macro_circuit = make_circuit_matrix::<f64>(1, &r, true);
+        let mut b = OpBuilder::new();
+        let r = b.qubit();
+
+        let r = b.rz(r, 1.0);
+        run_debug(&r)?;
+        let basic_circuit = make_circuit_matrix::<f64>(1, &r, true);
         assert_eq!(macro_circuit, basic_circuit);
         Ok(())
     }

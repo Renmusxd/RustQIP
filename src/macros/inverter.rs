@@ -27,6 +27,22 @@ use crate::{CircuitError, OpBuilder, Register, UnitaryBuilder};
 /// ```
 #[macro_export]
 macro_rules! wrap_and_invert {
+    (pub $newfunc:ident($arg:ident: $argtype:ident), pub $newinvert:ident, $($tail:tt)*) => {
+        wrap_fn!(pub $newfunc($arg: $argtype), $($tail)*);
+        invert_fn!(pub $newinvert($arg: $argtype), $newfunc);
+    };
+    ($newfunc:ident($arg:ident: $argtype:ident), pub $newinvert:ident, $($tail:tt)*) => {
+        wrap_fn!($newfunc($arg: $argtype), $($tail)*);
+        invert_fn!(pub $newinvert($arg: $argtype), $newfunc);
+    };
+    (pub $newfunc:ident($arg:ident: $argtype:ident), $newinvert:ident, $($tail:tt)*) => {
+        wrap_fn!(pub $newfunc($arg: $argtype), $($tail)*);
+        invert_fn!($newinvert($arg: $argtype), $newfunc);
+    };
+    ($newfunc:ident($arg:ident: $argtype:ident), $newinvert:ident, $($tail:tt)*) => {
+        wrap_fn!($newfunc($arg: $argtype), $($tail)*);
+        invert_fn!($newinvert($arg: $argtype), $newfunc);
+    };
     (pub $newfunc:ident, pub $newinvert:ident, $($tail:tt)*) => {
         wrap_fn!(pub $newfunc, $($tail)*);
         invert_fn!(pub $newinvert, $newfunc);
@@ -71,6 +87,25 @@ macro_rules! wrap_and_invert {
 /// ```
 #[macro_export]
 macro_rules! invert_fn {
+    (pub $newinvert:ident($arg:ident: $argtype:ident), $func:expr) => {
+        /// Invert the given function.
+        pub fn $newinvert(
+            b: &mut dyn $crate::UnitaryBuilder,
+            rs: Vec<Register>,
+            $arg: $argtype,
+        ) -> Result<Vec<Register>, $crate::CircuitError> {
+            $crate::inverter(b, rs, |b, rs| $func(b, rs, $arg))
+        }
+    };
+    ($newinvert:ident($arg:ident: $argtype:ident), $func:expr) => {
+        fn $newinvert(
+            b: &mut dyn $crate::UnitaryBuilder,
+            rs: Vec<Register>,
+            $arg: $argtype,
+        ) -> Result<Vec<Register>, $crate::CircuitError> {
+            $crate::inverter(b, rs, |b, rs| $func(b, rs, $arg))
+        }
+    };
     (pub $newinvert:ident, $func:expr) => {
         /// Invert the given function.
         pub fn $newinvert(
@@ -91,13 +126,14 @@ macro_rules! invert_fn {
 }
 
 /// Invert a circuit applied via the function f.
-pub fn inverter<
-    F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
->(
+pub fn inverter<F>(
     b: &mut dyn UnitaryBuilder,
     mut rs: Vec<Register>,
     f: F,
-) -> Result<Vec<Register>, CircuitError> {
+) -> Result<Vec<Register>, CircuitError>
+where
+    F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
+{
     let original_indices: Vec<_> = rs.iter().map(|r| r.indices.clone()).collect();
     let mut inv_builder = OpBuilder::new();
     let new_rs: Vec<_> = original_indices
@@ -327,6 +363,16 @@ mod inverter_test {
         let rb = b.register(3)?;
         let rs = inv_add(&mut b, vec![rc, ra, rb])?;
         let _r = b.merge(rs)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_invert_and_wrap_rz() -> Result<(), CircuitError> {
+        wrap_and_invert!(rz_op(theta: f64), inv_rz, UnitaryBuilder::rz, r);
+        let mut b = OpBuilder::new();
+        let r = b.qubit();
+        let rs = rz_op(&mut b, vec![r], 1.0)?;
+        let _rs = inv_rz(&mut b, rs, 1.0)?;
         Ok(())
     }
 }

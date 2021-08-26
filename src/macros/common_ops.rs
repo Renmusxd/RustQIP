@@ -11,3 +11,5 @@ wrap_fn!(pub not, UnitaryBuilder::not, r);
 wrap_fn!(pub swap, (UnitaryBuilder::swap), ra, rb);
 
 wrap_fn!(pub h, UnitaryBuilder::hadamard, r);
+
+wrap_fn!(pub rz(theta: f64), UnitaryBuilder::rz, r);
