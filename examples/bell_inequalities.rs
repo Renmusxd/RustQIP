@@ -1,103 +1,65 @@
+use qip::macros::common_ops::*;
 use qip::*;
 
 fn circuit1() -> Vec<f64> {
-    // build 2 qubits
-    let mut builder = OpBuilder::new();
-    let qubit1 = builder.qubit();
-    let qubit2 = builder.qubit();
+    let mut b = OpBuilder::new();
+    let r = b.register(2).unwrap();
 
-    // transform qubits from |0> to |1>
-    let qubit1 = builder.not(qubit1);
-    let qubit2 = builder.not(qubit2);
-
-    // apply hadamard and cnot
-    let qubit1 = builder.hadamard(qubit1);
-    let (qubit1, qubit2) = builder.cnot(qubit1, qubit2);
-
-    // apply rz to qubit2
-    let qubit2 = builder.rz(qubit2, std::f64::consts::FRAC_PI_3);
-
-    // apply hadamard to both qubits
-    let qubit1 = builder.hadamard(qubit1);
-    let qubit2 = builder.hadamard(qubit2);
-
-    // merge both qubits
-    let merged = builder.merge(vec![qubit1, qubit2]).unwrap();
-
-    // add a measurement of all possible states
-    let (merged, m_handle) = builder.stochastic_measure(merged);
+    let r = program!(&mut b, r;
+        not r;
+        h r[0];
+        control not r[0], r[1];
+        rz(std::f64::consts::FRAC_PI_3) r[1];
+        h r;
+    )
+    .unwrap();
+    let (r, m_handle) = b.stochastic_measure(r);
 
     // run and get probabilities
-    let (_, mut measured) = run_local::<f64>(&merged).unwrap();
+    let (_, mut measured) = run_local::<f64>(&r).unwrap();
     let probabilities = measured.pop_stochastic_measurements(m_handle).unwrap();
 
     probabilities
 }
 
 fn circuit2() -> Vec<f64> {
-    // build 2 qubits
-    let mut builder = OpBuilder::new();
-    let qubit1 = builder.qubit();
-    let qubit2 = builder.qubit();
+    let mut b = OpBuilder::new();
+    let r = b.register(2).unwrap();
 
-    // transform qubits from |0> to |1>
-    let qubit1 = builder.not(qubit1);
-    let qubit2 = builder.not(qubit2);
-
-    // apply hadamard and cnot
-    let qubit1 = builder.hadamard(qubit1);
-    let (qubit1, qubit2) = builder.cnot(qubit1, qubit2);
-
-    // apply rz to qubit2
-    let qubit2 = builder.rz(qubit2, 2.0 * std::f64::consts::FRAC_PI_3);
-
-    // apply hadamard to both qubits
-    let qubit1 = builder.hadamard(qubit1);
-    let qubit2 = builder.hadamard(qubit2);
-
-    // merge both qubits
-    let merged = builder.merge(vec![qubit1, qubit2]).unwrap();
-
-    // add a measurement of all possible states
-    let (merged, m_handle) = builder.stochastic_measure(merged);
+    let r = program!(&mut b, r;
+        not r;
+        h r[0];
+        control not r[0], r[1];
+        rz(2. * std::f64::consts::FRAC_PI_3) r[1];
+        h r;
+    )
+    .unwrap();
+    let (r, m_handle) = b.stochastic_measure(r);
 
     // run and get probabilities
-    let (_, mut measured) = run_local::<f64>(&merged).unwrap();
+    let (_, mut measured) = run_local::<f64>(&r).unwrap();
     let probabilities = measured.pop_stochastic_measurements(m_handle).unwrap();
 
     probabilities
 }
 
 fn circuit3() -> Vec<f64> {
-    // build 2 qubits
-    let mut builder = OpBuilder::new();
-    let qubit1 = builder.qubit();
-    let qubit2 = builder.qubit();
+    let mut b = OpBuilder::new();
+    let r = b.register(2).unwrap();
 
-    // transform qubits from |0> to |1>
-    let qubit1 = builder.not(qubit1);
-    let qubit2 = builder.not(qubit2);
-
-    // apply hadamard and cnot
-    let qubit1 = builder.hadamard(qubit1);
-    let (qubit1, qubit2) = builder.cnot(qubit1, qubit2);
-
-    // apply rz to both qubits
-    let qubit1 = builder.rz(qubit1, std::f64::consts::FRAC_PI_3);
-    let qubit2 = builder.rz(qubit2, 2.0 * std::f64::consts::FRAC_PI_3);
-
-    // apply hadamard to both qubits
-    let qubit1 = builder.hadamard(qubit1);
-    let qubit2 = builder.hadamard(qubit2);
-
-    // merge both qubits
-    let merged = builder.merge(vec![qubit1, qubit2]).unwrap();
-
-    // add a measurement of all possible states
-    let (merged, m_handle) = builder.stochastic_measure(merged);
+    let r = program!(&mut b, r;
+        not r;
+        h r[0];
+        control not r[0], r[1];
+        rz(std::f64::consts::FRAC_PI_3) r[0];
+        rz(2. * std::f64::consts::FRAC_PI_3) r[1];
+        h r;
+    )
+    .unwrap();
+    let (r, m_handle) = b.stochastic_measure(r);
 
     // run and get probabilities
-    let (_, mut measured) = run_local::<f64>(&merged).unwrap();
+    let (_, mut measured) = run_local::<f64>(&r).unwrap();
     let probabilities = measured.pop_stochastic_measurements(m_handle).unwrap();
 
     probabilities

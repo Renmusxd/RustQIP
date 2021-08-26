@@ -368,7 +368,7 @@ macro_rules! program {
     // (builder, register_1, ...; programs; ...)
     ($builder:expr, $($tail:tt)*) => {
         {
-            let tmp_f = |b: &mut dyn $crate::UnitaryBuilder| {
+            let tmp_f = |b: &mut dyn $crate::UnitaryBuilder| -> Result<_,$crate::CircuitError> {
                 // First reassign each name to a vec index
                 let mut register_manager = $crate::RegisterManager::default();
                 program!(@splitter(b, register_manager) $($tail)*);
