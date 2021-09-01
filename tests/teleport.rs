@@ -14,7 +14,7 @@ fn run_alice(b: &mut OpBuilder, epr_alice: Register, initial_angle: f64) -> Meas
     let q_random = b.ry(q_random, initial_angle * 2.0);
 
     // Alice prepares her state: a|0> + b|1>
-    let (q_random, q_alice) = condition(b, q_random, epr_alice, |b, q| b.not(q));
+    let (q_random, q_alice) = b.cnot(q_random, epr_alice);
     let q_random = b.hadamard(q_random);
 
     // Now she measures her two particles
