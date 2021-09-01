@@ -142,3 +142,25 @@ let (ra, rb) = program!(&mut b, ra, rb;
     inv_gamma_op ra, rb[2];
 )?;
 ```
+
+Functions in the `program!` macro may have a single argument, which is passed after the registers.
+This argument must be included in the `wrap_fn!` call as well as the `invert_fn!` call.
+```rust
+use qip::*;
+
+let mut b = OpBuilder::new();
+let r = b.qubit();
+
+fn rz(b: &mut dyn UnitaryBuilder, r: Register, theta: f64) -> Register {
+    b.rz(r, theta)
+}
+
+wrap_fn!(rz_op(theta: f64), rz, ra);
+invert_fn!(inv_rz_op(theta: f64), rz_op);
+
+let r = program!(&mut b, r;
+    rz_op(3.141) r;
+    inv_rz_op(3.141) r;
+)?;
+```
+
