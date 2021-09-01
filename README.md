@@ -155,7 +155,7 @@ fn rz(b: &mut dyn UnitaryBuilder, r: Register, theta: f64) -> Register {
     b.rz(r, theta)
 }
 
-wrap_fn!(rz_op(theta: f64), rz, ra);
+wrap_fn!(rz_op(theta: f64), rz, r);
 invert_fn!(inv_rz_op(theta: f64), rz_op);
 
 let r = program!(&mut b, r;
@@ -176,7 +176,7 @@ fn rz<T: Into<f64>>(b: &mut dyn UnitaryBuilder, r: Register, theta: T) -> Regist
     b.rz(r, theta.into())
 }
 
-wrap_fn!(rz_op[T: Into<f64>](theta: T), rz, ra);
+wrap_fn!(rz_op[T: Into<f64>](theta: T), rz, r);
 invert_fn!(inv_rz_op[T: Into<f64>](theta: T), rz_op);
 
 let r = program!(&mut b, r;

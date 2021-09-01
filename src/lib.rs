@@ -185,7 +185,7 @@
 //!     b.rz(r, theta)
 //! }
 //!
-//! wrap_fn!(rz_op(theta: f64), rz, ra);
+//! wrap_fn!(rz_op(theta: f64), rz, r);
 //! invert_fn!(inv_rz_op(theta: f64), rz_op);
 //!
 //! let r = program!(&mut b, r;
@@ -208,7 +208,7 @@
 //!     b.rz(r, theta.into())
 //! }
 //!
-//! wrap_fn!(rz_op[T: Into<f64>](theta: T), rz, ra);
+//! wrap_fn!(rz_op[T: Into<f64>](theta: T), rz, r);
 //! invert_fn!(inv_rz_op[T: Into<f64>](theta: T), rz_op);
 //!
 //! let r = program!(&mut b, r;
