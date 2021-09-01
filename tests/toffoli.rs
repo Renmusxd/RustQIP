@@ -1,7 +1,8 @@
 use qip::*;
 
 // https://en.wikipedia.org/wiki/Quantum_logic_gate#Toffoli_(CCNOT)_gate
-const fn truth_table() -> [((u64, u64, u64), (u64, u64, u64)); 8] {
+type Entry = (u64, u64, u64);
+const fn truth_table() -> [(Entry, Entry); 8] {
     [
         ((0, 0, 0), (0, 0, 0)),
         ((0, 0, 1), (0, 0, 1)),

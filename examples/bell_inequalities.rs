@@ -17,9 +17,7 @@ fn circuit1() -> Vec<f64> {
 
     // run and get probabilities
     let (_, mut measured) = run_local::<f64>(&r).unwrap();
-    let probabilities = measured.pop_stochastic_measurements(m_handle).unwrap();
-
-    probabilities
+    measured.pop_stochastic_measurements(m_handle).unwrap()
 }
 
 fn circuit2() -> Vec<f64> {
@@ -38,9 +36,7 @@ fn circuit2() -> Vec<f64> {
 
     // run and get probabilities
     let (_, mut measured) = run_local::<f64>(&r).unwrap();
-    let probabilities = measured.pop_stochastic_measurements(m_handle).unwrap();
-
-    probabilities
+    measured.pop_stochastic_measurements(m_handle).unwrap()
 }
 
 fn circuit3() -> Vec<f64> {
@@ -60,9 +56,7 @@ fn circuit3() -> Vec<f64> {
 
     // run and get probabilities
     let (_, mut measured) = run_local::<f64>(&r).unwrap();
-    let probabilities = measured.pop_stochastic_measurements(m_handle).unwrap();
-
-    probabilities
+    measured.pop_stochastic_measurements(m_handle).unwrap()
 }
 
 /// Bell inequality:
