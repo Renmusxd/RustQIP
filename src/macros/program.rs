@@ -525,6 +525,28 @@ macro_rules! wrap_fn {
             Ok($rs)
         }
     };
+    (pub $newfunc:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), ($func:expr), $($tail:tt)*) => {
+        /// Wrapped version of function
+        pub fn $newfunc<$($typetail)*>(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+            wrap_fn!(@result_body(b, $func, rs, $arg) $($tail)*)
+        }
+    };
+    (pub $newfunc:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), $func:expr, $($tail:tt)*) => {
+        /// Wrapped version of function
+        pub fn $newfunc<$($typetail)*>(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+            wrap_fn!(@raw_body(b, $func, rs, $arg) $($tail)*)
+        }
+    };
+    ($newfunc:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), ($func:expr), $($tail:tt)*) => {
+        fn $newfunc<$($typetail)*>(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+            wrap_fn!(@result_body(b, $func, rs, $arg) $($tail)*)
+        }
+    };
+    ($newfunc:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), $func:expr, $($tail:tt)*) => {
+        fn $newfunc<$($typetail)*>(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+            wrap_fn!(@raw_body(b, $func, rs, $arg) $($tail)*)
+        }
+    };
     (pub $newfunc:ident($arg:ident: $argtype:ident), ($func:expr), $($tail:tt)*) => {
         /// Wrapped version of function
         pub fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
@@ -1308,6 +1330,33 @@ mod common_circuit_tests {
     #[test]
     fn wrap_unitary_fn_arg() -> Result<(), CircuitError> {
         wrap_fn!(wrapped_rz(theta: f64), UnitaryBuilder::rz, r);
+
+        let mut b = OpBuilder::new();
+        let r = b.qubit();
+
+        let r = program!(&mut b, r;
+            wrapped_rz(1.0) r;
+        )?;
+
+        run_debug(&r)?;
+        // Compare to expected value
+        let macro_circuit = make_circuit_matrix::<f64>(1, &r, true);
+        let mut b = OpBuilder::new();
+        let r = b.qubit();
+
+        let r = b.rz(r, 1.0);
+        run_debug(&r)?;
+        let basic_circuit = make_circuit_matrix::<f64>(1, &r, true);
+        assert_eq!(macro_circuit, basic_circuit);
+        Ok(())
+    }
+
+    #[test]
+    fn wrap_unitary_fn_arg_generic() -> Result<(), CircuitError> {
+        fn rz<T: Into<f64>>(b: &mut dyn UnitaryBuilder, r: Register, theta: T) -> Register {
+            b.rz(r, theta.into())
+        }
+        wrap_fn!(wrapped_rz[T: Into<f64>](theta: T), rz, r);
 
         let mut b = OpBuilder::new();
         let r = b.qubit();
