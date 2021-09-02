@@ -311,6 +311,40 @@ pub struct LocalQuantumState<P: Precision> {
     arena: Vec<Complex<P>>,
 }
 
+/// Fill a buffer from the initial states.
+pub fn fill_buffer_initial_state<P: Precision>(
+    n: u64,
+    states: &[RegisterInitialState<P>],
+    buffer: &mut [Complex<P>],
+) {
+    // Assume that all unrepresented indices are in the |0> state.
+    let n_fullindices: u64 = states
+        .iter()
+        .map(|(indices, state)| match state {
+            InitialState::FullState(_) => indices.len() as u64,
+            _ => 0,
+        })
+        .sum();
+
+    // Make the index template/base
+    let template: u64 = states.iter().fold(0, |acc, (indices, state)| -> u64 {
+        match state {
+            InitialState::Index(val_indx) => {
+                let val_indx = flip_bits(indices.len(), *val_indx);
+                sub_to_full(n, indices, val_indx, acc)
+            }
+            _ => acc,
+        }
+    });
+
+    // Go through each combination of full index locations
+    (0..1 << n_fullindices).for_each(|i| {
+        // Calculate the offset from template, and the product of fullstates.
+        let (delta_index, val) = create_state_entry(n, i, states);
+        buffer[(delta_index + template) as usize] = val;
+    });
+}
+
 impl<P: Precision> LocalQuantumState<P> {
     /// Build a local state using a set of initial states for subsets of the qubits.
     /// These initial states are made from the Register handles.
@@ -328,33 +362,8 @@ impl<P: Precision> LocalQuantumState<P> {
 
         let n = max_init_n.map_or(n, |m| max(n, m));
 
-        // Assume that all unrepresented indices are in the |0> state.
-        let n_fullindices: u64 = states
-            .iter()
-            .map(|(indices, state)| match state {
-                InitialState::FullState(_) => indices.len() as u64,
-                _ => 0,
-            })
-            .sum();
-
-        // Make the index template/base
-        let template: u64 = states.iter().fold(0, |acc, (indices, state)| -> u64 {
-            match state {
-                InitialState::Index(val_indx) => {
-                    let val_indx = flip_bits(indices.len(), *val_indx);
-                    sub_to_full(n, indices, val_indx, acc)
-                }
-                _ => acc,
-            }
-        });
-
-        // Go through each combination of full index locations
         let mut cvec: Vec<Complex<P>> = (0..1 << n).map(|_| Complex::default()).collect();
-        (0..1 << n_fullindices).for_each(|i| {
-            // Calculate the offset from template, and the product of fullstates.
-            let (delta_index, val) = create_state_entry(n, i, states);
-            cvec[(delta_index + template) as usize] = val;
-        });
+        fill_buffer_initial_state(n, states, &mut cvec);
 
         let arena = vec![Complex::zero(); cvec.len()];
         LocalQuantumState {
