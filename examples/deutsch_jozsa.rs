@@ -14,7 +14,7 @@ fn main() -> Result<(), CircuitError> {
     Ok(())
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 enum FunctionType {
     Balanced,
     Constant,
@@ -45,7 +45,7 @@ fn algorithm(function_type: FunctionType) {
         &mut b,
         first_register,
         second_register,
-        function_type.clone(),
+        function_type,
     );
 
     // apply hardamard to the first register
