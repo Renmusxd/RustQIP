@@ -41,12 +41,8 @@ fn algorithm(function_type: FunctionType) {
     let first_register = b.hadamard(first_register);
 
     // apply oracle
-    let (first_register, _second_register) = oracle(
-        &mut b,
-        first_register,
-        second_register,
-        function_type,
-    );
+    let (first_register, _second_register) =
+        oracle(&mut b, first_register, second_register, function_type);
 
     // apply hardamard to the first register
     let first_register = b.hadamard(first_register);
@@ -56,7 +52,7 @@ fn algorithm(function_type: FunctionType) {
     let (_, measurements) = run_local::<f64>(&r).unwrap();
     let measured = measurements.get_measurement(&m).unwrap();
 
-    if measured.1 > 0.99 && measured.0 == 0 {
+    if measured.1 > 1.0 - f64::EPSILON && measured.0 == 0 {
         // in a constant function the final state will be always 0 with
         // 100% probability.
         println!("Output: Function is {:?}", FunctionType::Constant);
