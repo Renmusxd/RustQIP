@@ -1122,9 +1122,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         let (cr, r) = self.split_absolute(r, &cindices_clone).unwrap();
         self.set_conditional_register(cr);
         let (rs, remaining) = self.split_absolute_many(r.unwrap(), &index_groups).unwrap();
-        if remaining.is_some() {
-            panic!("There should be no qubits remaining.");
-        }
+        assert!(!remaining.is_some(), "There should be no qubits remaining.");
         rs
     }
 

@@ -103,7 +103,6 @@ impl<P: Precision> FeynmanState<P> {
             let memory_depth = pops.len() / 2;
             let sub_ops = &pops[..memory_depth];
             let mut mem = FeynmanMemory::<P>::new(self.memory_size, sub_ops);
-            // TODO consider doing this recursively to cut down total runtime.
             mem.iter_mut().for_each(|(i, c)| {
                 *c = self.substate.rec_calculate_amplitude(
                     i as u64,

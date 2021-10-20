@@ -19,7 +19,6 @@ use std::cmp::max;
 pub struct SparseQuantumState<P: Precision> {
     n: u64,
     state: Option<Vec<(u64, Complex<P>)>>,
-    multithread: bool,
 }
 
 impl<P: Precision> SparseQuantumState<P> {
@@ -55,7 +54,6 @@ impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
         Self {
             n,
             state: Some(vec![(0, Complex::one())]),
-            multithread: true,
         }
     }
 
@@ -101,7 +99,6 @@ impl<P: Precision> QuantumState<P> for SparseQuantumState<P> {
         Self {
             n,
             state: Some(cvec),
-            multithread: true,
         }
     }
 
