@@ -2,6 +2,15 @@ use qip::builders::apply_function;
 use qip::pipeline::LocalQuantumState;
 use qip::*;
 
+/// Take a black box which flips the sign on a specific state |w>.
+/// Grovers effectively operates in 2D spaces between the vectors |w> and |w_perp>
+/// We initialize in a superposition of all computational basis states: |s>
+/// Initially <w|s> = 1/Sqrt(2^n) = sin(theta)
+/// and <w_perp|s> = cos(theta)
+/// We then repeated apply alternating reflections across |w_perp> and |s>, each pair rotates
+/// the state |psi> by 2 theta
+/// After T = pi/(4 theta) ~ pi/4 sqrt(2^n) rotations we get <w|psi> ~ sin(pi/2) ~ 1
+/// Meaning a measurement of |psi> reveals the marked state |w>
 fn prepare_state<P: Precision>(n: u64) -> Result<LocalQuantumState<P>, CircuitError> {
     let mut b = OpBuilder::new();
     let r = b.register(n).unwrap();
@@ -16,6 +25,7 @@ fn prepare_state<P: Precision>(n: u64) -> Result<LocalQuantumState<P>, CircuitEr
     run_local(&r).map(|(s, _)| s)
 }
 
+/// Reflection across the |s> vector
 fn apply_us(
     b: &mut dyn UnitaryBuilder,
     search: Register,
@@ -29,6 +39,7 @@ fn apply_us(
     Ok((search, ancillary))
 }
 
+/// Reflection across the |w_perp> vector (oracle).
 fn apply_uw(
     b: &mut dyn UnitaryBuilder,
     search: Register,
@@ -39,6 +50,7 @@ fn apply_uw(
     apply_function(b, search, ancillary, move |x| ((x == x0) as u64, 0.0))
 }
 
+/// A reflection across |w_perp> then |s> gives a rotation by 2theta
 fn apply_grover_iteration<P: Precision>(
     x: u64,
     s: LocalQuantumState<P>,
@@ -52,6 +64,10 @@ fn apply_grover_iteration<P: Precision>(
     run_with_state(&r, s).map(|(s, _)| s)
 }
 
+/// Apply iterations of grovers and plot the chance of successfully finding the marked state.
+/// As steps are applied, the system's state rotates in the |w> and |w_perp> plane, when it is
+/// aligned and antialigned with |w> the chance of measurement is highest.
+/// We will see that the probability of success oscillates with period T = pi/4 sqrt(2^n).
 fn main() -> Result<(), CircuitError> {
     let n = 10;
     let x = 42;
