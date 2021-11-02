@@ -6,7 +6,7 @@ pub mod utils;
 /// Find paths through series of bits via rotations.
 mod bit_pathing;
 /// Decompose a unitary op into smaller controlled phases and rotations.
-mod decomposition;
+pub(crate) mod decomposition;
 
 #[cfg(test)]
 mod test_utils;

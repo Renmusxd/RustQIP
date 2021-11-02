@@ -265,6 +265,8 @@ pub mod sparse_state;
 pub mod state_ops;
 /// Tracing state
 pub mod trace_state;
+/// Transpiler classes
+pub mod transpilation;
 /// Commonly used types.
 pub mod types;
 /// Break unitary matrices into circuits.
