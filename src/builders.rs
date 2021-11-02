@@ -9,24 +9,33 @@ use std::rc::Rc;
 
 /// A function which takes a builder, a Register, and a set of measured values, and constructs a
 /// circuit, outputting the resulting Register.
-type SingleRegisterSideChannelFn =
-    dyn Fn(&mut dyn UnitaryBuilder, Register, &[u64]) -> Result<Register, CircuitError>;
+type SingleRegisterSideChannelFn<U> =
+    dyn Fn(&mut U, Register, &[u64]) -> Result<Register, CircuitError>;
 
 /// A function which takes a builder, a vec of Register, and a set of measured values, and constructs a
 /// circuit, outputting the resulting Registers.
-type SideChannelFn =
-    dyn Fn(&mut dyn UnitaryBuilder, Vec<Register>, &[u64]) -> Result<Vec<Register>, CircuitError>;
+type SideChannelFn<U> =
+    dyn Fn(&mut U, Vec<Register>, &[u64]) -> Result<Vec<Register>, CircuitError>;
 
 /// A function which takes a builder, a Register with possibly extra indices, and a set of measured
 /// values, and constructs a circuit, outputting the resulting Register.
-type SideChannelHelperFn =
-    dyn Fn(&mut dyn UnitaryBuilder, Register, &[u64]) -> Result<Vec<Register>, CircuitError>;
+type SideChannelHelperFn<U> =
+    dyn Fn(&mut U, Register, &[u64]) -> Result<Vec<Register>, CircuitError>;
 
 /// A function to build rows of a sparse matrix. Takes a row and outputs columns and entries.
 type SparseBuilderFn = dyn Fn(u64) -> Vec<(u64, Complex<f64>)>;
 
 /// A builder which support unitary operations
 pub trait UnitaryBuilder {
+    /// Make a new version of the UnitaryBuilder
+    fn make_new(&self) -> Self;
+
+    /// Get total count of all qubits
+    fn get_qubit_count(&self) -> u64;
+
+    /// Get indices of temp qubits.
+    fn get_temp_indices(&self) -> (Vec<u64>, Vec<u64>);
+
     /// Create a single qubit register.
     fn qubit(&mut self) -> Register;
 
@@ -73,7 +82,7 @@ pub trait UnitaryBuilder {
     fn return_temp_register(&mut self, r: Register, value: bool);
 
     /// Build a builder which uses `r` as a condition.
-    fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder;
+    fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder<Self>;
 
     /// Add a name scope.
     fn push_name_scope(&mut self, name: &str);
@@ -537,61 +546,55 @@ pub trait UnitaryBuilder {
     /// Register and handle.
     fn stochastic_measure(&mut self, r: Register) -> (Register, u64);
 
-    /// Create a circuit portion which depends on the classical results of measuring some Registers.
-    fn single_register_classical_sidechannel(
-        &mut self,
-        r: Register,
-        handles: &[MeasurementHandle],
-        f: Box<SingleRegisterSideChannelFn>,
-    ) -> Register {
-        self.classical_sidechannel(
-            vec![r],
-            handles,
-            Box::new(
-                move |b: &mut dyn UnitaryBuilder,
-                      mut rs: Vec<Register>,
-                      measurements: &[u64]|
-                      -> Result<Vec<Register>, CircuitError> {
-                    Ok(vec![f(b, rs.pop().unwrap(), measurements)?])
-                },
-            ),
-        )
-        .pop()
-        .unwrap()
-    }
-
-    /// Create a circuit portion which depends on the classical results of measuring some Registers.
-    fn classical_sidechannel(
-        &mut self,
-        rs: Vec<Register>,
-        handles: &[MeasurementHandle],
-        f: Box<SideChannelFn>,
-    ) -> Vec<Register> {
-        let index_groups: Vec<_> = rs.iter().map(|r| &r.indices).cloned().collect();
-        let f = Box::new(
-            move |b: &mut dyn UnitaryBuilder,
-                  r: Register,
-                  ms: &[u64]|
-                  -> Result<Vec<Register>, CircuitError> {
-                let (rs, _) = b.split_absolute_many(r, &index_groups)?;
-                f(b, rs, ms)
-            },
-        );
-        self.sidechannel_helper(rs, handles, f)
-    }
-
-    /// A helper function for the classical_sidechannel. Takes a set of Registers to pass to the
-    /// subcircuit, a set of handles whose measured values will also be passed, and a function
-    /// which matches to description of `SideChannelHelperFn`. Returns a set of Registers whose indices
-    /// match those of the input Registers.
-    /// This shouldn't be called in circuits, and is a helper to `classical_sidechannel` and
-    /// `single_register_classical_sidechannel`.
-    fn sidechannel_helper(
-        &mut self,
-        rs: Vec<Register>,
-        handles: &[MeasurementHandle],
-        f: Box<SideChannelHelperFn>,
-    ) -> Vec<Register>;
+    // /// Create a circuit portion which depends on the classical results of measuring some Registers.
+    // fn single_register_classical_sidechannel(
+    //     &mut self,
+    //     r: Register,
+    //     handles: &[MeasurementHandle],
+    //     f: Box<SingleRegisterSideChannelFn<Self>>,
+    // ) -> Register {
+    //     let f = move |b: &mut Self,
+    //                   mut rs: Vec<Register>,
+    //                   measurements: &[u64]|
+    //           -> Result<Vec<Register>, CircuitError> {
+    //         let res = f(b, rs.pop().unwrap(), measurements)?;
+    //         Ok(vec![res])
+    //     };
+    //
+    //     self.classical_sidechannel(vec![r], handles, Box::new(f))
+    //         .pop()
+    //         .unwrap()
+    // }
+    //
+    // /// Create a circuit portion which depends on the classical results of measuring some Registers.
+    // fn classical_sidechannel(
+    //     &mut self,
+    //     rs: Vec<Register>,
+    //     handles: &[MeasurementHandle],
+    //     f: Box<SideChannelFn<Self>>,
+    // ) -> Vec<Register> {
+    //     let index_groups: Vec<_> = rs.iter().map(|r| &r.indices).cloned().collect();
+    //     let f = Box::new(
+    //         move |b: &mut Self, r: Register, ms: &[u64]| -> Result<Vec<Register>, CircuitError> {
+    //             let (rs, _) = b.split_absolute_many(r, &index_groups)?;
+    //             f(b, rs, ms)
+    //         },
+    //     );
+    //     self.sidechannel_helper(rs, handles, f)
+    // }
+    //
+    // /// A helper function for the classical_sidechannel. Takes a set of Registers to pass to the
+    // /// subcircuit, a set of handles whose measured values will also be passed, and a function
+    // /// which matches to description of `SideChannelHelperFn`. Returns a set of Registers whose indices
+    // /// match those of the input Registers.
+    // /// This shouldn't be called in circuits, and is a helper to `classical_sidechannel` and
+    // /// `single_register_classical_sidechannel`.
+    // fn sidechannel_helper(
+    //     &mut self,
+    //     rs: Vec<Register>,
+    //     handles: &[MeasurementHandle],
+    //     f: Box<SideChannelHelperFn<Self>>,
+    // ) -> Vec<Register>;
 
     /// Debug a register using a function `f` run during circuit execution on the state of `r`
     fn debug(&mut self, r: Register, f: Box<dyn Fn(Vec<f64>)>) -> Result<Register, CircuitError> {
@@ -612,23 +615,31 @@ pub trait UnitaryBuilder {
 }
 
 /// Helper function for Boxing static functions and applying using the given UnitaryBuilder.
-pub fn apply_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
-    b: &mut dyn UnitaryBuilder,
+pub fn apply_function<U, F>(
+    b: &mut U,
     r_in: Register,
     r_out: Register,
     f: F,
-) -> Result<(Register, Register), CircuitError> {
+) -> Result<(Register, Register), CircuitError>
+where
+    F: 'static + Fn(u64) -> (u64, f64) + Send + Sync,
+    U: UnitaryBuilder,
+{
     b.apply_function("f", r_in, r_out, Rc::new(f))
 }
 
 /// Helper function for Boxing static functions and building sparse mats using the given
 /// UnitaryBuilder.
-pub fn apply_sparse_function<F: 'static + Fn(u64) -> (u64, f64) + Send + Sync>(
-    b: &mut dyn UnitaryBuilder,
+pub fn apply_sparse_function<U, F>(
+    b: &mut U,
     r_in: Register,
     r_out: Register,
     f: F,
-) -> Result<(Register, Register), CircuitError> {
+) -> Result<(Register, Register), CircuitError>
+where
+    F: 'static + Fn(u64) -> (u64, f64) + Send + Sync,
+    U: UnitaryBuilder,
+{
     b.apply_function("f", r_in, r_out, Rc::new(f))
 }
 
@@ -656,7 +667,7 @@ impl OpBuilder {
 
     /// Measure in the basis of `cos(phase)|0> + sin(phase)|1>`
     pub fn measure_basis(&mut self, r: Register, angle: f64) -> (Register, MeasurementHandle) {
-        let id = self.get_op_id();
+        let id = self.inc_op_id();
         let modifier = StateModifier::new_measurement_basis(
             String::from("measure"),
             id,
@@ -665,16 +676,26 @@ impl OpBuilder {
         );
         let modifier = Some(modifier);
         let r = Register::merge_with_modifier(id, vec![r], modifier).unwrap();
-        Register::make_measurement_handle(self.get_op_id(), r)
+        Register::make_measurement_handle(self.inc_op_id(), r)
     }
 
-    /// Get the current count of created qubits.
-    pub fn get_qubit_count(&self) -> u64 {
+    fn inc_op_id(&mut self) -> u64 {
+        let tmp = self.op_id;
+        self.op_id += 1;
+        tmp
+    }
+}
+
+impl UnitaryBuilder for OpBuilder {
+    fn make_new(&self) -> Self {
+        Self::new()
+    }
+
+    fn get_qubit_count(&self) -> u64 {
         self.qubit_index
     }
 
-    /// Get indices of zeros and ones temps currently in holding.
-    pub(crate) fn get_temp_indices(&self) -> (Vec<u64>, Vec<u64>) {
+    fn get_temp_indices(&self) -> (Vec<u64>, Vec<u64>) {
         let zeros = self
             .temp_zero_qubits
             .iter()
@@ -692,18 +713,10 @@ impl OpBuilder {
         (zeros, ones)
     }
 
-    fn get_op_id(&mut self) -> u64 {
-        let tmp = self.op_id;
-        self.op_id += 1;
-        tmp
-    }
-}
-
-impl UnitaryBuilder for OpBuilder {
     fn qubit(&mut self) -> Register {
         let base_index = self.qubit_index;
         self.qubit_index += 1;
-        Register::new(self.get_op_id(), vec![base_index]).unwrap()
+        Register::new(self.inc_op_id(), vec![base_index]).unwrap()
     }
 
     fn register(&mut self, n: u64) -> Result<Register, CircuitError> {
@@ -712,7 +725,7 @@ impl UnitaryBuilder for OpBuilder {
         } else {
             let base_index = self.qubit_index;
             self.qubit_index += n;
-            Register::new(self.get_op_id(), (base_index..self.qubit_index).collect())
+            Register::new(self.inc_op_id(), (base_index..self.qubit_index).collect())
         }
     }
 
@@ -772,7 +785,7 @@ impl UnitaryBuilder for OpBuilder {
         op_vec.extend(rs.into_iter());
     }
 
-    fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder {
+    fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder<Self> {
         ConditionalContextBuilder {
             parent_builder: self,
             conditioned_register: Some(r),
@@ -837,7 +850,7 @@ impl UnitaryBuilder for OpBuilder {
         r: Register,
         selected_indices: &[u64],
     ) -> Result<(Register, Option<Register>), CircuitError> {
-        Register::split_absolute(self.get_op_id(), self.get_op_id(), r, selected_indices)
+        Register::split_absolute(self.inc_op_id(), self.inc_op_id(), r, selected_indices)
     }
 
     fn merge_with_op(
@@ -848,11 +861,11 @@ impl UnitaryBuilder for OpBuilder {
         let modifier = named_operator
             .map(|(name, op)| (self.get_full_name(&name), op))
             .map(|(name, op)| StateModifier::new_unitary(name, op));
-        Register::merge_with_modifier(self.get_op_id(), rs, modifier)
+        Register::merge_with_modifier(self.inc_op_id(), rs, modifier)
     }
 
     fn stochastic_measure(&mut self, r: Register) -> (Register, u64) {
-        let id = self.get_op_id();
+        let id = self.inc_op_id();
         let modifier = StateModifier::new_stochastic_measurement(
             String::from("stochastic"),
             id,
@@ -863,36 +876,37 @@ impl UnitaryBuilder for OpBuilder {
         (r, id)
     }
 
-    fn sidechannel_helper(
-        &mut self,
-        rs: Vec<Register>,
-        handles: &[MeasurementHandle],
-        f: Box<SideChannelHelperFn>,
-    ) -> Vec<Register> {
-        let index_groups: Vec<_> = rs.iter().map(|r| &r.indices).cloned().collect();
-        let req_qubits = self.qubit_index + 1;
-
-        let f = Box::new(
-            move |measurements: &[u64]| -> Result<Vec<StateModifier>, CircuitError> {
-                let mut b = Self::new();
-                let r = b.register(req_qubits)?;
-                let rs = f(&mut b, r, measurements)?;
-                let r = b.merge(rs)?;
-                Ok(get_owned_opfns(r))
-            },
-        );
-
-        let modifier = Some(StateModifier::new_side_channel(
-            String::from("SideInputCircuit"),
-            handles,
-            f,
-        ));
-        let r = Register::merge_with_modifier(self.get_op_id(), rs, modifier).unwrap();
-        let deps = handles.iter().map(|m| m.clone_register()).collect();
-        let r = Register::add_deps(r, deps);
-        let (rs, _) = self.split_absolute_many(r, &index_groups).unwrap();
-        rs
-    }
+    // fn sidechannel_helper(
+    //     &mut self,
+    //     rs: Vec<Register>,
+    //     handles: &[MeasurementHandle],
+    //     f: Box<SideChannelHelperFn<Self>>,
+    // ) -> Vec<Register> {
+    //     let index_groups: Vec<_> = rs.iter().map(|r| &r.indices).cloned().collect();
+    //     let req_qubits = self.qubit_index + 1;
+    //
+    //     let f = Box::new(
+    //         move |measurements: &[u64]| -> Result<Vec<StateModifier>, CircuitError> {
+    //             // TODO Double check this for conditional builders
+    //             let mut b = Self::new();
+    //             let r = b.register(req_qubits)?;
+    //             let rs = f(&mut b, r, measurements)?;
+    //             let r = b.merge(rs)?;
+    //             Ok(get_owned_opfns(r))
+    //         },
+    //     );
+    //
+    //     let modifier = Some(StateModifier::new_side_channel(
+    //         String::from("SideInputCircuit"),
+    //         handles,
+    //         f,
+    //     ));
+    //     let r = Register::merge_with_modifier(self.get_op_id(), rs, modifier).unwrap();
+    //     let deps = handles.iter().map(|m| m.clone_register()).collect();
+    //     let r = Register::add_deps(r, deps);
+    //     let (rs, _) = self.split_absolute_many(r, &index_groups).unwrap();
+    //     rs
+    // }
 
     fn debug_registers(
         &mut self,
@@ -901,7 +915,7 @@ impl UnitaryBuilder for OpBuilder {
     ) -> Result<Vec<Register>, CircuitError> {
         let indices: Vec<Vec<u64>> = rs.iter().map(|r| r.indices.clone()).collect();
         let modifier = StateModifier::new_debug("Debug".to_string(), indices.clone(), f);
-        let r = Register::merge_with_modifier(self.get_op_id(), rs, Some(modifier))?;
+        let r = Register::merge_with_modifier(self.inc_op_id(), rs, Some(modifier))?;
         let (rs, remaining) = self.split_absolute_many(r, &indices)?;
         assert_eq!(remaining, None);
         Ok(rs)
@@ -909,12 +923,12 @@ impl UnitaryBuilder for OpBuilder {
 }
 
 /// An op builder which depends on the value of a given Register (COPs)
-pub struct ConditionalContextBuilder<'a> {
-    parent_builder: &'a mut dyn UnitaryBuilder,
+pub struct ConditionalContextBuilder<'a, U: UnitaryBuilder + ?Sized> {
+    parent_builder: &'a mut U,
     conditioned_register: Option<Register>,
 }
 
-impl<'a> fmt::Debug for ConditionalContextBuilder<'a> {
+impl<'a, U: UnitaryBuilder + ?Sized> fmt::Debug for ConditionalContextBuilder<'a, U> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -924,7 +938,7 @@ impl<'a> fmt::Debug for ConditionalContextBuilder<'a> {
     }
 }
 
-impl<'a> ConditionalContextBuilder<'a> {
+impl<'a, U: UnitaryBuilder + ?Sized> ConditionalContextBuilder<'a, U> {
     /// Release the Register used to build this builder
     pub fn release_register(self) -> Register {
         match self.conditioned_register {
@@ -942,7 +956,19 @@ impl<'a> ConditionalContextBuilder<'a> {
     }
 }
 
-impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
+impl<'a, U: UnitaryBuilder + ?Sized> UnitaryBuilder for ConditionalContextBuilder<'a, U> {
+    fn make_new(&self) -> Self {
+        todo!()
+    }
+
+    fn get_qubit_count(&self) -> u64 {
+        self.parent_builder.get_qubit_count()
+    }
+
+    fn get_temp_indices(&self) -> (Vec<u64>, Vec<u64>) {
+        self.parent_builder.get_temp_indices()
+    }
+
     fn qubit(&mut self) -> Register {
         self.parent_builder.qubit()
     }
@@ -959,7 +985,7 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         self.parent_builder.return_temp_register(r, value)
     }
 
-    fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder {
+    fn with_condition(&mut self, r: Register) -> ConditionalContextBuilder<Self> {
         ConditionalContextBuilder {
             parent_builder: self,
             conditioned_register: Some(r),
@@ -1095,36 +1121,33 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
         self.parent_builder.stochastic_measure(r)
     }
 
-    fn sidechannel_helper(
-        &mut self,
-        rs: Vec<Register>,
-        handles: &[MeasurementHandle],
-        f: Box<SideChannelHelperFn>,
-    ) -> Vec<Register> {
-        let cr = self.get_conditional_register();
-        let conditioned_indices = cr.indices.clone();
-        let cindices_clone = conditioned_indices.clone();
-        let f = Box::new(
-            move |b: &mut dyn UnitaryBuilder,
-                  r: Register,
-                  ms: &[u64]|
-                  -> Result<Vec<Register>, CircuitError> {
-                let (cr, r) = b.split_absolute(r, &conditioned_indices)?;
-                let r = r.unwrap();
-                let mut b = b.with_condition(cr);
-                f(&mut b, r, ms)
-            },
-        );
-        let rs = self.parent_builder.sidechannel_helper(rs, handles, f);
-        let index_groups: Vec<_> = rs.iter().map(|r| r.indices.clone()).collect();
-        let r = self.merge(rs).unwrap();
-        let r = self.merge(vec![cr, r]).unwrap();
-        let (cr, r) = self.split_absolute(r, &cindices_clone).unwrap();
-        self.set_conditional_register(cr);
-        let (rs, remaining) = self.split_absolute_many(r.unwrap(), &index_groups).unwrap();
-        assert!(!remaining.is_some(), "There should be no qubits remaining.");
-        rs
-    }
+    // fn sidechannel_helper(
+    //     &mut self,
+    //     rs: Vec<Register>,
+    //     handles: &[MeasurementHandle],
+    //     f: Box<SideChannelHelperFn<Self>>,
+    // ) -> Vec<Register> {
+    //     let cr = self.get_conditional_register();
+    //     let conditioned_indices = cr.indices.clone();
+    //     let cindices_clone = conditioned_indices.clone();
+    //     let f = Box::new(
+    //         move |b: &mut U, r: Register, ms: &[u64]| -> Result<Vec<Register>, CircuitError> {
+    //             let (cr, r) = b.split_absolute(r, &conditioned_indices)?;
+    //             let r = r.unwrap();
+    //             let mut b = b.with_condition(cr);
+    //             f(&mut b, r, ms)
+    //         },
+    //     );
+    //     let rs = self.parent_builder.sidechannel_helper(rs, handles, f);
+    //     let index_groups: Vec<_> = rs.iter().map(|r| r.indices.clone()).collect();
+    //     let r = self.merge(rs).unwrap();
+    //     let r = self.merge(vec![cr, r]).unwrap();
+    //     let (cr, r) = self.split_absolute(r, &cindices_clone).unwrap();
+    //     self.set_conditional_register(cr);
+    //     let (rs, remaining) = self.split_absolute_many(r.unwrap(), &index_groups).unwrap();
+    //     assert!(!remaining.is_some(), "There should be no qubits remaining.");
+    //     rs
+    // }
 
     fn debug_registers(
         &mut self,
@@ -1162,14 +1185,10 @@ impl<'a> UnitaryBuilder for ConditionalContextBuilder<'a> {
 ///     (q1, q2)
 /// });
 /// ```
-pub fn condition<F, RS, OS>(
-    b: &mut dyn UnitaryBuilder,
-    cr: Register,
-    rs: RS,
-    f: F,
-) -> (Register, OS)
+pub fn condition<U, F, RS, OS>(b: &mut U, cr: Register, rs: RS, f: F) -> (Register, OS)
 where
-    F: FnOnce(&mut dyn UnitaryBuilder, RS) -> OS,
+    U: UnitaryBuilder,
+    F: FnOnce(&mut ConditionalContextBuilder<U>, RS) -> OS,
 {
     let mut c = b.with_condition(cr);
     let rs = f(&mut c, rs);
@@ -1197,14 +1216,15 @@ where
 /// # Ok(())
 /// # }
 /// ```
-pub fn try_condition<F, RS, OS>(
-    b: &mut dyn UnitaryBuilder,
+pub fn try_condition<U, F, RS, OS>(
+    b: &mut U,
     cr: Register,
     rs: RS,
     f: F,
 ) -> Result<(Register, OS), CircuitError>
 where
-    F: FnOnce(&mut dyn UnitaryBuilder, RS) -> Result<OS, CircuitError>,
+    U: UnitaryBuilder,
+    F: FnOnce(&mut ConditionalContextBuilder<U>, RS) -> Result<OS, CircuitError>,
 {
     let mut c = b.with_condition(cr);
     let rs = f(&mut c, rs)?;

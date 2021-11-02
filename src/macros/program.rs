@@ -368,17 +368,17 @@ macro_rules! program {
     // (builder, register_1, ...; programs; ...)
     ($builder:expr, $($tail:tt)*) => {
         {
-            let tmp_f = |b: &mut dyn $crate::UnitaryBuilder| -> Result<_,$crate::CircuitError> {
+            let f = || -> Result<_,$crate::CircuitError> {
                 // First reassign each name to a vec index
                 let mut register_manager = $crate::RegisterManager::default();
-                program!(@splitter(b, register_manager) $($tail)*);
+                program!(@splitter($builder, register_manager) $($tail)*);
 
-                program!(@skip_to_program(b, register_manager) $($tail)*);
+                program!(@skip_to_program($builder, register_manager) $($tail)*);
 
-                program!(@joiner(b, register_manager) $($tail)*);
+                program!(@joiner($builder, register_manager) $($tail)*);
                 Ok(program!(@name_tuple () <- $($tail)*))
             };
-            tmp_f($builder)
+            f()
         }
     };
 }
@@ -527,74 +527,74 @@ macro_rules! wrap_fn {
     };
     (pub $newfunc:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), ($func:expr), $($tail:tt)*) => {
         /// Wrapped version of function
-        pub fn $newfunc<$($typetail)*>(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+        pub fn $newfunc<U: $crate::UnitaryBuilder,$($typetail)*>(b: &mut U, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@result_body(b, $func, rs, $arg) $($tail)*)
         }
     };
     (pub $newfunc:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), $func:expr, $($tail:tt)*) => {
         /// Wrapped version of function
-        pub fn $newfunc<$($typetail)*>(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+        pub fn $newfunc<U: $crate::UnitaryBuilder,$($typetail)*>(b: &mut U, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@raw_body(b, $func, rs, $arg) $($tail)*)
         }
     };
     ($newfunc:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), ($func:expr), $($tail:tt)*) => {
-        fn $newfunc<$($typetail)*>(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+        fn $newfunc<U: $crate::UnitaryBuilder,$($typetail)*>(b: &mut U, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@result_body(b, $func, rs, $arg) $($tail)*)
         }
     };
     ($newfunc:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), $func:expr, $($tail:tt)*) => {
-        fn $newfunc<$($typetail)*>(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+        fn $newfunc<U: $crate::UnitaryBuilder,$($typetail)*>(b: &mut U, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@raw_body(b, $func, rs, $arg) $($tail)*)
         }
     };
     (pub $newfunc:ident($arg:ident: $argtype:ident), ($func:expr), $($tail:tt)*) => {
         /// Wrapped version of function
-        pub fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+        pub fn $newfunc<U: $crate::UnitaryBuilder>(b: &mut U, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@result_body(b, $func, rs, $arg) $($tail)*)
         }
     };
     (pub $newfunc:ident($arg:ident: $argtype:ident), $func:expr, $($tail:tt)*) => {
         /// Wrapped version of function
-        pub fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+        pub fn $newfunc<U: $crate::UnitaryBuilder>(b: &mut U, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@raw_body(b, $func, rs, $arg) $($tail)*)
         }
     };
     ($newfunc:ident($arg:ident: $argtype:ident), ($func:expr), $($tail:tt)*) => {
-        fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+        fn $newfunc<U: $crate::UnitaryBuilder>(b: &mut U, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@result_body(b, $func, rs, $arg) $($tail)*)
         }
     };
     ($newfunc:ident($arg:ident: $argtype:ident), $func:expr, $($tail:tt)*) => {
-        fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+        fn $newfunc<U: $crate::UnitaryBuilder>(b: &mut U, mut rs: Vec<$crate::Register>, $arg: $argtype) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@raw_body(b, $func, rs, $arg) $($tail)*)
         }
     };
     (pub $newfunc:ident, ($func:expr), $($tail:tt)*) => {
         /// Wrapped version of function
-        pub fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+        pub fn $newfunc<U: $crate::UnitaryBuilder>(b: &mut U, mut rs: Vec<$crate::Register>) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@result_body(b, $func, rs) $($tail)*)
         }
     };
     (pub $newfunc:ident, $func:expr, $($tail:tt)*) => {
         /// Wrapped version of function
-        pub fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+        pub fn $newfunc<U: $crate::UnitaryBuilder>(b: &mut U, mut rs: Vec<$crate::Register>) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@raw_body(b, $func, rs) $($tail)*)
         }
     };
     ($newfunc:ident, ($func:expr), $($tail:tt)*) => {
-        fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+        fn $newfunc<U: $crate::UnitaryBuilder>(b: &mut U, mut rs: Vec<$crate::Register>) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@result_body(b, $func, rs) $($tail)*)
         }
     };
     ($newfunc:ident, $func:expr, $($tail:tt)*) => {
-        fn $newfunc(b: &mut dyn $crate::UnitaryBuilder, mut rs: Vec<$crate::Register>) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
+        fn $newfunc<U: $crate::UnitaryBuilder>(b: &mut U, mut rs: Vec<$crate::Register>) -> Result<Vec<$crate::Register>, $crate::CircuitError> {
             wrap_fn!(@raw_body(b, $func, rs) $($tail)*)
         }
     };
 }
 
 /// Negate all the qubits in a register where the mask bit == 0.
-pub fn negate_bitmask(b: &mut dyn UnitaryBuilder, r: Register, mask: u64) -> Register {
+pub fn negate_bitmask<U: UnitaryBuilder>(b: &mut U, r: Register, mask: u64) -> Register {
     let rs = b.split_all(r);
     let (rs, _) = rs
         .into_iter()
@@ -616,9 +616,9 @@ pub struct RegisterManager {
 
 impl RegisterManager {
     /// Add a register to the manager
-    pub fn add_register(
+    pub fn add_register<U: UnitaryBuilder>(
         &mut self,
-        b: &mut dyn UnitaryBuilder,
+        b: &mut U,
         r: Register,
         name: &str,
     ) -> RegisterDataWrapper {
@@ -643,9 +643,9 @@ impl RegisterManager {
     }
 
     /// Get all qubits from a register
-    pub fn get_full_register(
+    pub fn get_full_register<U: UnitaryBuilder>(
         &mut self,
-        b: &mut dyn UnitaryBuilder,
+        b: &mut U,
         rid: usize,
     ) -> Result<Register, CircuitError> {
         let (name, registers_for_name) = &mut self.registers[rid];
@@ -667,13 +667,14 @@ impl RegisterManager {
     }
 
     /// Get qubits with specific relative indices for a register.
-    pub fn get_registers<'a, T>(
+    pub fn get_registers<'a, T, U>(
         &mut self,
-        b: &mut dyn UnitaryBuilder,
+        b: &mut U,
         rid: usize,
         relative_indices: &'a [T],
     ) -> Result<Register, CircuitError>
     where
+        U: UnitaryBuilder,
         &'a T: Into<QubitIndices>,
     {
         let (name, registers_for_name) = &mut self.registers[rid];
@@ -707,7 +708,7 @@ impl RegisterManager {
     }
 
     /// Pop off a register
-    pub fn pop_register(&mut self, b: &mut dyn UnitaryBuilder) -> Register {
+    pub fn pop_register<U: UnitaryBuilder>(&mut self, b: &mut U) -> Register {
         let (_, registers) = self.registers.pop().unwrap();
         let rs: Vec<Register> = registers.into_iter().map(Option::unwrap).collect();
         rs.iter().map(|r| r.indices[0] as usize).for_each(|indx| {
@@ -717,7 +718,7 @@ impl RegisterManager {
     }
 
     /// Give qubits back to any registers.
-    pub fn return_registers(&mut self, b: &mut dyn UnitaryBuilder, rs: Vec<Register>) {
+    pub fn return_registers<U: UnitaryBuilder>(&mut self, b: &mut U, rs: Vec<Register>) {
         rs.into_iter()
             .map(|r| b.split_all(r))
             .flatten()
@@ -971,14 +972,13 @@ mod common_circuit_tests {
         let ra = b.register(n)?;
         let rb = b.register(n)?;
 
-        let cnot = |b: &mut dyn UnitaryBuilder,
-                    mut rs: Vec<Register>|
-         -> Result<Vec<Register>, CircuitError> {
-            let rb = rs.pop().unwrap();
-            let ra = rs.pop().unwrap();
-            let (ra, rb) = b.cnot(ra, rb);
-            Ok(vec![ra, rb])
-        };
+        let cnot =
+            |b: &mut OpBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+                let rb = rs.pop().unwrap();
+                let ra = rs.pop().unwrap();
+                let (ra, rb) = b.cnot(ra, rb);
+                Ok(vec![ra, rb])
+            };
 
         let (ra, rb) = program!(&mut b, ra, rb;
             cnot ra, rb[2];
@@ -1013,14 +1013,13 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let r = b.register(n)?;
 
-        let cnot = |b: &mut dyn UnitaryBuilder,
-                    mut rs: Vec<Register>|
-         -> Result<Vec<Register>, CircuitError> {
-            let rb = rs.pop().unwrap();
-            let ra = rs.pop().unwrap();
-            let (ra, rb) = b.cnot(ra, rb);
-            Ok(vec![ra, rb])
-        };
+        let cnot =
+            |b: &mut OpBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+                let rb = rs.pop().unwrap();
+                let ra = rs.pop().unwrap();
+                let (ra, rb) = b.cnot(ra, rb);
+                Ok(vec![ra, rb])
+            };
 
         let r = program!(&mut b, r;
             cnot r[0], r[1];
@@ -1050,14 +1049,13 @@ mod common_circuit_tests {
         let ra = b.register(n)?;
         let rb = b.register(n)?;
 
-        let cnot = |b: &mut dyn UnitaryBuilder,
-                    mut rs: Vec<Register>|
-         -> Result<Vec<Register>, CircuitError> {
-            let rb = rs.pop().unwrap();
-            let ra = rs.pop().unwrap();
-            let (ra, rb) = b.cnot(ra, rb);
-            Ok(vec![ra, rb])
-        };
+        let cnot =
+            |b: &mut OpBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+                let rb = rs.pop().unwrap();
+                let ra = rs.pop().unwrap();
+                let (ra, rb) = b.cnot(ra, rb);
+                Ok(vec![ra, rb])
+            };
 
         let (ra, rb) = program!(&mut b, ra, rb;
             cnot |ra[0], ra[2],| rb[2];
@@ -1092,14 +1090,13 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let r = b.register(n)?;
 
-        let cnot = |b: &mut dyn UnitaryBuilder,
-                    mut rs: Vec<Register>|
-         -> Result<Vec<Register>, CircuitError> {
-            let rb = rs.pop().unwrap();
-            let ra = rs.pop().unwrap();
-            let (ra, rb) = b.cnot(ra, rb);
-            Ok(vec![ra, rb])
-        };
+        let cnot =
+            |b: &mut OpBuilder, mut rs: Vec<Register>| -> Result<Vec<Register>, CircuitError> {
+                let rb = rs.pop().unwrap();
+                let ra = rs.pop().unwrap();
+                let (ra, rb) = b.cnot(ra, rb);
+                Ok(vec![ra, rb])
+            };
 
         let r = program!(&mut b, r;
             cnot r[0..2], r[2];
@@ -1127,13 +1124,14 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let r = b.register(n)?;
 
-        let not = |b: &mut dyn UnitaryBuilder,
-                   mut rs: Vec<Register>|
-         -> Result<Vec<Register>, CircuitError> {
+        fn not<U: UnitaryBuilder>(
+            b: &mut U,
+            mut rs: Vec<Register>,
+        ) -> Result<Vec<Register>, CircuitError> {
             let ra = rs.pop().unwrap();
             let ra = b.not(ra);
             Ok(vec![ra])
-        };
+        }
 
         let r = program!(&mut b, r;
             control not r[0..2], r[2];
@@ -1161,13 +1159,14 @@ mod common_circuit_tests {
         let mut b = OpBuilder::new();
         let r = b.register(n)?;
 
-        let not = |b: &mut dyn UnitaryBuilder,
-                   mut rs: Vec<Register>|
-         -> Result<Vec<Register>, CircuitError> {
+        fn not<U: UnitaryBuilder>(
+            b: &mut U,
+            mut rs: Vec<Register>,
+        ) -> Result<Vec<Register>, CircuitError> {
             let ra = rs.pop().unwrap();
             let ra = b.not(ra);
             Ok(vec![ra])
-        };
+        }
 
         let r = program!(&mut b, r;
             control(00) not r[0..2], r[2];
@@ -1196,13 +1195,14 @@ mod common_circuit_tests {
         let ra = b.qubit();
         let rb = b.qubit();
 
-        let not = |b: &mut dyn UnitaryBuilder,
-                   mut rs: Vec<Register>|
-         -> Result<Vec<Register>, CircuitError> {
+        fn not<U: UnitaryBuilder>(
+            b: &mut U,
+            mut rs: Vec<Register>,
+        ) -> Result<Vec<Register>, CircuitError> {
             let ra = rs.pop().unwrap();
             let ra = b.not(ra);
             Ok(vec![ra])
-        };
+        }
 
         let (ra, rb) = program!(&mut b, ra, rb;
             control not ra, rb;
@@ -1229,7 +1229,7 @@ mod common_circuit_tests {
         Ok(())
     }
 
-    fn simple_fn(b: &mut dyn UnitaryBuilder, ra: Register) -> Register {
+    fn simple_fn<U: UnitaryBuilder>(b: &mut U, ra: Register) -> Register {
         b.not(ra)
     }
 
@@ -1257,8 +1257,8 @@ mod common_circuit_tests {
         Ok(())
     }
 
-    fn complex_fn(
-        b: &mut dyn UnitaryBuilder,
+    fn complex_fn<U: UnitaryBuilder>(
+        b: &mut U,
         ra: Register,
         rb: Register,
         rc: Register,
@@ -1353,7 +1353,7 @@ mod common_circuit_tests {
 
     #[test]
     fn wrap_unitary_fn_arg_generic() -> Result<(), CircuitError> {
-        fn rz<T: Into<f64>>(b: &mut dyn UnitaryBuilder, r: Register, theta: T) -> Register {
+        fn rz<T: Into<f64>, U: UnitaryBuilder>(b: &mut U, r: Register, theta: T) -> Register {
             b.rz(r, theta.into())
         }
         wrap_fn!(wrapped_rz[T: Into<f64>](theta: T), rz, r);

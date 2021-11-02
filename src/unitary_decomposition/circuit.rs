@@ -1,14 +1,14 @@
 use super::decomposition::decompose_unitary;
 use crate::errors::CircuitError;
 use crate::unitary_decomposition::decomposition::{BaseUnitary, DecompOp};
-use crate::{condition, Complex, Register, UnitaryBuilder};
+use crate::{condition, Complex, ConditionalContextBuilder, Register, UnitaryBuilder};
 use num::{One, Zero};
 
 /// Takes a unitary builder and a sparse unitary matrix and attempts to convert the matrix into the
 /// equivalent circuit using basic gates. This is a bit numerically unstable and can be very
 /// expensive for arbitrary matrices.
-pub fn convert_sparse_to_circuit(
-    b: &mut dyn UnitaryBuilder,
+pub fn convert_sparse_to_circuit<U: UnitaryBuilder>(
+    b: &mut U,
     r: Register,
     sparse_unitary: Vec<Vec<(u64, Complex<f64>)>>,
     drop_below: f64,
@@ -19,8 +19,8 @@ pub fn convert_sparse_to_circuit(
     convert_decomp_ops_to_circuit(b, r, &base, &ops)
 }
 
-fn convert_decomp_ops_to_circuit(
-    b: &mut dyn UnitaryBuilder,
+fn convert_decomp_ops_to_circuit<U: UnitaryBuilder>(
+    b: &mut U,
     r: Register,
     base: &BaseUnitary<f64>,
     ops: &[DecompOp<f64>],
@@ -91,12 +91,16 @@ fn convert_decomp_ops_to_circuit(
     b.merge(rs)
 }
 
-fn apply_to_index_with_control<F: Fn(&mut dyn UnitaryBuilder, Register) -> Register>(
-    b: &mut dyn UnitaryBuilder,
+fn apply_to_index_with_control<F, U>(
+    b: &mut U,
     mut rs: Vec<Register>,
     indx: u64,
     f: F,
-) -> Vec<Register> {
+) -> Vec<Register>
+where
+    U: UnitaryBuilder,
+    F: Fn(&mut ConditionalContextBuilder<U>, Register) -> Register,
+{
     let r = rs.remove(indx as usize);
     let cr = b.merge(rs).unwrap();
     let (cr, r) = condition(b, cr, r, |b, r| f(b, r));
@@ -105,8 +109,8 @@ fn apply_to_index_with_control<F: Fn(&mut dyn UnitaryBuilder, Register) -> Regis
     rs
 }
 
-fn negate_difference(
-    b: &mut dyn UnitaryBuilder,
+fn negate_difference<U: UnitaryBuilder>(
+    b: &mut U,
     rs: Vec<Register>,
     old_mask: u64,
     new_mask: u64,

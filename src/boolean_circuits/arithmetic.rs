@@ -6,8 +6,8 @@ use crate::*;
 /// Add together ra and rb using rc as carry, result is in rb.
 /// This works when the highest order bit of rb and rc are both |0>. Undefined behavior otherwise.
 /// ra and rc have m qubits, rb has m+1 qubits.
-pub fn add(
-    b: &mut dyn UnitaryBuilder,
+pub fn add<U: UnitaryBuilder>(
+    b: &mut U,
     rc: Register,
     ra: Register,
     rb: Register,
@@ -41,8 +41,8 @@ pub fn add(
 }
 wrap_and_invert!(pub add_op, pub add_inv, (add), ra, rb, rc);
 
-fn sum(
-    b: &mut dyn UnitaryBuilder,
+fn sum<U: UnitaryBuilder>(
+    b: &mut U,
     rc: Register,
     ra: Register,
     rb: Register,
@@ -55,8 +55,8 @@ fn sum(
 }
 wrap_fn!(sum_op, sum, rc, ra, rb);
 
-fn carry(
-    b: &mut dyn UnitaryBuilder,
+fn carry<U: UnitaryBuilder>(
+    b: &mut U,
     rc: Register,
     ra: Register,
     rb: Register,
@@ -76,8 +76,8 @@ wrap_and_invert!(carry_op, carry_inv, (carry), rc, ra, rb, rcp);
 
 /// Addition of ra and rb modulo rm. Conditions are:
 /// `a,b < M`, `M > 0`.
-pub fn add_mod(
-    b: &mut dyn UnitaryBuilder,
+pub fn add_mod<U: UnitaryBuilder>(
+    b: &mut U,
     ra: Register,
     rb: Register,
     rm: Register,
@@ -120,8 +120,8 @@ wrap_and_invert!(pub add_mod_op, pub add_mod_inv, (add_mod), ra, rb, rm);
 
 /// Maps `|a>|b>|M>|p>` to `|a>|b>|M>|(p + ba) mod M>`
 /// With `a[n+1]`, `b[k]`, `M[n]`, and `p[n+1]`, and `a,p < M`, `M > 0`.
-pub fn times_mod(
-    b: &mut dyn UnitaryBuilder,
+pub fn times_mod<U: UnitaryBuilder>(
+    b: &mut U,
     ra: Register,
     rb: Register,
     rm: Register,
@@ -183,7 +183,7 @@ pub fn times_mod(
 wrap_and_invert!(pub times_mod_op, pub times_mod_inv, (times_mod), ra, rb, rm, rp);
 
 /// Right shift the qubits in a register (or left shift by providing a negative number).
-pub fn rshift(b: &mut dyn UnitaryBuilder, r: Register) -> Register {
+pub fn rshift<U: UnitaryBuilder>(b: &mut U, r: Register) -> Register {
     b.push_name_scope("rshift");
     let n = r.n();
     let mut rs: Vec<Option<Register>> = b.split_all(r).into_iter().map(Some).collect();
@@ -207,8 +207,8 @@ pub fn rshift(b: &mut dyn UnitaryBuilder, r: Register) -> Register {
 wrap_and_invert!(pub rshift_op, pub lshift_op, rshift, r);
 
 /// Performs |a>|b> -> |a>|a ^ b>, which for b=0 is a copy operation.
-pub fn copy(
-    b: &mut dyn UnitaryBuilder,
+pub fn copy<U: UnitaryBuilder>(
+    b: &mut U,
     ra: Register,
     rb: Register,
 ) -> Result<(Register, Register), CircuitError> {
@@ -240,8 +240,8 @@ pub fn copy(
 wrap_and_invert!(pub copy_op, pub copy_inv, (copy), ra, rb);
 
 /// Performs |a>|m>|s> -> |a>|m>|(s + a*a) % m>.
-pub fn square_mod(
-    b: &mut dyn UnitaryBuilder,
+pub fn square_mod<U: UnitaryBuilder>(
+    b: &mut U,
     ra: Register,
     rm: Register,
     rs: Register,
@@ -275,8 +275,8 @@ pub fn square_mod(
 wrap_and_invert!(pub square_mod_op, pub square_mod_inv, (square_mod), ra, rm, rs);
 
 /// Maps |a>|b>|m>|p>|0> -> |a>|b>|m>|p>|(p*a^b) mod m>
-pub fn exp_mod(
-    b: &mut dyn UnitaryBuilder,
+pub fn exp_mod<U: UnitaryBuilder>(
+    b: &mut U,
     ra: Register,
     rb: Register,
     rm: Register,
@@ -357,7 +357,7 @@ mod arithmetic_tests {
     }
 
     fn assert_on_registers_and_filter<
-        F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
+        F: Fn(&mut OpBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
         G: Fn(Vec<u64>, Vec<u64>, u64),
         FilterFn: Fn(&[u64]) -> bool,
     >(
@@ -406,7 +406,7 @@ mod arithmetic_tests {
     }
 
     fn assert_on_registers<
-        F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
+        F: Fn(&mut OpBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
         G: Fn(Vec<u64>, Vec<u64>, u64),
     >(
         b: &mut OpBuilder,

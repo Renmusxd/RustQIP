@@ -1,6 +1,6 @@
 use crate::pipeline::{get_owned_opfns, StateModifierType};
 use crate::state_ops::{invert_op, UnitaryOp};
-use crate::{CircuitError, OpBuilder, Register, UnitaryBuilder};
+use crate::{CircuitError, Register, UnitaryBuilder};
 
 /// Wrap a function to create a version compatible with `program!` as well as an inverse which is
 /// also compatible.
@@ -105,8 +105,8 @@ macro_rules! wrap_and_invert {
 macro_rules! invert_fn {
     (pub $newinvert:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), $func:expr) => {
         /// Invert the given function.
-        pub fn $newinvert<$($typetail)*>(
-            b: &mut dyn $crate::UnitaryBuilder,
+        pub fn $newinvert<U: $crate::UnitaryBuilder, $($typetail)*>(
+            b: &mut U,
             rs: Vec<Register>,
             $arg: $argtype,
         ) -> Result<Vec<Register>, $crate::CircuitError> {
@@ -114,8 +114,8 @@ macro_rules! invert_fn {
         }
     };
     ($newinvert:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), $func:expr) => {
-        fn $newinvert<$($typetail)*>(
-            b: &mut dyn $crate::UnitaryBuilder,
+        fn $newinvert<U: $crate::UnitaryBuilder, $($typetail)*>(
+            b: &mut U,
             rs: Vec<Register>,
             $arg: $argtype,
         ) -> Result<Vec<Register>, $crate::CircuitError> {
@@ -124,8 +124,8 @@ macro_rules! invert_fn {
     };
     (pub $newinvert:ident($arg:ident: $argtype:ident), $func:expr) => {
         /// Invert the given function.
-        pub fn $newinvert(
-            b: &mut dyn $crate::UnitaryBuilder,
+        pub fn $newinvert<U: $crate::UnitaryBuilder>(
+            b: &mut U,
             rs: Vec<Register>,
             $arg: $argtype,
         ) -> Result<Vec<Register>, $crate::CircuitError> {
@@ -133,8 +133,8 @@ macro_rules! invert_fn {
         }
     };
     ($newinvert:ident($arg:ident: $argtype:ident), $func:expr) => {
-        fn $newinvert(
-            b: &mut dyn $crate::UnitaryBuilder,
+        fn $newinvert<U: $crate::UnitaryBuilder>(
+            b: &mut U,
             rs: Vec<Register>,
             $arg: $argtype,
         ) -> Result<Vec<Register>, $crate::CircuitError> {
@@ -143,16 +143,16 @@ macro_rules! invert_fn {
     };
     (pub $newinvert:ident, $func:expr) => {
         /// Invert the given function.
-        pub fn $newinvert(
-            b: &mut dyn $crate::UnitaryBuilder,
+        pub fn $newinvert<U: $crate::UnitaryBuilder>(
+            b: &mut U,
             rs: Vec<Register>,
         ) -> Result<Vec<Register>, $crate::CircuitError> {
             $crate::inverter(b, rs, $func)
         }
     };
     ($newinvert:ident, $func:expr) => {
-        fn $newinvert(
-            b: &mut dyn $crate::UnitaryBuilder,
+        fn $newinvert<U: $crate::UnitaryBuilder>(
+            b: &mut U,
             rs: Vec<Register>,
         ) -> Result<Vec<Register>, $crate::CircuitError> {
             $crate::inverter(b, rs, $func)
@@ -161,29 +161,27 @@ macro_rules! invert_fn {
 }
 
 /// Invert a circuit applied via the function f.
-pub fn inverter<F>(
-    b: &mut dyn UnitaryBuilder,
-    rs: Vec<Register>,
-    f: F,
-) -> Result<Vec<Register>, CircuitError>
+pub fn inverter<F, U>(b: &mut U, rs: Vec<Register>, f: F) -> Result<Vec<Register>, CircuitError>
 where
-    F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
+    U: UnitaryBuilder,
+    F: Fn(&mut U, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
 {
     inverter_args(b, rs, |b, rs, _| f(b, rs), ())
 }
 
 /// Invert a circuit applied via the function f.
-pub fn inverter_args<T, F>(
-    b: &mut dyn UnitaryBuilder,
+pub fn inverter_args<T, F, U>(
+    b: &mut U,
     mut rs: Vec<Register>,
     f: F,
     args: T,
 ) -> Result<Vec<Register>, CircuitError>
 where
-    F: Fn(&mut dyn UnitaryBuilder, Vec<Register>, T) -> Result<Vec<Register>, CircuitError>,
+    U: UnitaryBuilder,
+    F: Fn(&mut U, Vec<Register>, T) -> Result<Vec<Register>, CircuitError>,
 {
     let original_indices: Vec<_> = rs.iter().map(|r| r.indices.clone()).collect();
-    let mut inv_builder = OpBuilder::new();
+    let mut inv_builder = b.make_new();
     let new_rs: Vec<_> = original_indices
         .iter()
         .map(|indices| {
@@ -306,16 +304,14 @@ mod inverter_test {
     use crate::boolean_circuits::arithmetic::{add, add_op};
     use crate::pipeline::{get_required_state_size_from_frontier, InitialState, Representation};
     use crate::utils::flip_bits;
-    use crate::{run_debug, run_local_with_init, Complex, QuantumState};
+    use crate::{run_debug, run_local_with_init, Complex, OpBuilder, QuantumState};
     use num::One;
 
-    fn test_inversion<
-        F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
-    >(
-        b: &mut OpBuilder,
-        rs: Vec<Register>,
-        f: F,
-    ) -> Result<(), CircuitError> {
+    fn test_inversion<U, F>(b: &mut U, rs: Vec<Register>, f: F) -> Result<(), CircuitError>
+    where
+        U: UnitaryBuilder,
+        F: Fn(&mut U, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
+    {
         let rs = f(b, rs)?;
         let rs = inverter(b, rs, f)?;
         let r = b.merge(rs)?;
@@ -356,8 +352,8 @@ mod inverter_test {
 
     #[test]
     fn test_invert_multi() -> Result<(), CircuitError> {
-        fn gamma(
-            b: &mut dyn UnitaryBuilder,
+        fn gamma<U: UnitaryBuilder>(
+            b: &mut U,
             ra: Register,
             rb: Register,
         ) -> Result<(Register, Register), CircuitError> {
@@ -426,7 +422,7 @@ mod inverter_test {
 
     #[test]
     fn test_invert_and_wrap_rz_generic() -> Result<(), CircuitError> {
-        fn rz<T: Into<f64>>(b: &mut dyn UnitaryBuilder, r: Register, theta: T) -> Register {
+        fn rz<T: Into<f64>, U: UnitaryBuilder>(b: &mut U, r: Register, theta: T) -> Register {
             b.rz(r, theta.into())
         }
         wrap_and_invert!(rz_op[T: Into<f64>](theta: T), inv_rz, rz, r);

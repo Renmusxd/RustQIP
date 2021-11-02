@@ -1,18 +1,19 @@
 use crate::errors::CircuitError;
 /// Common circuits for general usage.
-use crate::{OpBuilder, Register, UnitaryBuilder};
+use crate::{Register, UnitaryBuilder};
 
 /// Extract a set of indices, provide them to a function, then reinsert them in the correct order.
 /// Deprecated in favor of prgram! macro
 #[deprecated(note = "Please use program! macro instead")]
-pub fn work_on<F>(
-    b: &mut dyn UnitaryBuilder,
+pub fn work_on<F, U>(
+    b: &mut U,
     r: Register,
     indices: &[u64],
     f: F,
 ) -> Result<Register, CircuitError>
 where
-    F: Fn(&mut dyn UnitaryBuilder, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
+    U: UnitaryBuilder,
+    F: Fn(&mut U, Vec<Register>) -> Result<Vec<Register>, CircuitError>,
 {
     program!(b, r;
         f r indices;
@@ -29,7 +30,7 @@ where
 /// // and second 3 given to bob: |000>|000> + |111>|111>
 /// let (q_alice, q_bob) = qip::epr_pair(&mut b, 3);
 /// ```
-pub fn epr_pair(b: &mut OpBuilder, n: u64) -> (Register, Register) {
+pub fn epr_pair<U: UnitaryBuilder>(b: &mut U, n: u64) -> (Register, Register) {
     let m = 2 * n;
 
     let r = b.qubit();
@@ -52,7 +53,7 @@ pub fn epr_pair(b: &mut OpBuilder, n: u64) -> (Register, Register) {
 #[cfg(test)]
 mod common_circuit_tests {
     use super::*;
-    use crate::run_debug;
+    use crate::{run_debug, OpBuilder};
 
     #[allow(deprecated)]
     #[test]

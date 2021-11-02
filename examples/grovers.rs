@@ -26,8 +26,8 @@ fn prepare_state<P: Precision>(n: u64) -> Result<LocalQuantumState<P>, CircuitEr
 }
 
 /// Reflection across the |s> vector
-fn apply_us(
-    b: &mut dyn UnitaryBuilder,
+fn apply_us<U: UnitaryBuilder>(
+    b: &mut U,
     search: Register,
     ancillary: Register,
 ) -> Result<(Register, Register), CircuitError> {
@@ -40,8 +40,8 @@ fn apply_us(
 }
 
 /// Reflection across the |w_perp> vector (oracle).
-fn apply_uw(
-    b: &mut dyn UnitaryBuilder,
+fn apply_uw<U: UnitaryBuilder>(
+    b: &mut U,
     search: Register,
     ancillary: Register,
     x0: u64,

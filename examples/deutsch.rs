@@ -8,8 +8,8 @@ use qip::{apply_function, run_local, CircuitError, OpBuilder, Register, UnitaryB
 /// |y> --- |   | --- |y xor f(x)>
 ///         -----
 ///
-fn apply_oracle<F>(
-    b: &mut dyn UnitaryBuilder,
+fn apply_oracle<U: UnitaryBuilder, F>(
+    b: &mut U,
     rx: Register,
     ry: Register,
     f: F,
