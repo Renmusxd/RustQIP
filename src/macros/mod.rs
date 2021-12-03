@@ -1,13 +1,20 @@
-/// Main mod with program and macros, all reexported.
-#[macro_use]
-pub mod program;
+use crate::builder_traits::{AdvancedCircuitBuilder, Subcircuitable};
+use crate::conditioning::{Conditionable, ConditionableSubcircuit};
+use crate::macros::inverter::Invertable;
+use crate::Precision;
 
-/// Common ops for programs, not automatically exported because their names easily conflict with
-/// existing variables.
-pub mod common_ops;
-/// Tools for inverting functions on qubits.
-#[macro_use]
 pub mod inverter;
+pub mod program;
+pub mod program_ops;
+pub mod wrap_function;
 
-pub use inverter::*;
-pub use program::*;
+pub trait RecursiveCircuitBuilder<P: Precision>:
+    Invertable<SimilarBuilder = Self::RecursiveSimilarBuilder>
+    + Conditionable
+    + AdvancedCircuitBuilder<P>
+    + Subcircuitable
+    + Conditionable
+    + ConditionableSubcircuit
+{
+    type RecursiveSimilarBuilder: RecursiveCircuitBuilder<P>;
+}

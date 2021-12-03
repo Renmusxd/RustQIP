@@ -1,6 +1,3 @@
-#[cfg(feature = "parallel")]
-pub(crate) use rayon::prelude::*;
-
 /// Choose between iter and par_iter
 #[cfg(not(feature = "parallel"))]
 #[macro_export]

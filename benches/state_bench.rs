@@ -1,12 +1,12 @@
 #![feature(test)]
 
-use num::Complex;
-use qip::state_ops::UnitaryOp::*;
-use qip::state_ops::*;
+use num_complex::Complex;
+use qip::state_ops::iterators::UnitaryOp;
+use qip::state_ops::matrix_ops::{apply_op, from_reals};
 
 /// Make the full op matrix from `ops`.
 /// Not very efficient, use only for debugging.
-fn make_ops_matrix(n: u64, ops: &[&UnitaryOp]) -> Vec<Vec<Complex<f64>>> {
+fn make_ops_matrix(n: usize, ops: &[&UnitaryOp<f64>]) -> Vec<Vec<Complex<f64>>> {
     let zeros: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     (0..1 << n)
         .map(|i| {
@@ -26,6 +26,8 @@ fn make_ops_matrix(n: u64, ops: &[&UnitaryOp]) -> Vec<Vec<Complex<f64>>> {
 mod tests {
     use super::*;
     extern crate test;
+    use qip_rewrite::state_ops::iterators::UnitaryOp::*;
+    use qip_rewrite::state_ops::matrix_ops::{apply_ops, make_control_op, make_matrix_op};
     use test::Bencher;
 
     #[bench]
@@ -34,7 +36,7 @@ mod tests {
 
         let mat = from_reals(&[1.0, 0.0, 0.0, 1.0]);
 
-        let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
+        let ops: Vec<UnitaryOp<f64>> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
         let ops_ref = ops.iter().collect::<Vec<_>>();
 
         let mat_nested = make_ops_matrix(n, &ops_ref);
@@ -55,7 +57,7 @@ mod tests {
         let mult = (1.0 / 2.0f64).sqrt();
         let mat = from_reals(&[mult, mult, mult, -mult]);
 
-        let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
+        let ops: Vec<UnitaryOp<f64>> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
         let ops_ref = ops.iter().collect::<Vec<_>>();
 
         let mat_nested = make_ops_matrix(n, &ops_ref);
@@ -89,7 +91,7 @@ mod tests {
 
         let mat = from_reals(&[1.0, 0.0, 0.0, 1.0]);
 
-        let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
+        let ops: Vec<UnitaryOp<f64>> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
         let ops_ref = ops.iter().collect::<Vec<_>>();
 
         let mat_nested = make_ops_matrix(n, &ops_ref);
@@ -110,12 +112,28 @@ mod tests {
         let mult = (1.0 / 2.0f64).sqrt();
         let mat = from_reals(&[mult, mult, mult, -mult]);
 
-        let ops: Vec<UnitaryOp> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
+        let ops: Vec<UnitaryOp<f64>> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
         let ops_ref = ops.iter().collect::<Vec<_>>();
 
         let mat_nested = make_ops_matrix(n, &ops_ref);
         let mat = mat_nested.into_iter().flatten().collect();
         let op = Matrix((0..n).collect(), mat);
+
+        let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
+        let input = from_reals(&base_vector);
+        let mut output = from_reals(&base_vector);
+
+        b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
+    }
+
+    #[bench]
+    fn bench_hadamard_larger_single(b: &mut Bencher) {
+        let n = 24;
+
+        let mult = (1.0 / 2.0f64).sqrt();
+        let mat = from_reals(&[mult, mult, mult, -mult]);
+
+        let op = Matrix(vec![0], mat);
 
         let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
         let input = from_reals(&base_vector);
@@ -197,15 +215,13 @@ mod tests {
         let op1 = make_matrix_op(vec![0], mat.clone()).unwrap();
         let op2 = make_matrix_op(vec![1], mat).unwrap();
 
-        let r_op1 = &op1;
-        let r_op2 = &op2;
-
         let base_vector: Vec<f32> = (0..1 << n).map(|_| 0.0).collect();
         let input = from_reals(&base_vector);
         let mut output = from_reals(&base_vector);
 
+        let ops = [op1, op2];
         b.iter(|| {
-            apply_ops(n, &[r_op1, r_op2], &input, &mut output, 0, 0);
+            apply_ops(n, &ops, &input, &mut output, 0, 0);
         });
     }
 
@@ -235,15 +251,13 @@ mod tests {
         let op1 = make_matrix_op(vec![0], mat.clone()).unwrap();
         let op2 = make_matrix_op(vec![1], mat).unwrap();
 
-        let r_op1 = &op1;
-        let r_op2 = &op2;
-
         let base_vector: Vec<f32> = (0..1 << n).map(|_| 0.0).collect();
         let input = from_reals(&base_vector);
         let mut output = from_reals(&base_vector);
 
+        let ops = [op1, op2];
         b.iter(|| {
-            apply_ops(n, &[r_op1, r_op2], &input, &mut output, 0, 0);
+            apply_ops(n, &ops, &input, &mut output, 0, 0);
         });
     }
 
@@ -274,14 +288,13 @@ mod tests {
         let ops: Vec<_> = (0..n)
             .map(|indx| make_matrix_op(vec![indx], mat.clone()).unwrap())
             .collect();
-        let r_ops: Vec<_> = ops.iter().collect();
 
         let base_vector: Vec<f32> = (0..1 << n).map(|_| 0.0).collect();
         let input = from_reals(&base_vector);
         let mut output = from_reals(&base_vector);
 
         b.iter(|| {
-            apply_ops(n, &r_ops, &input, &mut output, 0, 0);
+            apply_ops(n, &ops, &input, &mut output, 0, 0);
         });
     }
 
@@ -312,14 +325,13 @@ mod tests {
         let ops: Vec<_> = (0..n)
             .map(|indx| make_matrix_op(vec![indx], mat.clone()).unwrap())
             .collect();
-        let r_ops: Vec<_> = ops.iter().collect();
 
         let base_vector: Vec<f32> = (0..1 << n).map(|_| 0.0).collect();
         let input = from_reals(&base_vector);
         let mut output = from_reals(&base_vector);
 
         b.iter(|| {
-            apply_ops(n, &r_ops, &input, &mut output, 0, 0);
+            apply_ops(n, &ops, &input, &mut output, 0, 0);
         });
     }
 
