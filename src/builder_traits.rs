@@ -322,6 +322,36 @@ pub trait CliffordTBuilder<P: Precision>: UnitaryBuilder<P> {
             Ok((cr, r))
         }
     }
+
+    fn swap(
+        &mut self,
+        ra: Self::Register,
+        rb: Self::Register,
+    ) -> Result<(Self::Register, Self::Register), CircuitError> {
+        if ra.n() == rb.n() {
+            let ras = self.split_all_register(ra);
+            let rbs = self.split_all_register(rb);
+            let (ras, rbs): (Vec<_>, Vec<_>) = ras
+                .into_iter()
+                .zip(rbs.into_iter())
+                .map(|(ra, rb)| {
+                    assert_eq!(ra.n(), 1);
+                    assert_eq!(rb.n(), 1);
+                    self.cnot(ra, rb)
+                        .and_then(|(ra, rb)| self.cnot(rb, ra))
+                        .and_then(|(rb, ra)| self.cnot(ra, rb))
+                        .unwrap()
+                })
+                .unzip();
+            let ra = self.merge_registers(ras).unwrap();
+            let rb = self.merge_registers(rbs).unwrap();
+            Ok((ra, rb))
+        } else {
+            Err(CircuitError::new(
+                "Swap must be between registers of the same size.",
+            ))
+        }
+    }
 }
 
 pub trait TemporaryRegisterBuilder: CircuitBuilder {
@@ -399,36 +429,6 @@ pub trait AdvancedCircuitBuilder<P: Precision>:
             Ok((self.merge_two_registers(crhead, crtail), r))
         } else {
             unreachable!()
-        }
-    }
-
-    fn swap(
-        &mut self,
-        ra: Self::Register,
-        rb: Self::Register,
-    ) -> Result<(Self::Register, Self::Register), CircuitError> {
-        if ra.n() == rb.n() {
-            let ras = self.split_all_register(ra);
-            let rbs = self.split_all_register(rb);
-            let (ras, rbs): (Vec<_>, Vec<_>) = ras
-                .into_iter()
-                .zip(rbs.into_iter())
-                .map(|(ra, rb)| {
-                    assert_eq!(ra.n(), 1);
-                    assert_eq!(rb.n(), 1);
-                    self.cnot(ra, rb)
-                        .and_then(|(ra, rb)| self.cnot(rb, ra))
-                        .and_then(|(rb, ra)| self.cnot(ra, rb))
-                        .unwrap()
-                })
-                .unzip();
-            let ra = self.merge_registers(ras).unwrap();
-            let rb = self.merge_registers(rbs).unwrap();
-            Ok((ra, rb))
-        } else {
-            Err(CircuitError::new(
-                "Swap must be between registers of the same size.",
-            ))
         }
     }
 }

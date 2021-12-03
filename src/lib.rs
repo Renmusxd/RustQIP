@@ -18,6 +18,7 @@ pub mod errors;
 pub mod macros;
 #[cfg(feature = "optimization")]
 pub mod optimizer;
+pub mod qfft;
 pub mod rayon_helper;
 pub mod state_ops;
 pub mod types;

@@ -3,10 +3,11 @@ use crate::errors::CircuitError;
 use crate::macros::inverter::Invertable;
 use crate::macros::RecursiveCircuitBuilder;
 use crate::prelude::{
-    AdvancedCircuitBuilder, CircuitBuilder, CliffordTBuilder, TemporaryRegisterBuilder,
-    UnitaryBuilder,
+    AdvancedCircuitBuilder, CircuitBuilder, CliffordTBuilder, RotationsBuilder,
+    TemporaryRegisterBuilder, UnitaryBuilder,
 };
 use crate::{Complex, Precision};
+use num_rational::Rational64;
 use std::num::NonZeroUsize;
 
 pub trait Conditionable: CircuitBuilder {
@@ -122,6 +123,58 @@ impl<'a, P: Precision, CB: Conditionable + CliffordTBuilder<P> + ?Sized> Cliffor
         self.parent.make_cnot()
     }
 }
+impl<'a, P: Precision, CB: Conditionable + RotationsBuilder<P> + ?Sized> RotationsBuilder<P>
+    for Conditioned<'a, CB>
+{
+    fn rz(&mut self, r: Self::Register, theta: P) -> Self::Register {
+        self.parent.rz(r, theta)
+    }
+
+    fn rx(&mut self, r: Self::Register, theta: P) -> Self::Register {
+        self.parent.rx(r, theta)
+    }
+
+    fn ry(&mut self, r: Self::Register, theta: P) -> Self::Register {
+        self.parent.ry(r, theta)
+    }
+
+    fn rz_ratio(
+        &mut self,
+        r: Self::Register,
+        theta: Rational64,
+    ) -> Result<Self::Register, CircuitError> {
+        self.parent.rz_ratio(r, theta)
+    }
+
+    fn rx_ratio(
+        &mut self,
+        r: Self::Register,
+        theta: Rational64,
+    ) -> Result<Self::Register, CircuitError> {
+        self.parent.rx_ratio(r, theta)
+    }
+
+    fn ry_ratio(
+        &mut self,
+        r: Self::Register,
+        theta: Rational64,
+    ) -> Result<Self::Register, CircuitError> {
+        self.parent.ry_ratio(r, theta)
+    }
+
+    fn rz_pi_by(&mut self, r: Self::Register, m: i64) -> Result<Self::Register, CircuitError> {
+        self.parent.rz_pi_by(r, m)
+    }
+
+    fn rx_pi_by(&mut self, r: Self::Register, m: i64) -> Result<Self::Register, CircuitError> {
+        self.parent.rx_pi_by(r, m)
+    }
+
+    fn ry_pi_by(&mut self, r: Self::Register, m: i64) -> Result<Self::Register, CircuitError> {
+        self.parent.ry_pi_by(r, m)
+    }
+}
+
 impl<'a, CB: Conditionable + TemporaryRegisterBuilder + ?Sized> TemporaryRegisterBuilder
     for Conditioned<'a, CB>
 {
