@@ -1,4 +1,4 @@
-use crate::errors::CircuitError;
+use crate::errors::{CircuitError, CircuitResult};
 use crate::prelude::{AdvancedCircuitBuilder, CliffordTBuilder};
 use crate::Precision;
 
@@ -7,7 +7,7 @@ macro_rules! make_single_qubit_op {
         pub fn $opname<P: Precision, UB: CliffordTBuilder<P>>(
             b: &mut UB,
             r: Vec<UB::Register>,
-        ) -> Result<Vec<UB::Register>, CircuitError> {
+        ) -> CircuitResult<Vec<UB::Register>> {
             Ok(b.merge_registers(r.into_iter())
                 .map(|r| b.$funccall(r))
                 .map(|r| vec![r])
@@ -27,7 +27,7 @@ make_single_qubit_op!(t, t);
 pub fn cnot<P: Precision, UB: CliffordTBuilder<P>>(
     b: &mut UB,
     mut rs: Vec<UB::Register>,
-) -> Result<Vec<UB::Register>, CircuitError> {
+) -> CircuitResult<Vec<UB::Register>> {
     let r = rs
         .pop()
         .ok_or_else(|| CircuitError::new("CNOT requires at least 2 qubits."))?;
@@ -42,7 +42,7 @@ pub fn cnot<P: Precision, UB: CliffordTBuilder<P>>(
 pub fn toffoli<P: Precision, UB: AdvancedCircuitBuilder<P>>(
     b: &mut UB,
     mut rs: Vec<UB::Register>,
-) -> Result<Vec<UB::Register>, CircuitError> {
+) -> CircuitResult<Vec<UB::Register>> {
     let r = rs
         .pop()
         .ok_or_else(|| CircuitError::new("Toffoli requires at least 2 qubits."))?;

@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 ///
 /// # Example
 /// ```
-/// use qip_rewrite::utils::set_bit;
+/// use qip::utils::set_bit;
 /// let n = set_bit(0, 1, true);
 /// assert_eq!(n, 2);
 /// ```
@@ -26,7 +26,7 @@ pub fn set_bit(num: usize, bit_index: usize, value: bool) -> usize {
 ///
 /// # Example
 /// ```
-/// use qip_rewrite::utils::get_bit;
+/// use qip::utils::get_bit;
 /// let n = get_bit(2, 1);
 /// assert_eq!(n, true);
 /// ```
@@ -39,7 +39,7 @@ pub fn get_bit(num: usize, bit_index: usize) -> bool {
 ///
 /// # Example
 /// ```
-/// use qip_rewrite::utils::entwine_bits;
+/// use qip::utils::entwine_bits;
 ///
 /// let n = 3;
 /// let off_bits = 0b01; // 2 bits from off
@@ -82,7 +82,7 @@ pub fn get_flat_index(nindices: usize, i: usize, j: usize) -> usize {
 /// # Example
 ///
 /// ```
-/// use qip_rewrite::utils::flip_bits;
+/// use qip::utils::flip_bits;
 ///
 /// assert_eq!(flip_bits(3, 0b100), 0b001);
 /// assert_eq!(flip_bits(3, 0b010), 0b010);
@@ -99,7 +99,7 @@ pub fn flip_bits(n: usize, num: usize) -> usize {
 /// # Example
 ///
 /// ```
-/// use qip_rewrite::utils::extract_bits;
+/// use qip::utils::extract_bits;
 ///
 /// assert_eq!(extract_bits(0b1010, &[3, 0]), 0b01);
 /// ```

@@ -1,6 +1,6 @@
 use crate::builder_traits::*;
 use crate::conditioning::{Conditionable, ConditionableSubcircuit};
-use crate::errors::CircuitError;
+use crate::errors::{CircuitError, CircuitResult};
 use crate::macros::inverter::Invertable;
 use crate::macros::program_ops::not;
 use crate::macros::RecursiveCircuitBuilder;
@@ -216,7 +216,7 @@ impl<P: Precision> CircuitBuilder for LocalBuilder<P> {
         &mut self,
         r: Self::Register,
         c: Self::CircuitObject,
-    ) -> Result<Self::Register, CircuitError> {
+    ) -> CircuitResult<Self::Register> {
         if c.n == 1 || c.n == r.n() {
             if c.n == 1 && r.n() > 1 {
                 // Do broadcasting
@@ -250,12 +250,13 @@ impl<P: Precision> CircuitBuilder for LocalBuilder<P> {
             .map(|(r, x)| {
                 r.indices
                     .iter()
+                    .rev()
                     .cloned()
                     .enumerate()
-                    .map(move |(ri, i)| (i, (x >> ri) & 1))
+                    .map(move |(ri, i)| (r.n() - 1 - i, (x >> ri) & 1))
             })
             .flatten()
-            .for_each(|(index, bit)| initial_index = initial_index | (bit << index));
+            .for_each(|(index, bit)| initial_index |= bit << index);
         state[initial_index] = Complex::one();
 
         let (state, _, measurements) = self
@@ -263,7 +264,7 @@ impl<P: Precision> CircuitBuilder for LocalBuilder<P> {
             .iter()
             .try_fold(
                 (state, arena, vec![]),
-                |(state, mut arena, mut measurements), (indices, obj)| -> Result<_, CircuitError> {
+                |(state, mut arena, mut measurements), (indices, obj)| -> CircuitResult<_> {
                     let BuilderCircuitObject { object, .. } = obj;
                     match object {
                         // Global phases do not affect state.
@@ -481,7 +482,7 @@ impl<P: Precision> RotationsBuilder<P> for LocalBuilder<P> {
         };
         self.apply_circuit_object(r, co).unwrap()
     }
-    fn rz_pi_by(&mut self, r: Self::Register, m: i64) -> Result<Self::Register, CircuitError> {
+    fn rz_pi_by(&mut self, r: Self::Register, m: i64) -> CircuitResult<Self::Register> {
         if m == 0 {
             Err(CircuitError::new("Cannot rotate by pi/0"))
         } else {
@@ -646,7 +647,7 @@ fn split_vector_at<T>(mut v: Vec<T>, x: usize) -> (Vec<T>, Vec<T>) {
 impl<P: Precision> Subcircuitable for LocalBuilder<P> {
     type Subcircuit = Vec<(Vec<usize>, Self::CircuitObject)>;
 
-    fn make_subcircuit(&self) -> Result<Self::Subcircuit, CircuitError> {
+    fn make_subcircuit(&self) -> CircuitResult<Self::Subcircuit> {
         Ok(self.pipeline.clone())
     }
 
@@ -654,7 +655,7 @@ impl<P: Precision> Subcircuitable for LocalBuilder<P> {
         &mut self,
         sc: Self::Subcircuit,
         r: Self::Register,
-    ) -> Result<Self::Register, CircuitError> {
+    ) -> CircuitResult<Self::Register> {
         apply_pipeline_objects(self, sc, r)
     }
 }
@@ -666,7 +667,7 @@ impl<P: Precision> Invertable for LocalBuilder<P> {
         Self::default()
     }
 
-    fn invert_subcircuit(sc: Self::Subcircuit) -> Result<Self::Subcircuit, CircuitError> {
+    fn invert_subcircuit(sc: Self::Subcircuit) -> CircuitResult<Self::Subcircuit> {
         sc.into_iter()
             .rev()
             .try_fold(vec![], |mut acc, (indices, co)| {
@@ -696,7 +697,7 @@ fn apply_pipeline_objects<CB, CO>(
     cb: &mut CB,
     sc: CB::Subcircuit,
     r: CB::Register,
-) -> Result<CB::Register, CircuitError>
+) -> CircuitResult<CB::Register>
 where
     CB: CircuitBuilder<CircuitObject = CO>
         + Subcircuitable<Subcircuit = Vec<(Vec<usize>, CO)>>
@@ -741,7 +742,7 @@ where
 
 fn invert_circuit_object<P: Precision>(
     co: BuilderCircuitObject<P>,
-) -> Result<Vec<BuilderCircuitObject<P>>, CircuitError> {
+) -> CircuitResult<Vec<BuilderCircuitObject<P>>> {
     match co.object {
         BuilderCircuitObjectType::Unitary(u) => {
             let new_objs = match u {
@@ -835,7 +836,7 @@ pub mod optimizers {
                 }
                 UnitaryMatrixObject::MAT(data) => {
                     state.write_i8(10);
-                    data.into_iter().for_each(|c| {
+                    data.iter().for_each(|c| {
                         hash_p(c.re, state);
                         hash_p(c.im, state);
                     })
@@ -864,7 +865,7 @@ pub mod optimizers {
     >;
 
     impl<P: Precision> LocalBuilder<P> {
-        pub fn simple_map_strings(x: &str) -> Result<BuilderCircuitObjectType<P>, CircuitError> {
+        pub fn simple_map_strings(x: &str) -> CircuitResult<BuilderCircuitObjectType<P>> {
             let res = match x {
                 "X" => BuilderCircuitObjectType::Unitary(UnitaryMatrixObject::X),
                 "Y" => BuilderCircuitObjectType::Unitary(UnitaryMatrixObject::Y),
@@ -906,7 +907,7 @@ pub mod optimizers {
         pub fn make_circuit_optimizer_from_trie(
             &self,
             trie: OptimizerTrie<P>,
-        ) -> Result<MonteCarloOptimizer<BuilderCircuitObjectType<P>>, CircuitError> {
+        ) -> CircuitResult<MonteCarloOptimizer<BuilderCircuitObjectType<P>>> {
             Ok(MonteCarloOptimizer::new(
                 self.make_subcircuit()?
                     .into_iter()
@@ -918,7 +919,7 @@ pub mod optimizers {
         pub fn make_circuit_optimizer<It, S>(
             &self,
             rules: It,
-        ) -> Result<MonteCarloOptimizer<BuilderCircuitObjectType<P>>, CircuitError>
+        ) -> CircuitResult<MonteCarloOptimizer<BuilderCircuitObjectType<P>>>
         where
             S: AsRef<str>,
             It: IntoIterator<Item = S>,
@@ -930,7 +931,7 @@ pub mod optimizers {
         pub fn make_circuit_optimizer_from_file<S>(
             &self,
             filepath: S,
-        ) -> Result<MonteCarloOptimizer<BuilderCircuitObjectType<P>>, CircuitError>
+        ) -> CircuitResult<MonteCarloOptimizer<BuilderCircuitObjectType<P>>>
         where
             S: AsRef<Path>,
         {
@@ -938,11 +939,7 @@ pub mod optimizers {
             self.make_circuit_optimizer_from_trie(trie)
         }
 
-        pub fn apply_optimizer_circuit<It>(
-            &mut self,
-            r: Qudit,
-            it: It,
-        ) -> Result<Qudit, CircuitError>
+        pub fn apply_optimizer_circuit<It>(&mut self, r: Qudit, it: It) -> CircuitResult<Qudit>
         where
             It: IntoIterator<Item = (Vec<usize>, BuilderCircuitObjectType<P>)>,
         {

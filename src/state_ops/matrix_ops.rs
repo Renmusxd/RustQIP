@@ -1,5 +1,5 @@
 /// Contains functions, structs, and enums for storing and manipulating the quantum state.
-use crate::errors::CircuitError;
+use crate::errors::{CircuitError, CircuitResult};
 use crate::state_ops::iterators::*;
 use crate::types::Representation;
 use crate::utils::*;
@@ -12,7 +12,7 @@ use std::cmp::{max, min};
 pub fn make_matrix_op<P: Precision>(
     indices: Vec<usize>,
     dat: Vec<Complex<P>>,
-) -> Result<UnitaryOp<P>, CircuitError> {
+) -> CircuitResult<UnitaryOp<P>> {
     let n = indices.len();
     let expected_mat_size = 1 << (2 * n);
     if indices.is_empty() {
@@ -36,7 +36,7 @@ pub fn make_sparse_matrix_op<P: Precision>(
     indices: Vec<usize>,
     dat: Vec<Vec<(usize, Complex<P>)>>,
     order: Representation,
-) -> Result<UnitaryOp<P>, CircuitError> {
+) -> CircuitResult<UnitaryOp<P>> {
     let n = indices.len();
     let expected_mat_size = 1 << n;
     if indices.is_empty() {
@@ -114,7 +114,7 @@ pub fn make_sparse_matrix_from_function<P: Precision, F: Fn(usize) -> Vec<(usize
 pub fn make_swap_op<P: Precision>(
     a_indices: Vec<usize>,
     b_indices: Vec<usize>,
-) -> Result<UnitaryOp<P>, CircuitError> {
+) -> CircuitResult<UnitaryOp<P>> {
     if a_indices.is_empty() || b_indices.is_empty() {
         Err(CircuitError::new("Need at least 1 swap index for a and b"))
     } else if a_indices.len() != b_indices.len() {
@@ -133,7 +133,7 @@ pub fn make_swap_op<P: Precision>(
 pub fn make_control_op<P: Precision>(
     mut c_indices: Vec<usize>,
     op: UnitaryOp<P>,
-) -> Result<UnitaryOp<P>, CircuitError> {
+) -> CircuitResult<UnitaryOp<P>> {
     if c_indices.is_empty() {
         Err(CircuitError::new("Must supply at least one control index"))
     } else {

@@ -357,7 +357,7 @@ mod arithmetic_tests {
     use super::*;
     use crate::builder::Qudit;
     use crate::utils::{extract_bits, flip_bits};
-    use num_traits::{Float, One};
+    use num_traits::One;
 
     fn measure_each<CB>(
         b: &mut CB,
@@ -381,9 +381,9 @@ mod arithmetic_tests {
         f: F,
         assertion: G,
         filter: FilterFn,
-    ) -> Result<(), CircuitError>
+    ) -> CircuitResult<()>
     where
-        F: Fn(&mut LocalBuilder<f64>, Vec<Qudit>) -> Result<Vec<Qudit>, CircuitError>,
+        F: Fn(&mut LocalBuilder<f64>, Vec<Qudit>) -> CircuitResult<Vec<Qudit>>,
         G: Fn(Vec<usize>, Vec<usize>, usize),
         FilterFn: Fn(&Vec<usize>) -> bool,
     {
@@ -394,8 +394,8 @@ mod arithmetic_tests {
         let (rs, after_measurements) = measure_each(b, rs);
         let r = b
             .merge_registers(rs)
-            .ok_or(CircuitError::new("No qudits found"))?;
-        let indices: Vec<_> = (0..n).collect();
+            .ok_or_else(|| CircuitError::new("No qudits found"))?;
+        // let indices: Vec<_> = (0..n).collect();
         (0..1 << n).into_iter().try_for_each(|indx| {
             let filter_measurements: Vec<_> = index_groups
                 .iter()
@@ -428,16 +428,16 @@ mod arithmetic_tests {
         rs: Vec<Qudit>,
         f: F,
         assertion: G,
-    ) -> Result<(), CircuitError>
+    ) -> CircuitResult<()>
     where
-        F: Fn(&mut LocalBuilder<f64>, Vec<Qudit>) -> Result<Vec<Qudit>, CircuitError>,
+        F: Fn(&mut LocalBuilder<f64>, Vec<Qudit>) -> CircuitResult<Vec<Qudit>>,
         G: Fn(Vec<usize>, Vec<usize>, usize),
     {
         assert_on_registers_and_filter(b, rs, f, assertion, |_| true)
     }
 
     #[test]
-    fn test_carry_simple() -> Result<(), CircuitError> {
+    fn test_carry_simple() -> CircuitResult<()> {
         let mut b = LocalBuilder::<f64>::default();
         let rc = b.qubit();
         let ra = b.qubit();
@@ -471,7 +471,7 @@ mod arithmetic_tests {
     }
 
     #[test]
-    fn test_sum_simple() -> Result<(), CircuitError> {
+    fn test_sum_simple() -> CircuitResult<()> {
         let mut b = LocalBuilder::<f64>::default();
         let rc = b.qubit();
         let ra = b.qubit();
@@ -495,39 +495,44 @@ mod arithmetic_tests {
     }
 
     #[test]
-    fn test_add_1m() -> Result<(), CircuitError> {
+    fn test_add_1m() -> CircuitResult<()> {
         let mut b = LocalBuilder::<f64>::default();
         let rc = b.qubit();
         let ra = b.qubit();
         let rb = b.register(NonZeroUsize::new(2).unwrap());
 
-        assert_on_registers(&mut b, vec![rc, ra, rb], add_op, |befores, afters, _| {
-            let c = befores[0];
-            let a = befores[1];
-            let b = befores[2];
+        let r = b
+            .merge_registers([rc, ra, rb])
+            .ok_or_else(|| CircuitError::new("No qubits"))?;
+        let mat = make_circuit_matrix(&mut b, &r, |(state, _)| state);
+        mat.into_iter().enumerate().for_each(|(i, row)| {
+            println!(
+                "{:4b}\t{:4b}",
+                i,
+                row.into_iter().position(|c| c.norm() > 0.0).unwrap()
+            );
+        });
+        assert!(false);
 
-            let q_c = afters[0];
-            let q_a = afters[1];
-            let q_b = afters[2];
-
-            let num = |x: bool| {
-                if x {
-                    1
-                } else {
-                    0
-                }
-            };
-
-            dbg!(c, a, b, q_c, q_a, q_b, (b + c + a) % 4);
-            assert_eq!(q_c, c);
-            assert_eq!(q_a, a);
-            assert_eq!(q_b, (b + c + a) % 4)
-        })?;
+        // assert_on_registers(&mut b, vec![rc, ra, rb], add_op, |befores, afters, _| {
+        //     let c = befores[0];
+        //     let a = befores[1];
+        //     let b = befores[2];
+        //
+        //     let q_c = afters[0];
+        //     let q_a = afters[1];
+        //     let q_b = afters[2];
+        //
+        //     dbg!(c, a, b, q_c, q_a, q_b, (b + c + a) % 4);
+        //     assert_eq!(q_c, c);
+        //     assert_eq!(q_a, a);
+        //     assert_eq!(q_b, (b + c + a) % 4)
+        // })?;
         Ok(())
     }
 
     // #[test]
-    // fn test_add_2m() -> Result<(), CircuitError> {
+    // fn test_add_2m() -> CircuitResult<()> {
     //     let mut b = OpBuilder::new();
     //     let n = 2;
     //     let rc = b.register(n)?;
@@ -562,7 +567,7 @@ mod arithmetic_tests {
     // }
     //
     // #[test]
-    // fn test_add_3m() -> Result<(), CircuitError> {
+    // fn test_add_3m() -> CircuitResult<()> {
     //     let mut b = OpBuilder::new();
     //     let n = 3;
     //     let rc = b.register(n)?;
@@ -597,7 +602,7 @@ mod arithmetic_tests {
     // }
     //
     // #[test]
-    // fn test_mod_add() -> Result<(), CircuitError> {
+    // fn test_mod_add() -> CircuitResult<()> {
     //     let mut b = OpBuilder::new();
     //     let ra = b.register(1)?;
     //     let rb = b.register(2)?;
@@ -632,7 +637,7 @@ mod arithmetic_tests {
     // }
     //
     // #[test]
-    // fn test_mod_add_larger() -> Result<(), CircuitError> {
+    // fn test_mod_add_larger() -> CircuitResult<()> {
     //     let mut b = OpBuilder::new();
     //     let ra = b.register(2)?;
     //     let rb = b.register(3)?;
@@ -667,7 +672,7 @@ mod arithmetic_tests {
     // }
     //
     // #[test]
-    // fn test_rshift() -> Result<(), CircuitError> {
+    // fn test_rshift() -> CircuitResult<()> {
     //     let mut b = OpBuilder::new();
     //     let n = 5;
     //     let r = b.register(n)?;
@@ -681,7 +686,7 @@ mod arithmetic_tests {
     // }
     //
     // #[test]
-    // fn test_lshift() -> Result<(), CircuitError> {
+    // fn test_lshift() -> CircuitResult<()> {
     //     let mut b = OpBuilder::new();
     //     let n = 5;
     //     let r = b.register(n)?;
@@ -695,7 +700,7 @@ mod arithmetic_tests {
     // }
     //
     // #[test]
-    // fn test_mod_times() -> Result<(), CircuitError> {
+    // fn test_mod_times() -> CircuitResult<()> {
     //     let circuit_n = 2;
     //     let mod_k = 2;
     //     let mut b = OpBuilder::new();
@@ -736,7 +741,7 @@ mod arithmetic_tests {
     // }
     //
     // #[test]
-    // fn test_mod_squared() -> Result<(), CircuitError> {
+    // fn test_mod_squared() -> CircuitResult<()> {
     //     let circuit_n = 2;
     //     let mut b = OpBuilder::new();
     //     let ra = b.register(circuit_n + 1)?;
@@ -803,7 +808,7 @@ mod arithmetic_tests {
     // }
     //
     // #[test]
-    // fn test_exp_mod_base() -> Result<(), CircuitError> {
+    // fn test_exp_mod_base() -> CircuitResult<()> {
     //     let n = 1;
     //     let k = 1;
     //     let mut b = OpBuilder::new();
@@ -824,7 +829,7 @@ mod arithmetic_tests {
     // }
     //
     // #[test]
-    // fn test_exp_mod_base_larger() -> Result<(), CircuitError> {
+    // fn test_exp_mod_base_larger() -> CircuitResult<()> {
     //     let n = 2;
     //     let k = 1;
     //     let mut b = OpBuilder::new();
@@ -845,7 +850,7 @@ mod arithmetic_tests {
     // }
     //
     // #[test]
-    // fn test_exp_small_rec() -> Result<(), CircuitError> {
+    // fn test_exp_small_rec() -> CircuitResult<()> {
     //     let n = 1;
     //     let k = 2;
     //     let mut b = OpBuilder::new();

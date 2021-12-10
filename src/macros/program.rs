@@ -1,3 +1,4 @@
+use crate::errors::CircuitResult;
 use crate::prelude::{CircuitBuilder, CircuitError, CliffordTBuilder, QubitRegister};
 use crate::Precision;
 use std::ops::{Range, RangeInclusive};
@@ -339,7 +340,7 @@ impl<R: QubitRegister> RegisterManager<R> {
         &mut self,
         b: &mut CB,
         rid: usize,
-    ) -> Result<R, CircuitError> {
+    ) -> CircuitResult<R> {
         let (name, registers_for_name) = &mut self.registers[rid];
         let rs = registers_for_name.iter_mut().enumerate().try_fold(
             Vec::default(),
@@ -365,7 +366,7 @@ impl<R: QubitRegister> RegisterManager<R> {
         b: &mut CB,
         rid: usize,
         relative_indices: &'a [T],
-    ) -> Result<R, CircuitError>
+    ) -> CircuitResult<R>
     where
         &'a T: Into<QubitIndices>,
     {

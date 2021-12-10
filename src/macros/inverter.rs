@@ -1,16 +1,16 @@
 use crate::builder_traits::{CircuitBuilder, QubitRegister, SplitManyResult, Subcircuitable};
-use crate::errors::CircuitError;
+use crate::errors::CircuitResult;
 
 pub trait Invertable: Subcircuitable {
     type SimilarBuilder: Subcircuitable<Subcircuit = Self::Subcircuit>;
 
     fn new_similar(&self) -> Self::SimilarBuilder;
-    fn invert_subcircuit(sc: Self::Subcircuit) -> Result<Self::Subcircuit, CircuitError>;
+    fn invert_subcircuit(sc: Self::Subcircuit) -> CircuitResult<Self::Subcircuit>;
     fn apply_inverted_subcircuit(
         &mut self,
         sc: Self::Subcircuit,
         r: Self::Register,
-    ) -> Result<Self::Register, CircuitError> {
+    ) -> CircuitResult<Self::Register> {
         let sc = Self::invert_subcircuit(sc)?;
         self.apply_subcircuit(sc, r)
     }
@@ -21,14 +21,14 @@ pub fn inverter_args<T, CB, F>(
     rs: Vec<CB::Register>,
     f: F,
     t: T,
-) -> Result<Vec<CB::Register>, CircuitError>
+) -> CircuitResult<Vec<CB::Register>>
 where
     CB: Invertable,
     F: Fn(
         &mut CB::SimilarBuilder,
         Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>,
         T,
-    ) -> Result<Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>, CircuitError>,
+    ) -> CircuitResult<Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>>,
 {
     let mut sub_cb = cb.new_similar();
     let sub_rs = rs
@@ -50,17 +50,13 @@ where
     }
 }
 
-pub fn inverter<CB, F>(
-    cb: &mut CB,
-    r: Vec<CB::Register>,
-    f: F,
-) -> Result<Vec<CB::Register>, CircuitError>
+pub fn inverter<CB, F>(cb: &mut CB, r: Vec<CB::Register>, f: F) -> CircuitResult<Vec<CB::Register>>
 where
     CB: Invertable,
     F: Fn(
         &mut CB::SimilarBuilder,
         Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>,
-    ) -> Result<Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>, CircuitError>,
+    ) -> CircuitResult<Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>>,
 {
     inverter_args(cb, r, |r, cb, _| f(r, cb), ())
 }

@@ -23,8 +23,8 @@ pub fn prob_magnitude<P: Precision>(input: &[Complex<P>]) -> P {
 ///
 /// # Examples
 /// ```
-/// use qip_rewrite::state_ops::matrix_ops::from_reals;
-/// use qip_rewrite::state_ops::measurement_ops::measure_prob;
+/// use qip::state_ops::matrix_ops::from_reals;
+/// use qip::state_ops::measurement_ops::measure_prob;
 ///
 /// // Make the state |10>, index 0 is always |1> and index 1 is always |0>
 /// let input = from_reals(&[0.0, 0.0, 1.0, 0.0]);
@@ -135,8 +135,8 @@ pub fn measure_probs<P: Precision>(
 ///
 /// # Examples
 /// ```
-/// use qip_rewrite::state_ops::matrix_ops::from_reals;
-/// use qip_rewrite::state_ops::measurement_ops::soft_measure;
+/// use qip::state_ops::matrix_ops::from_reals;
+/// use qip::state_ops::measurement_ops::soft_measure;
 ///
 /// // Make the state |10>, index 0 is always |1> and index 1 is always |0>
 /// let input = from_reals(&[0.0, 0.0, 1.0, 0.0]);

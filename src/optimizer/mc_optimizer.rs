@@ -1,4 +1,4 @@
-use crate::errors::CircuitError;
+use crate::errors::{CircuitError, CircuitResult};
 use crate::optimizer::index_trie::IndexTrie;
 use rand::prelude::SliceRandom;
 use rand::Rng;
@@ -23,7 +23,7 @@ where
     data: Vec<Node<CO>>,
     head: Option<usize>,
     trie: Option<IndexTrie<(Vec<usize>, CO), Vec<(Vec<usize>, CO)>>>,
-    nvars: usize,
+    // nvars: usize,
 }
 
 impl<CO> MonteCarloOptimizer<CO>
@@ -48,13 +48,13 @@ where
             prev = sel;
             sel = self.data[isel].next;
         }
-        return count == self.data.len();
+        count == self.data.len()
     }
 
-    pub fn new_from_path<SC, F, P>(sc: SC, trie_path: P, f: F) -> Result<Self, CircuitError>
+    pub fn new_from_path<SC, F, P>(sc: SC, trie_path: P, f: F) -> CircuitResult<Self>
     where
         SC: IntoIterator<Item = (Vec<usize>, CO)>,
-        F: Fn(&str) -> Result<CO, CircuitError>,
+        F: Fn(&str) -> CircuitResult<CO>,
         P: AsRef<Path>,
     {
         let trie = IndexTrie::new_from_filepath(trie_path, f)?;
@@ -90,27 +90,22 @@ where
         } else {
             None
         };
-        let nvars = data
-            .iter()
-            .map(|node| node.indices.iter().cloned().max())
-            .flatten()
-            .max()
-            .unwrap_or(0);
+        // let nvars = data
+        //     .iter()
+        //     .map(|node| node.indices.iter().cloned().max())
+        //     .flatten()
+        //     .max()
+        //     .unwrap_or(0);
         Self {
             data,
             head,
             trie: Some(replacement_trie),
-            nvars,
+            // nvars,
         }
     }
 
     /// Returns the index just before the replaced region, and the index just after.
-    fn replace<It>(
-        &mut self,
-        start_inc: usize,
-        end_inc: usize,
-        with: It,
-    ) -> Result<(), CircuitError>
+    fn replace<It>(&mut self, start_inc: usize, end_inc: usize, with: It) -> CircuitResult<()>
     where
         It: IntoIterator<Item = (Vec<usize>, CO)>,
     {
@@ -124,7 +119,7 @@ where
                 if sel != end_inc {
                     sel = self.data[sel]
                         .next
-                        .ok_or(CircuitError::new("Gave a non-closed range."))?;
+                        .ok_or_else(|| CircuitError::new("Gave a non-closed range."))?;
                 } else {
                     break;
                 }
@@ -242,14 +237,16 @@ where
 
     /// Swap positions in linked list.
     fn swap_nodes(&mut self, a: usize, b: usize) {
-        let (head, tail) = if a < b {
-            let (head, tail) = self.data.split_at_mut(b);
-            (&mut head[a], &mut tail[0])
-        } else if b < a {
-            let (head, tail) = self.data.split_at_mut(a);
-            (&mut head[b], &mut tail[0])
-        } else {
-            return;
+        let (head, tail) = match (a, b) {
+            (a, b) if a < b => {
+                let (head, tail) = self.data.split_at_mut(b);
+                (&mut head[a], &mut tail[0])
+            }
+            (a, b) if b < a => {
+                let (head, tail) = self.data.split_at_mut(a);
+                (&mut head[b], &mut tail[0])
+            }
+            _ => return,
         };
         swap(&mut head.co, &mut tail.co);
         swap(&mut head.indices, &mut tail.indices);
@@ -322,7 +319,7 @@ where
 
         // First lets put in some identities.
         let identities = trie.get_root_values();
-        if identities.len() > 0 {
+        if !identities.is_empty() {
             let mut sel = self.head;
             while let Some(isel) = sel {
                 let attempt = &identities[rng.gen_range(0..identities.len())];
@@ -346,13 +343,13 @@ where
                     }
                     let max_index_needed = attempt
                         .iter()
-                        .map(|(indices, _)| indices.into_iter())
+                        .map(|(indices, _)| indices.iter())
                         .flatten()
                         .cloned()
                         .max()
                         .unwrap();
                     if max_index_needed < base_indices.len() {
-                        let last_index = attempt.into_iter().fold(isel, |index, (indices, co)| {
+                        let last_index = attempt.iter().fold(isel, |index, (indices, co)| {
                             let mut indices = indices.clone();
                             indices.iter_mut().for_each(|i| {
                                 *i = base_indices[*i];
@@ -376,7 +373,7 @@ where
         beta: f64,
         energy_function: F,
         rng: &mut R,
-    ) -> Result<(), CircuitError>
+    ) -> CircuitResult<()>
     where
         F: Fn(&CO) -> i32,
     {
@@ -517,7 +514,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn basic_noop_sort() -> Result<(), CircuitError> {
+    fn basic_noop_sort() -> CircuitResult<()> {
         let mut mco = MonteCarloOptimizer::<usize>::new(
             [(vec![1, 2, 3], 0), (vec![2, 3, 4], 1)],
             IndexTrie::default(),
@@ -529,7 +526,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn basic_sort() -> Result<(), CircuitError> {
+    fn basic_sort() -> CircuitResult<()> {
         let mut mco = MonteCarloOptimizer::<usize>::new(
             [(vec![1, 2, 3], 0), (vec![0, 4, 5], 1)],
             IndexTrie::default(),
@@ -543,7 +540,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn basic_sort_longer() -> Result<(), CircuitError> {
+    fn basic_sort_longer() -> CircuitResult<()> {
         let mut mco = MonteCarloOptimizer::<usize>::new(
             [(vec![1, 2, 3], 1), (vec![6], 2), (vec![0, 4, 5], 0)],
             IndexTrie::default(),
@@ -557,7 +554,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn basic_remove() -> Result<(), CircuitError> {
+    fn basic_remove() -> CircuitResult<()> {
         let mut mco = MonteCarloOptimizer::<usize>::new(
             [(vec![0], 0), (vec![1], 3), (vec![2], 1), (vec![3], 2)],
             IndexTrie::default(),
@@ -571,7 +568,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn adjacent_remove() -> Result<(), CircuitError> {
+    fn adjacent_remove() -> CircuitResult<()> {
         let mut mco = MonteCarloOptimizer::<usize>::new(
             [(vec![1, 2, 3], 0), (vec![6], 2), (vec![0, 4, 5], 1)],
             IndexTrie::default(),
@@ -585,7 +582,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn first_remove() -> Result<(), CircuitError> {
+    fn first_remove() -> CircuitResult<()> {
         let mut mco = MonteCarloOptimizer::<usize>::new(
             [(vec![0], 3), (vec![1], 0), (vec![2], 1), (vec![3], 2)],
             IndexTrie::default(),
@@ -599,7 +596,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn last_remove() -> Result<(), CircuitError> {
+    fn last_remove() -> CircuitResult<()> {
         let mut mco = MonteCarloOptimizer::<usize>::new(
             [(vec![0], 1), (vec![1], 2), (vec![2], 3), (vec![3], 0)],
             IndexTrie::default(),
@@ -613,7 +610,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn basic_replace() -> Result<(), CircuitError> {
+    fn basic_replace() -> CircuitResult<()> {
         let mut mco = MonteCarloOptimizer::<usize>::new(
             [(vec![1, 2, 3], 0), (vec![6], 3), (vec![0, 4, 5], 2)],
             IndexTrie::default(),
@@ -627,7 +624,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn overflow_replace() -> Result<(), CircuitError> {
+    fn overflow_replace() -> CircuitResult<()> {
         let mut mco = MonteCarloOptimizer::<usize>::new(
             [(vec![1, 2, 3], 0), (vec![6], 4), (vec![0, 4, 5], 3)],
             IndexTrie::default(),
@@ -641,7 +638,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn underflow_replace() -> Result<(), CircuitError> {
+    fn underflow_replace() -> CircuitResult<()> {
         let mut mco = MonteCarloOptimizer::<usize>::new(
             [
                 (vec![1, 2, 3], 0),
@@ -660,7 +657,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn underflow_replace_multi() -> Result<(), CircuitError> {
+    fn underflow_replace_multi() -> CircuitResult<()> {
         let mut mco = MonteCarloOptimizer::<usize>::new(
             [
                 (vec![1, 2, 3], 0),
@@ -679,7 +676,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn empty_replace() -> Result<(), CircuitError> {
+    fn empty_replace() -> CircuitResult<()> {
         let mut mco = MonteCarloOptimizer::<usize>::new(
             [(vec![0], 2), (vec![1], 1), (vec![2], 0)],
             IndexTrie::default(),
@@ -693,7 +690,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn simple_opt() -> Result<(), CircuitError> {
+    fn simple_opt() -> CircuitResult<()> {
         let replacement_trie =
             IndexTrie::new_from_valid_lines(["4[1] 3[0] = 1[0]"], |s| s.parse().unwrap())?;
         println!("{:?}", replacement_trie);
@@ -709,7 +706,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn multi_opt() -> Result<(), CircuitError> {
+    fn multi_opt() -> CircuitResult<()> {
         let replacement_trie =
             IndexTrie::new_from_valid_lines(["4[0] 3[0] = 0[0]", "6[0] 5[0] = 1[0]"], |s| {
                 s.parse().unwrap()
@@ -736,7 +733,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn multi_run_opt() -> Result<(), CircuitError> {
+    fn multi_run_opt() -> CircuitResult<()> {
         let replacement_trie =
             IndexTrie::new_from_valid_lines(["4[0] 3[0] = 7[0]", "6[1] 7[0] = 1[0]"], |s| {
                 s.parse().unwrap()
@@ -757,7 +754,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn multi_run_opt_change_index() -> Result<(), CircuitError> {
+    fn multi_run_opt_change_index() -> CircuitResult<()> {
         let replacement_trie =
             IndexTrie::new_from_valid_lines(["4[0] 3[0] = 7[0]", "6[1] 7[0] = 1[0]"], |s| {
                 s.parse().unwrap()
@@ -779,7 +776,7 @@ mod mc_opt_tests {
     }
 
     #[test]
-    fn identity_inf_temp() -> Result<(), CircuitError> {
+    fn identity_inf_temp() -> CircuitResult<()> {
         let replacement_trie =
             IndexTrie::new_from_valid_lines(["2[0] 1[0] = I"], |s| s.parse().unwrap())?;
         println!("{:?}", replacement_trie);

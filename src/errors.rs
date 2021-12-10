@@ -11,3 +11,5 @@ impl CircuitError {
         Self { msg: msg.into() }
     }
 }
+
+pub type CircuitResult<T> = Result<T, CircuitError>;

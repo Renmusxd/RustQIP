@@ -1,4 +1,4 @@
-use crate::errors::CircuitError;
+use crate::errors::{CircuitError, CircuitResult};
 use crate::types::Precision;
 use crate::Complex;
 use num_rational::Rational64;
@@ -51,7 +51,7 @@ pub trait CircuitBuilder {
         It: IntoIterator<Item = Self::Register>,
     {
         rs.into_iter().fold(None, |acc, r1| match acc {
-            Some(r2) => Some(self.merge_two_registers(r1, r2)),
+            Some(r2) => Some(self.merge_two_registers(r2, r1)),
             None => Some(r1),
         })
     }
@@ -132,7 +132,7 @@ pub trait CircuitBuilder {
         &mut self,
         r: Self::Register,
         c: Self::CircuitObject,
-    ) -> Result<Self::Register, CircuitError>;
+    ) -> CircuitResult<Self::Register>;
 
     fn calculate_state(&mut self) -> Self::StateCalculation {
         self.calculate_state_with_init(None)
@@ -166,7 +166,7 @@ pub trait UnitaryBuilder<P: Precision>: CircuitBuilder {
         &mut self,
         r: Self::Register,
         data: Vec<Complex<P>>,
-    ) -> Result<Self::Register, CircuitError> {
+    ) -> CircuitResult<Self::Register> {
         let n = r.n();
         self.apply_circuit_object(r, Self::vec_matrix_to_circuitobject(n, data))
     }
@@ -175,7 +175,7 @@ pub trait UnitaryBuilder<P: Precision>: CircuitBuilder {
         &mut self,
         r: Self::Register,
         data: [Complex<P>; N],
-    ) -> Result<Self::Register, CircuitError> {
+    ) -> CircuitResult<Self::Register> {
         let n = r.n();
         self.apply_circuit_object(r, Self::matrix_to_circuitobject(n, data))
     }
@@ -447,40 +447,28 @@ pub trait RotationsBuilder<P: Precision>: CliffordTBuilder<P> {
         let r = self.h(r);
         self.s(r)
     }
-    fn rz_ratio(
-        &mut self,
-        r: Self::Register,
-        theta: Rational64,
-    ) -> Result<Self::Register, CircuitError> {
+    fn rz_ratio(&mut self, r: Self::Register, theta: Rational64) -> CircuitResult<Self::Register> {
         Ok(self.rz(r, P::from(theta).unwrap()))
     }
-    fn rx_ratio(
-        &mut self,
-        r: Self::Register,
-        theta: Rational64,
-    ) -> Result<Self::Register, CircuitError> {
+    fn rx_ratio(&mut self, r: Self::Register, theta: Rational64) -> CircuitResult<Self::Register> {
         let r = self.h(r);
         let r = self.rz_ratio(r, theta)?;
         Ok(self.h(r))
     }
-    fn ry_ratio(
-        &mut self,
-        r: Self::Register,
-        theta: Rational64,
-    ) -> Result<Self::Register, CircuitError> {
+    fn ry_ratio(&mut self, r: Self::Register, theta: Rational64) -> CircuitResult<Self::Register> {
         let r = self.s(r);
         let r = self.h(r);
         let r = self.rz_ratio(r, -theta)?;
         let r = self.h(r);
         Ok(self.s_dagger(r))
     }
-    fn rz_pi_by(&mut self, r: Self::Register, m: i64) -> Result<Self::Register, CircuitError> {
+    fn rz_pi_by(&mut self, r: Self::Register, m: i64) -> CircuitResult<Self::Register> {
         self.rz_ratio(r, Rational64::new(1, m))
     }
-    fn rx_pi_by(&mut self, r: Self::Register, m: i64) -> Result<Self::Register, CircuitError> {
+    fn rx_pi_by(&mut self, r: Self::Register, m: i64) -> CircuitResult<Self::Register> {
         self.rx_ratio(r, Rational64::new(1, m))
     }
-    fn ry_pi_by(&mut self, r: Self::Register, m: i64) -> Result<Self::Register, CircuitError> {
+    fn ry_pi_by(&mut self, r: Self::Register, m: i64) -> CircuitResult<Self::Register> {
         self.ry_ratio(r, Rational64::new(1, m))
     }
 }
@@ -501,10 +489,22 @@ pub trait StochasticMeasurementBuilder: CircuitBuilder {
 pub trait Subcircuitable: CircuitBuilder {
     type Subcircuit;
 
-    fn make_subcircuit(&self) -> Result<Self::Subcircuit, CircuitError>;
+    fn make_subcircuit(&self) -> CircuitResult<Self::Subcircuit>;
     fn apply_subcircuit(
         &mut self,
         sc: Self::Subcircuit,
         r: Self::Register,
-    ) -> Result<Self::Register, CircuitError>;
+    ) -> CircuitResult<Self::Register>;
+}
+
+/// Create a circuit for the circuit given by `r`.
+pub fn make_circuit_matrix<CB, P, F>(cb: &mut CB, r: &CB::Register, f: F) -> Vec<Vec<Complex<P>>>
+where
+    CB: CircuitBuilder,
+    P: Precision,
+    F: Fn(CB::StateCalculation) -> Vec<Complex<P>>,
+{
+    (0..1 << r.n())
+        .map(|indx| f(cb.calculate_state_with_init(Some((r, indx)))))
+        .collect()
 }

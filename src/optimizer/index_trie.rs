@@ -1,4 +1,4 @@
-use crate::errors::CircuitError;
+use crate::errors::{CircuitError, CircuitResult};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::File;
@@ -65,7 +65,7 @@ impl<CO> IndexTrie<(Vec<usize>, CO), Vec<(Vec<usize>, CO)>>
 where
     CO: Hash + Eq + Clone,
 {
-    pub fn new_from_valid_lines<It, F, S>(lines: It, f: F) -> Result<Self, CircuitError>
+    pub fn new_from_valid_lines<It, F, S>(lines: It, f: F) -> CircuitResult<Self>
     where
         S: AsRef<str>,
         It: IntoIterator<Item = S>,
@@ -74,11 +74,11 @@ where
         Self::new_from_lines(lines, |x| Ok(f(x)))
     }
 
-    pub fn new_from_lines<It, F, S>(lines: It, f: F) -> Result<Self, CircuitError>
+    pub fn new_from_lines<It, F, S>(lines: It, f: F) -> CircuitResult<Self>
     where
         S: AsRef<str>,
         It: IntoIterator<Item = S>,
-        F: Fn(&str) -> Result<CO, CircuitError>,
+        F: Fn(&str) -> CircuitResult<CO>,
     {
         let mut lhss = vec![];
         let mut rhss = vec![];
@@ -92,7 +92,7 @@ where
             if !line.is_empty() {
                 let (lhs, rhs) = line
                     .split_once("=")
-                    .ok_or(CircuitError::new("Line missing '='"))?;
+                    .ok_or_else(|| CircuitError::new("Line missing '='"))?;
                 let lhs = parse_str(lhs, &f)?;
                 let rhs = parse_str(rhs, &f)?;
                 lhss.push(lhs);
@@ -114,10 +114,10 @@ where
         Ok(Self::new(iter))
     }
 
-    pub fn new_from_filepath<P, F>(filename: P, f: F) -> Result<Self, CircuitError>
+    pub fn new_from_filepath<P, F>(filename: P, f: F) -> CircuitResult<Self>
     where
         P: AsRef<Path>,
-        F: Fn(&str) -> Result<CO, CircuitError>,
+        F: Fn(&str) -> CircuitResult<CO>,
     {
         let lines = read_lines(filename)
             .map_err(|err| CircuitError::new(format!("IOError: {:?}", err)))?
@@ -152,16 +152,16 @@ fn parse_num_array(s: &str) -> Result<Vec<usize>, ParseIntError> {
 
 fn parse_str<CO, F>(mut s: &str, f: F) -> Result<Vec<(Vec<usize>, CO)>, CircuitError>
 where
-    F: Fn(&str) -> Result<CO, CircuitError>,
+    F: Fn(&str) -> CircuitResult<CO>,
 {
     let mut res = vec![];
     // Expect ident[indices]
     while !s.is_empty() {
         if let Some(start_index) = s.find('[') {
-            let co = f(&s[0..start_index].trim())?;
+            let co = f(s[0..start_index].trim())?;
             let end_index = s
                 .find(']')
-                .ok_or(CircuitError::new(format!("Error parsing string: {}", &s)))?;
+                .ok_or_else(|| CircuitError::new(format!("Error parsing string: {}", &s)))?;
             let num_array = parse_num_array(&s[start_index + 1..end_index]).map_err(|err| {
                 CircuitError::new(format!(
                     "Error parsing string: {} -- {:?}",
@@ -292,9 +292,9 @@ mod index_trie_tests {
         let trie = IndexTrie::new([
             (vec![a.clone(), b.clone()], 'A'),
             (vec![a.clone(), c.clone()], 'B'),
-            (vec![d.clone(), a.clone()], 'C'),
-            (vec![b.clone(), d.clone()], 'D'),
-            (vec![c.clone(), d.clone()], 'E'),
+            (vec![d.clone(), a], 'C'),
+            (vec![b, d.clone()], 'D'),
+            (vec![c, d], 'E'),
         ]);
         let mut walker = trie.index_walker();
 
@@ -319,7 +319,7 @@ mod index_trie_tests {
     }
 
     #[test]
-    fn file_read_test() -> Result<(), CircuitError> {
+    fn file_read_test() -> CircuitResult<()> {
         let trie =
             IndexTrie::new_from_valid_lines(["B[0,1]A[0,1] = C[0]", "A[0,1]A[1,0]=I"], |a| {
                 a.to_string()

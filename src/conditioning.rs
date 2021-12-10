@@ -1,5 +1,5 @@
 use crate::builder_traits::{QubitRegister, SplitResult, Subcircuitable};
-use crate::errors::CircuitError;
+use crate::errors::{CircuitError, CircuitResult};
 use crate::macros::inverter::Invertable;
 use crate::macros::RecursiveCircuitBuilder;
 use crate::prelude::{
@@ -74,7 +74,7 @@ impl<'a, CB: Conditionable + ?Sized> CircuitBuilder for Conditioned<'a, CB> {
         &mut self,
         r: Self::Register,
         c: Self::CircuitObject,
-    ) -> Result<Self::Register, CircuitError> {
+    ) -> CircuitResult<Self::Register> {
         let cr = self.cr.take().unwrap();
         let (cr, r) = self.parent.try_apply_with_condition(cr, r, c)?;
         self.cr = Some(cr);
@@ -138,39 +138,27 @@ impl<'a, P: Precision, CB: Conditionable + RotationsBuilder<P> + ?Sized> Rotatio
         self.parent.ry(r, theta)
     }
 
-    fn rz_ratio(
-        &mut self,
-        r: Self::Register,
-        theta: Rational64,
-    ) -> Result<Self::Register, CircuitError> {
+    fn rz_ratio(&mut self, r: Self::Register, theta: Rational64) -> CircuitResult<Self::Register> {
         self.parent.rz_ratio(r, theta)
     }
 
-    fn rx_ratio(
-        &mut self,
-        r: Self::Register,
-        theta: Rational64,
-    ) -> Result<Self::Register, CircuitError> {
+    fn rx_ratio(&mut self, r: Self::Register, theta: Rational64) -> CircuitResult<Self::Register> {
         self.parent.rx_ratio(r, theta)
     }
 
-    fn ry_ratio(
-        &mut self,
-        r: Self::Register,
-        theta: Rational64,
-    ) -> Result<Self::Register, CircuitError> {
+    fn ry_ratio(&mut self, r: Self::Register, theta: Rational64) -> CircuitResult<Self::Register> {
         self.parent.ry_ratio(r, theta)
     }
 
-    fn rz_pi_by(&mut self, r: Self::Register, m: i64) -> Result<Self::Register, CircuitError> {
+    fn rz_pi_by(&mut self, r: Self::Register, m: i64) -> CircuitResult<Self::Register> {
         self.parent.rz_pi_by(r, m)
     }
 
-    fn rx_pi_by(&mut self, r: Self::Register, m: i64) -> Result<Self::Register, CircuitError> {
+    fn rx_pi_by(&mut self, r: Self::Register, m: i64) -> CircuitResult<Self::Register> {
         self.parent.rx_pi_by(r, m)
     }
 
-    fn ry_pi_by(&mut self, r: Self::Register, m: i64) -> Result<Self::Register, CircuitError> {
+    fn ry_pi_by(&mut self, r: Self::Register, m: i64) -> CircuitResult<Self::Register> {
         self.parent.ry_pi_by(r, m)
     }
 }
@@ -226,7 +214,7 @@ pub trait ConditionableSubcircuit: Subcircuitable {
 impl<'a, CB: ConditionableSubcircuit + Conditionable> Subcircuitable for Conditioned<'a, CB> {
     type Subcircuit = CB::Subcircuit;
 
-    fn make_subcircuit(&self) -> Result<Self::Subcircuit, CircuitError> {
+    fn make_subcircuit(&self) -> CircuitResult<Self::Subcircuit> {
         self.parent.make_subcircuit()
     }
 
@@ -234,7 +222,7 @@ impl<'a, CB: ConditionableSubcircuit + Conditionable> Subcircuitable for Conditi
         &mut self,
         sc: Self::Subcircuit,
         r: Self::Register,
-    ) -> Result<Self::Register, CircuitError> {
+    ) -> CircuitResult<Self::Register> {
         let cr = self.cr.take().unwrap();
         let (cr, r) = self.parent.apply_conditioned_subcircuit(sc, cr, r)?;
         self.cr = Some(cr);
@@ -251,7 +239,7 @@ impl<'a, CB: Invertable + ConditionableSubcircuit + Conditionable> Invertable
         self.parent.new_similar()
     }
 
-    fn invert_subcircuit(sc: Self::Subcircuit) -> Result<Self::Subcircuit, CircuitError> {
+    fn invert_subcircuit(sc: Self::Subcircuit) -> CircuitResult<Self::Subcircuit> {
         CB::invert_subcircuit(sc)
     }
 }

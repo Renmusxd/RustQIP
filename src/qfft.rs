@@ -1,9 +1,9 @@
 use crate::builder_traits::{CliffordTBuilder, RotationsBuilder};
 use crate::conditioning::Conditionable;
-use crate::errors::CircuitError;
+use crate::errors::{CircuitError, CircuitResult};
 use crate::Precision;
 
-pub fn qfft<P, CB>(b: &mut CB, r: CB::Register) -> Result<CB::Register, CircuitError>
+pub fn qfft<P, CB>(b: &mut CB, r: CB::Register) -> CircuitResult<CB::Register>
 where
     CB: CliffordTBuilder<P> + Conditionable + RotationsBuilder<P>,
     P: Precision,
@@ -15,12 +15,12 @@ where
         .collect::<Vec<Option<CB::Register>>>();
     for i in 0..rs.len() {
         let mut ri = rs[i].take().unwrap();
-        for j in (i + 1)..rs.len() {
-            let rj = rs[j].take().unwrap();
+        for (j, rj_ref) in rs.iter_mut().enumerate().skip(i + 1) {
+            let rj = rj_ref.take().unwrap();
             let mut cb = b.condition_with(rj);
             ri = cb.rz_pi_by(ri, 1 << (j - i))?;
             let rj = cb.dissolve();
-            rs[j] = Some(rj);
+            *rj_ref = Some(rj);
         }
         let ri = b.h(ri);
         rs[i] = Some(ri);
@@ -35,5 +35,5 @@ where
         rs[ib] = Some(rb);
     }
     b.merge_registers(rs.into_iter().map(Option::unwrap))
-        .ok_or(CircuitError::new("No registers found"))
+        .ok_or_else(|| CircuitError::new("No registers found"))
 }
