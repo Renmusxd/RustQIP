@@ -1,4 +1,3 @@
-use qip::builder::{BuilderCircuitObject, Qudit};
 use qip::macros::program_ops::*;
 use qip::prelude::*;
 use rand::{thread_rng, Rng};
@@ -88,7 +87,7 @@ fn main() -> Result<(), CircuitError> {
 
     let mut b = LocalBuilder::<f64>::default();
     let r = b.register(NonZeroUsize::new(3).unwrap());
-    b.apply_optimizer_circuit(r, opt.get_ops());
+    b.apply_optimizer_circuit(r, opt.get_ops())?;
     let (state, _) = b.calculate_state();
     println!("{:?}", state);
 

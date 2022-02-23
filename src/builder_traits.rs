@@ -37,7 +37,9 @@ pub trait CircuitBuilder {
     fn qubit(&mut self) -> Self::Register {
         self.register(NonZeroUsize::new(1).unwrap())
     }
-
+    fn qudit(&mut self, n: usize) -> Option<Self::Register> {
+        NonZeroUsize::new(n).map(|n| self.register(n))
+    }
     fn register(&mut self, n: NonZeroUsize) -> Self::Register;
 
     fn try_register(&mut self, n: usize) -> Option<Self::Register> {
@@ -115,11 +117,10 @@ pub trait CircuitBuilder {
             .collect::<Vec<_>>();
         let selected_rs = indices
             .into_iter()
-            .map(|is| {
+            .flat_map(|is| {
                 let subrs = is.into_iter().map(|i| rs[i].take().unwrap());
                 self.merge_registers(subrs)
             })
-            .flatten()
             .collect();
         let remaining_rs = self.merge_registers(rs.into_iter().flatten());
         match remaining_rs {

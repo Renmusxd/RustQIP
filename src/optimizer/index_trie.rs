@@ -14,6 +14,7 @@ struct Node<T, V> {
     values: Vec<V>,
     children: HashMap<T, Node<T, V>>,
 }
+
 impl<T, V> Default for Node<T, V> {
     fn default() -> Self {
         Self {
@@ -91,7 +92,7 @@ where
             };
             if !line.is_empty() {
                 let (lhs, rhs) = line
-                    .split_once("=")
+                    .split_once('=')
                     .ok_or_else(|| CircuitError::new("Line missing '='"))?;
                 let lhs = parse_str(lhs, &f)?;
                 let rhs = parse_str(rhs, &f)?;
@@ -108,8 +109,7 @@ where
                 rhs.reverse();
                 (lhs, rhs)
             })
-            .map(|(lhs, rhs)| [(lhs.clone(), rhs.clone()), (rhs, lhs)])
-            .flatten();
+            .flat_map(|(lhs, rhs)| [(lhs.clone(), rhs.clone()), (rhs, lhs)]);
 
         Ok(Self::new(iter))
     }

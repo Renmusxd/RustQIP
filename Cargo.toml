@@ -1,6 +1,6 @@
 [package]
 name = "qip"
-version = "0.16.0"
+version = "1.0.0"
 authors = ["Sumner Hearth <sumnernh@gmail.com>"]
 description = "A library for efficient quantum computing simulations."
 repository = "https://github.com/Renmusxd/RustQIP"
@@ -19,6 +19,6 @@ optimization = []
 num-rational = "^0.4"
 num-traits = "^0.2"
 num-complex = "^0.4"
-rayon = {version = "^1.5", optional = true }
+rayon = { version = "^1.5", optional = true }
 rand = "^0.8"
-smallvec = "^1.7"
+smallvec = "^1.8"

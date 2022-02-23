@@ -367,10 +367,9 @@ pub fn apply_ops<P: Precision>(
         _ => {
             let mat_indices: Vec<usize> = ops
                 .iter()
-                .map(|op| -> Vec<usize> {
+                .flat_map(|op| -> Vec<usize> {
                     (0..num_indices(op)).map(|i| get_index(op, i)).collect()
                 })
-                .flatten()
                 .collect();
 
             let row_fn = |(outputrow, outputloc): (usize, &mut Complex<P>)| {

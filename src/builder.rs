@@ -90,13 +90,13 @@ pub struct BuilderCircuitObject<P: Precision> {
     object: BuilderCircuitObjectType<P>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum BuilderCircuitObjectType<P: Precision> {
     Unitary(UnitaryMatrixObject<P>),
     Measurement(MeasurementObject),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum UnitaryMatrixObject<P: Precision> {
     X,
     Y,
@@ -114,7 +114,7 @@ pub enum UnitaryMatrixObject<P: Precision> {
     GlobalPhase(RotationObject<P>),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum RotationObject<P: Precision> {
     Floating(P),
     PiRational(Ratio<i64>),
@@ -125,6 +125,110 @@ impl<P: Precision> RotationObject<P> {
         match self {
             RotationObject::Floating(f) => Self::Floating(-(*f)),
             RotationObject::PiRational(r) => Self::PiRational(-(*r)),
+        }
+    }
+}
+
+impl<P: Precision> PartialEq for UnitaryMatrixObject<P> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::X, Self::X)
+            | (Self::Y, Self::Y)
+            | (Self::Z, Self::Z)
+            | (Self::H, Self::H)
+            | (Self::S, Self::S)
+            | (Self::T, Self::T)
+            | (Self::CNOT, Self::CNOT)
+            | (Self::SWAP, Self::SWAP) => true,
+            (Self::Rz(ra), Self::Rz(rb)) => ra.eq(rb),
+            (Self::MAT(ma), Self::MAT(mb)) => ma.eq(mb),
+            (Self::GlobalPhase(ra), Self::GlobalPhase(rb)) => ra.eq(rb),
+            (_, _) => false,
+        }
+    }
+}
+
+impl<P: Precision> PartialEq for BuilderCircuitObjectType<P> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Unitary(ua), Self::Unitary(ub)) => ua.eq(ub),
+            (Self::Measurement(ma), Self::Measurement(mb)) => ma.eq(mb),
+            (_, _) => false,
+        }
+    }
+}
+
+impl<P: Precision> PartialEq for RotationObject<P> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Floating(pa), Self::Floating(pb)) => pa.eq(pb),
+            (Self::PiRational(ra), Self::PiRational(rb)) => ra.eq(rb),
+            (_, _) => false,
+        }
+    }
+}
+
+impl<P: Precision> Eq for UnitaryMatrixObject<P> {}
+
+impl<P: Precision> Eq for BuilderCircuitObjectType<P> {}
+
+impl<P: Precision> Eq for RotationObject<P> {}
+
+fn hash_p<P: Precision, H: Hasher>(f: P, state: &mut H) {
+    format!("{}", f).hash(state)
+}
+
+impl<P: Precision> Hash for BuilderCircuitObjectType<P> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            BuilderCircuitObjectType::Measurement(m) => {
+                state.write_i8(0);
+                m.hash(state)
+            }
+            BuilderCircuitObjectType::Unitary(u) => {
+                state.write_i8(1);
+                u.hash(state)
+            }
+        }
+    }
+}
+
+impl<P: Precision> Hash for UnitaryMatrixObject<P> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            UnitaryMatrixObject::X => state.write_i8(0),
+            UnitaryMatrixObject::Y => state.write_i8(1),
+            UnitaryMatrixObject::Z => state.write_i8(2),
+            UnitaryMatrixObject::H => state.write_i8(3),
+            UnitaryMatrixObject::S => state.write_i8(4),
+            UnitaryMatrixObject::T => state.write_i8(5),
+            UnitaryMatrixObject::CNOT => state.write_i8(6),
+            UnitaryMatrixObject::SWAP => state.write_i8(7),
+            UnitaryMatrixObject::Rz(rot) => {
+                state.write_i8(8);
+                rot.hash(state);
+            }
+            UnitaryMatrixObject::GlobalPhase(rot) => {
+                state.write_i8(9);
+                rot.hash(state);
+            }
+            UnitaryMatrixObject::MAT(data) => {
+                state.write_i8(10);
+                data.iter().for_each(|c| {
+                    hash_p(c.re, state);
+                    hash_p(c.im, state);
+                })
+            }
+        }
+    }
+}
+
+impl<P: Precision> Hash for RotationObject<P> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            // Grossly inefficient but also don't hash floats.
+            RotationObject::Floating(f) => hash_p(*f, state),
+            RotationObject::PiRational(r) => r.hash(state),
         }
     }
 }
@@ -247,15 +351,15 @@ impl<P: Precision> CircuitBuilder for LocalBuilder<P> {
 
         let mut initial_index = 0;
         it.into_iter()
-            .map(|(r, x)| {
+            .flat_map(|(r, x)| {
+                let rn = r.n();
                 r.indices
                     .iter()
                     .rev()
                     .cloned()
                     .enumerate()
-                    .map(move |(ri, i)| (r.n() - 1 - i, (x >> ri) & 1))
+                    .map(move |(ri, i)| (n - 1 - i, (x >> (rn - 1 - ri)) & 1))
             })
-            .flatten()
             .for_each(|(index, bit)| initial_index |= bit << index);
         state[initial_index] = Complex::one();
 
@@ -707,8 +811,7 @@ where
     let mut rs = cb.split_all_register(r);
     let max_r_index = sc
         .iter()
-        .map(|(indices, _)| indices.iter().cloned().max())
-        .flatten()
+        .flat_map(|(indices, _)| indices.iter().cloned().max())
         .max()
         .unwrap();
     // Need temp qubits for the max_r_index - rn
@@ -796,68 +899,6 @@ pub mod optimizers {
     use crate::optimizer::index_trie::IndexTrie;
     use crate::optimizer::mc_optimizer::MonteCarloOptimizer;
     use std::path::Path;
-
-    impl<P: Precision> Eq for UnitaryMatrixObject<P> {}
-    impl<P: Precision> Eq for BuilderCircuitObjectType<P> {}
-
-    impl<P: Precision> Hash for BuilderCircuitObjectType<P> {
-        fn hash<H: Hasher>(&self, state: &mut H) {
-            match self {
-                BuilderCircuitObjectType::Measurement(m) => {
-                    state.write_i8(0);
-                    m.hash(state)
-                }
-                BuilderCircuitObjectType::Unitary(u) => {
-                    state.write_i8(1);
-                    u.hash(state)
-                }
-            }
-        }
-    }
-
-    impl<P: Precision> Hash for UnitaryMatrixObject<P> {
-        fn hash<H: Hasher>(&self, state: &mut H) {
-            match self {
-                UnitaryMatrixObject::X => state.write_i8(0),
-                UnitaryMatrixObject::Y => state.write_i8(1),
-                UnitaryMatrixObject::Z => state.write_i8(2),
-                UnitaryMatrixObject::H => state.write_i8(3),
-                UnitaryMatrixObject::S => state.write_i8(4),
-                UnitaryMatrixObject::T => state.write_i8(5),
-                UnitaryMatrixObject::CNOT => state.write_i8(6),
-                UnitaryMatrixObject::SWAP => state.write_i8(7),
-                UnitaryMatrixObject::Rz(rot) => {
-                    state.write_i8(8);
-                    rot.hash(state);
-                }
-                UnitaryMatrixObject::GlobalPhase(rot) => {
-                    state.write_i8(9);
-                    rot.hash(state);
-                }
-                UnitaryMatrixObject::MAT(data) => {
-                    state.write_i8(10);
-                    data.iter().for_each(|c| {
-                        hash_p(c.re, state);
-                        hash_p(c.im, state);
-                    })
-                }
-            }
-        }
-    }
-
-    impl<P: Precision> Hash for RotationObject<P> {
-        fn hash<H: Hasher>(&self, state: &mut H) {
-            match self {
-                // Grossly inefficient but also don't hash floats.
-                RotationObject::Floating(f) => hash_p(*f, state),
-                RotationObject::PiRational(r) => r.hash(state),
-            }
-        }
-    }
-
-    fn hash_p<P: Precision, H: Hasher>(f: P, state: &mut H) {
-        format!("{}", f).hash(state)
-    }
 
     pub type OptimizerTrie<P> = IndexTrie<
         (Vec<usize>, BuilderCircuitObjectType<P>),

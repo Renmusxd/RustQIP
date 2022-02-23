@@ -416,8 +416,7 @@ impl<R: QubitRegister> RegisterManager<R> {
     /// Give qubits back to any registers.
     pub fn return_registers<CB: CircuitBuilder<Register = R>>(&mut self, b: &mut CB, rs: Vec<R>) {
         rs.into_iter()
-            .map(|r| b.split_all_register(r))
-            .flatten()
+            .flat_map(|r| b.split_all_register(r))
             .for_each(|r: R| {
                 let (reg_indx, rel_indx) = self.reverse_lookup[r.indices()[0]].unwrap();
                 let (_, qubits) = &mut self.registers[reg_indx];
@@ -445,109 +444,128 @@ impl From<Range<usize>> for QubitIndices {
         indices.into()
     }
 }
+
 impl From<Range<u64>> for QubitIndices {
     fn from(indices: Range<u64>) -> Self {
         let indices: Vec<_> = indices.map(|indx| indx as usize).collect();
         indices.into()
     }
 }
+
 impl From<Range<u32>> for QubitIndices {
     fn from(indices: Range<u32>) -> Self {
         let indices: Vec<_> = indices.map(|indx| indx as usize).collect();
         indices.into()
     }
 }
+
 impl From<Range<i64>> for QubitIndices {
     fn from(indices: Range<i64>) -> Self {
         let indices: Vec<_> = indices.map(|indx| indx as usize).collect();
         indices.into()
     }
 }
+
 impl From<Range<i32>> for QubitIndices {
     fn from(indices: Range<i32>) -> Self {
         let indices: Vec<_> = indices.map(|indx| indx as usize).collect();
         indices.into()
     }
 }
+
 impl From<&Range<usize>> for QubitIndices {
     fn from(indices: &Range<usize>) -> Self {
         (indices.start..indices.end).into()
     }
 }
+
 impl From<&Range<u64>> for QubitIndices {
     fn from(indices: &Range<u64>) -> Self {
         (indices.start..indices.end).into()
     }
 }
+
 impl From<&Range<u32>> for QubitIndices {
     fn from(indices: &Range<u32>) -> Self {
         (indices.start..indices.end).into()
     }
 }
+
 impl From<&Range<i64>> for QubitIndices {
     fn from(indices: &Range<i64>) -> Self {
         (indices.start..indices.end).into()
     }
 }
+
 impl From<&Range<i32>> for QubitIndices {
     fn from(indices: &Range<i32>) -> Self {
         (indices.start..indices.end).into()
     }
 }
+
 impl From<RangeInclusive<usize>> for QubitIndices {
     fn from(indices: RangeInclusive<usize>) -> Self {
         let indices: Vec<_> = indices.collect();
         indices.into()
     }
 }
+
 impl From<RangeInclusive<u64>> for QubitIndices {
     fn from(indices: RangeInclusive<u64>) -> Self {
         let indices: Vec<_> = indices.map(|indx| indx as usize).collect();
         indices.into()
     }
 }
+
 impl From<RangeInclusive<u32>> for QubitIndices {
     fn from(indices: RangeInclusive<u32>) -> Self {
         let indices: Vec<_> = indices.map(|indx| indx as usize).collect();
         indices.into()
     }
 }
+
 impl From<RangeInclusive<i64>> for QubitIndices {
     fn from(indices: RangeInclusive<i64>) -> Self {
         let indices: Vec<_> = indices.map(|indx| indx as usize).collect();
         indices.into()
     }
 }
+
 impl From<RangeInclusive<i32>> for QubitIndices {
     fn from(indices: RangeInclusive<i32>) -> Self {
         let indices: Vec<_> = indices.map(|indx| indx as usize).collect();
         indices.into()
     }
 }
+
 impl From<&RangeInclusive<usize>> for QubitIndices {
     fn from(indices: &RangeInclusive<usize>) -> Self {
         let indices: Vec<_> = indices.clone().collect();
         indices.into()
     }
 }
+
 impl From<&RangeInclusive<u64>> for QubitIndices {
     fn from(indices: &RangeInclusive<u64>) -> Self {
         let indices: Vec<_> = indices.clone().map(|indx| indx as usize).collect();
         indices.into()
     }
 }
+
 impl From<&RangeInclusive<u32>> for QubitIndices {
     fn from(indices: &RangeInclusive<u32>) -> Self {
         let indices: Vec<_> = indices.clone().map(|indx| indx as usize).collect();
         indices.into()
     }
 }
+
 impl From<&RangeInclusive<i64>> for QubitIndices {
     fn from(indices: &RangeInclusive<i64>) -> Self {
         let indices: Vec<_> = indices.clone().map(|indx| indx as usize).collect();
         indices.into()
     }
 }
+
 impl From<&RangeInclusive<i32>> for QubitIndices {
     fn from(indices: &RangeInclusive<i32>) -> Self {
         let indices: Vec<_> = indices.clone().map(|indx| indx as usize).collect();
@@ -569,6 +587,7 @@ impl From<usize> for QubitIndices {
         }
     }
 }
+
 impl From<&usize> for QubitIndices {
     fn from(item: &usize) -> Self {
         (*item).into()
@@ -582,6 +601,7 @@ impl From<u64> for QubitIndices {
         }
     }
 }
+
 impl From<&u64> for QubitIndices {
     fn from(item: &u64) -> Self {
         (*item).into()
@@ -595,6 +615,7 @@ impl From<u32> for QubitIndices {
         }
     }
 }
+
 impl From<&u32> for QubitIndices {
     fn from(item: &u32) -> Self {
         (*item).into()
@@ -608,6 +629,7 @@ impl From<i64> for QubitIndices {
         }
     }
 }
+
 impl From<&i64> for QubitIndices {
     fn from(item: &i64) -> Self {
         (*item).into()
@@ -621,6 +643,7 @@ impl From<i32> for QubitIndices {
         }
     }
 }
+
 impl From<&i32> for QubitIndices {
     fn from(item: &i32) -> Self {
         (*item).into()

@@ -343,8 +343,7 @@ where
                     }
                     let max_index_needed = attempt
                         .iter()
-                        .map(|(indices, _)| indices.iter())
-                        .flatten()
+                        .flat_map(|(indices, _)| indices.iter())
                         .cloned()
                         .max()
                         .unwrap();
@@ -415,12 +414,11 @@ where
                         |(node, energy, count), co| (node, energy + energy_function(co), count + 1),
                     )
                     .into_iter()
-                    .map(|((starting_node, energy, count), indices, exchanges)| {
+                    .flat_map(|((starting_node, energy, count), indices, exchanges)| {
                         exchanges.into_iter().map(move |exchange| {
                             (starting_node, energy, count, indices.clone(), exchange)
                         })
                     })
-                    .flatten()
                     .collect::<Vec<_>>();
                 res.shuffle(rng);
 
