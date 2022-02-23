@@ -25,9 +25,11 @@ fn make_ops_matrix(n: usize, ops: &[&UnitaryOp<f64>]) -> Vec<Vec<Complex<f64>>> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
     extern crate test;
-    use qip_rewrite::state_ops::iterators::UnitaryOp::*;
-    use qip_rewrite::state_ops::matrix_ops::{apply_ops, make_control_op, make_matrix_op};
+
+    use qip::state_ops::iterators::UnitaryOp::*;
+    use qip::state_ops::matrix_ops::{apply_ops, make_control_op, make_matrix_op};
     use test::Bencher;
 
     #[bench]
