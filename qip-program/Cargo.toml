@@ -1,0 +1,16 @@
+[package]
+name = "qip-program"
+version = "1.0.0"
+authors = ["Sumner Hearth <sumnernh@gmail.com>"]
+description = "A procedural macro for QIP"
+repository = "https://github.com/Renmusxd/RustQIP"
+license = "MIT"
+edition = "2021"
+
+[lib]
+name = "qip_program"
+proc-macro = true
+
+[dependencies]
+syn = { version = ">=1.0", features = ["full", "extra-traits"] }
+quote = ">=1.0"

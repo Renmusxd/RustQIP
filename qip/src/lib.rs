@@ -1,13 +1,13 @@
 #![forbid(unsafe_code)]
 #![deny(
-    unreachable_pub,
-    missing_debug_implementations,
-    missing_copy_implementations,
-    trivial_casts,
-    trivial_numeric_casts,
-    unstable_features,
-    unused_import_braces,
-    unused_qualifications
+unreachable_pub,
+missing_debug_implementations,
+missing_copy_implementations,
+trivial_casts,
+trivial_numeric_casts,
+unstable_features,
+unused_import_braces,
+unused_qualifications
 )]
 
 //! Quantum Computing library leveraging graph building to build efficient quantum circuit
@@ -74,30 +74,32 @@
 //! ```
 //! use qip::prelude::*;
 //! use std::num::NonZeroUsize;
+//! # #[cfg(feature = "macros")]
+//! use qip_program::program;
+//! # #[cfg(feature = "macros")]
 //! # fn main() -> CircuitResult<()> {
+//!
+//! fn gamma<B>(b: &mut B, ra: B::Register, rb: B::Register) -> CircuitResult<(B::Register, B::Register)>
+//!    where B: AdvancedCircuitBuilder<f64>
+//! {
+//!     let (ra, rb) = b.toffoli(ra, rb)?;
+//!     let (rb, ra) = b.toffoli(rb, ra)?;
+//!     Ok((ra, rb))
+//! }
 //!
 //! let n = NonZeroUsize::new(3).unwrap();
 //! let mut b = LocalBuilder::default();
 //! let ra = b.register(n);
 //! let rb = b.register(n);
 //!
-//! fn gamma<B>(b: &mut B, mut rs: Vec<B::Register>) -> CircuitResult<Vec<B::Register>>
-//!    where B: AdvancedCircuitBuilder<f64>
-//! {
-//!     let rb = rs.pop().ok_or(CircuitError::new("No rb provided"))?;
-//!     let ra = rs.pop().ok_or(CircuitError::new("No ra provided"))?;
-//!     let (ra, rb) = b.toffoli(ra, rb)?;
-//!     let (rb, ra) = b.toffoli(rb, ra)?;
-//!     Ok(vec![ra, rb])
-//! }
 //!
-//! let (ra, rb) = program!(&mut b, ra, rb;
+//! let (ra, rb) = program!(&mut b; ra, rb;
 //!     // Applies gamma to |ra[0] ra[1]>|ra[2]>
 //!     gamma ra[0..2], ra[2];
 //!     // Applies gamma to |ra[0] rb[0]>|ra[2]>
-//!     gamma |ra[0], rb[0],| ra[2];
+//!     gamma [ra[0], rb[0]], ra[2];
 //!     // Applies gamma to |ra[0]>|rb[0] ra[2]>
-//!     gamma ra[0], |rb[0], ra[2],|;
+//!     gamma ra[0], [rb[0], ra[2]];
 //!     // Applies gamma to |ra[0] ra[1]>|ra[2]> if rb == |111>
 //!     control gamma rb, ra[0..2], ra[2];
 //!     // Applies gamma to |ra[0] ra[1]>|ra[2]> if rb == |110> (rb[0] == |0>, rb[1] == 1, ...)
@@ -107,12 +109,15 @@
 //!
 //! # Ok(())
 //! # }
+//! # #[cfg(not(feature = "macros"))]
+//! # fn main() {}
 //! ```
 
 pub mod builder;
 pub mod builder_traits;
 pub mod conditioning;
 pub mod errors;
+#[cfg(feature = "macros")]
 pub mod macros;
 #[cfg(feature = "optimization")]
 pub mod optimizer;
@@ -132,5 +137,6 @@ pub mod prelude {
     pub use crate::builder_traits::*;
     pub use crate::conditioning::*;
     pub use crate::errors::*;
+    #[cfg(feature = "macros")]
     pub use macros::RecursiveCircuitBuilder;
 }

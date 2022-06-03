@@ -15,7 +15,7 @@ pub enum UnitaryOp<P: Precision> {
     Control(Vec<usize>, Vec<usize>, Box<UnitaryOp<P>>),
 }
 
-impl<'a, P: Precision> fmt::Debug for UnitaryOp<P> {
+impl<P: Precision> fmt::Debug for UnitaryOp<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (name, indices) = match self {
             UnitaryOp::Matrix(indices, _) => ("Matrix".to_string(), indices.clone()),

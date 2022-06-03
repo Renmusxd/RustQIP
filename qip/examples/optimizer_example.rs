@@ -1,8 +1,16 @@
+#[cfg(feature = "macros")]
 use qip::macros::program_ops::*;
+#[cfg(feature = "macros")]
 use qip::prelude::*;
+#[cfg(feature = "macros")]
+use qip_program::program;
+#[cfg(feature = "macros")]
 use rand::{thread_rng, Rng};
+#[cfg(feature = "macros")]
 use std::num::NonZeroUsize;
 
+#[cfg(feature = "macros")]
+#[cfg(feature = "optimization")]
 fn make_random_circuit<P: Precision, CB: CliffordTBuilder<P> + Conditionable, R: Rng>(
     cb: &mut CB,
     mut r: CB::Register,
@@ -22,28 +30,28 @@ fn make_random_circuit<P: Precision, CB: CliffordTBuilder<P> + Conditionable, R:
                 qubit_numb
             };
             assert_ne!(qubit_numa, qubit_numb);
-            r = program!(cb, r;
+            r = program!(&mut *cb; r;
                 control not r[qubit_numa], r[qubit_numb];
             )?;
         } else {
             let qubit_num = rng.gen_range(0..n);
             r = match gatenum {
-                1 => program!(cb, r;
+                1 => program!(&mut *cb; r;
                     x r[qubit_num];
                 ),
-                2 => program!(cb, r;
+                2 => program!(&mut *cb; r;
                     y r[qubit_num];
                 ),
-                3 => program!(cb, r;
+                3 => program!(&mut *cb; r;
                     z r[qubit_num];
                 ),
-                4 => program!(cb, r;
+                4 => program!(&mut *cb; r;
                     h r[qubit_num];
                 ),
-                5 => program!(cb, r;
+                5 => program!(&mut *cb; r;
                     s r[qubit_num];
                 ),
-                6 => program!(cb, r;
+                6 => program!(&mut *cb; r;
                     t r[qubit_num];
                 ),
                 _ => unreachable!(),
@@ -53,6 +61,12 @@ fn make_random_circuit<P: Precision, CB: CliffordTBuilder<P> + Conditionable, R:
     Ok(r)
 }
 
+#[cfg(not(feature = "macros"))]
+#[cfg(not(feature = "optimization"))]
+fn main() -> () {}
+
+#[cfg(feature = "macros")]
+#[cfg(feature = "optimization")]
 fn main() -> Result<(), CircuitError> {
     let mut b = LocalBuilder::<f64>::default();
     let r = b.register(NonZeroUsize::new(3).unwrap());

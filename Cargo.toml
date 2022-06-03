@@ -1,24 +1,3 @@
-[package]
-name = "qip"
-version = "1.0.0"
-authors = ["Sumner Hearth <sumnernh@gmail.com>"]
-description = "A library for efficient quantum computing simulations."
-repository = "https://github.com/Renmusxd/RustQIP"
-license = "MIT"
-edition = "2021"
+[workspace]
+members = ["qip", "qip-program"]
 
-[lib]
-name = "qip"
-
-[features]
-default = ["parallel", "optimization"]
-parallel = ["rayon"]
-optimization = []
-
-[dependencies]
-num-rational = "^0.4"
-num-traits = "^0.2"
-num-complex = "^0.4"
-rayon = { version = "^1.5", optional = true }
-rand = "^0.8"
-smallvec = "^1.8"

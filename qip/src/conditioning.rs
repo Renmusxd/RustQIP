@@ -1,6 +1,8 @@
 use crate::builder_traits::{QubitRegister, SplitResult, Subcircuitable};
 use crate::errors::{CircuitError, CircuitResult};
+#[cfg(feature = "macros")]
 use crate::macros::inverter::Invertable;
+#[cfg(feature = "macros")]
 use crate::macros::RecursiveCircuitBuilder;
 use crate::prelude::{
     AdvancedCircuitBuilder, CircuitBuilder, CliffordTBuilder, RotationsBuilder,
@@ -64,8 +66,8 @@ impl<'a, CB: Conditionable + ?Sized> CircuitBuilder for Conditioned<'a, CB> {
         r: Self::Register,
         indices: It,
     ) -> SplitResult<Self::Register>
-    where
-        It: IntoIterator<Item = usize>,
+        where
+            It: IntoIterator<Item=usize>,
     {
         self.parent.split_register_relative(r, indices)
     }
@@ -82,16 +84,16 @@ impl<'a, CB: Conditionable + ?Sized> CircuitBuilder for Conditioned<'a, CB> {
     }
 
     fn calculate_state_with_init<'b, It>(&mut self, it: It) -> Self::StateCalculation
-    where
-        Self::Register: 'b,
-        It: IntoIterator<Item = (&'b Self::Register, usize)>,
+        where
+            Self::Register: 'b,
+            It: IntoIterator<Item=(&'b Self::Register, usize)>,
     {
         self.parent.calculate_state_with_init(it)
     }
 }
 
 impl<'a, P: Precision, CB: Conditionable + UnitaryBuilder<P> + ?Sized> UnitaryBuilder<P>
-    for Conditioned<'a, CB>
+for Conditioned<'a, CB>
 {
     fn vec_matrix_to_circuitobject(n: usize, data: Vec<Complex<P>>) -> Self::CircuitObject {
         CB::vec_matrix_to_circuitobject(n, data)
@@ -99,7 +101,7 @@ impl<'a, P: Precision, CB: Conditionable + UnitaryBuilder<P> + ?Sized> UnitaryBu
 }
 
 impl<'a, P: Precision, CB: Conditionable + CliffordTBuilder<P> + ?Sized> CliffordTBuilder<P>
-    for Conditioned<'a, CB>
+for Conditioned<'a, CB>
 {
     fn make_x(&self) -> Self::CircuitObject {
         self.parent.make_x()
@@ -123,8 +125,9 @@ impl<'a, P: Precision, CB: Conditionable + CliffordTBuilder<P> + ?Sized> Cliffor
         self.parent.make_cnot()
     }
 }
+
 impl<'a, P: Precision, CB: Conditionable + RotationsBuilder<P> + ?Sized> RotationsBuilder<P>
-    for Conditioned<'a, CB>
+for Conditioned<'a, CB>
 {
     fn rz(&mut self, r: Self::Register, theta: P) -> Self::Register {
         self.parent.rz(r, theta)
@@ -164,7 +167,7 @@ impl<'a, P: Precision, CB: Conditionable + RotationsBuilder<P> + ?Sized> Rotatio
 }
 
 impl<'a, CB: Conditionable + TemporaryRegisterBuilder + ?Sized> TemporaryRegisterBuilder
-    for Conditioned<'a, CB>
+for Conditioned<'a, CB>
 {
     fn make_zeroed_temp_qubit(&mut self) -> Self::Register {
         self.parent.make_zeroed_temp_qubit()
@@ -176,9 +179,8 @@ impl<'a, CB: Conditionable + TemporaryRegisterBuilder + ?Sized> TemporaryRegiste
 }
 
 impl<'a, P: Precision, CB: Conditionable + AdvancedCircuitBuilder<P> + ?Sized>
-    AdvancedCircuitBuilder<P> for Conditioned<'a, CB>
-{
-}
+AdvancedCircuitBuilder<P> for Conditioned<'a, CB>
+{}
 
 impl<'a, CB: Conditionable> Conditionable for Conditioned<'a, CB> {
     fn try_apply_with_condition(
@@ -230,8 +232,9 @@ impl<'a, CB: ConditionableSubcircuit + Conditionable> Subcircuitable for Conditi
     }
 }
 
+#[cfg(feature = "macros")]
 impl<'a, CB: Invertable + ConditionableSubcircuit + Conditionable> Invertable
-    for Conditioned<'a, CB>
+for Conditioned<'a, CB>
 {
     type SimilarBuilder = CB::SimilarBuilder;
 
@@ -244,8 +247,10 @@ impl<'a, CB: Invertable + ConditionableSubcircuit + Conditionable> Invertable
     }
 }
 
+
+#[cfg(feature = "macros")]
 impl<'a, CB: Invertable + ConditionableSubcircuit + Conditionable> ConditionableSubcircuit
-    for Conditioned<'a, CB>
+for Conditioned<'a, CB>
 {
     fn apply_conditioned_subcircuit(
         &mut self,
@@ -268,10 +273,11 @@ impl<'a, CB: Invertable + ConditionableSubcircuit + Conditionable> Conditionable
     }
 }
 
+#[cfg(feature = "macros")]
 impl<'a, P: Precision, CB: RecursiveCircuitBuilder<P>> RecursiveCircuitBuilder<P>
-    for Conditioned<'a, CB>
-where
-    <CB as Invertable>::SimilarBuilder: RecursiveCircuitBuilder<P>,
+for Conditioned<'a, CB>
+    where
+        <CB as Invertable>::SimilarBuilder: RecursiveCircuitBuilder<P>,
 {
     type RecursiveSimilarBuilder = Self::SimilarBuilder;
 }

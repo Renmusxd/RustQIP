@@ -7,10 +7,11 @@ use std::iter::{Product, Sum};
 pub trait Precision: Default + Float + Sum + Send + Sync + Display + Product + Debug {}
 
 impl Precision for f64 {}
+
 impl Precision for f32 {}
 
 /// Order of qubits returned by `QuantumState::into_state` and other similar methods.
-#[derive(Clone, Copy, Debug, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum Representation {
     /// Qubit with index 0 is the least significant index bit.
     LittleEndian,
