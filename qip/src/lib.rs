@@ -1,13 +1,13 @@
 #![forbid(unsafe_code)]
 #![deny(
-    unreachable_pub,
-    missing_debug_implementations,
-    missing_copy_implementations,
-    trivial_casts,
-    trivial_numeric_casts,
-    unstable_features,
-    unused_import_braces,
-    unused_qualifications
+unreachable_pub,
+missing_debug_implementations,
+missing_copy_implementations,
+trivial_casts,
+trivial_numeric_casts,
+unstable_features,
+unused_import_braces,
+unused_qualifications
 )]
 
 //! Quantum Computing library leveraging graph building to build efficient quantum circuit
@@ -68,14 +68,11 @@
 //! While the borrow checker included in rust is a wonderful tool for checking that our registers
 //! are behaving, it can be cumbersome. For that reason qip also includes a macro which provides an
 //! API similar to that which you would see in quantum computing textbooks.
-//! *Notice that due to a design choice in rust's `macro_rules!` we use vertical bars to group qubits
-//! and a comma must appear before the closing bar. This may be fixed in the future using procedural
-//! macros.*
 //! ```
 //! use qip::prelude::*;
 //! use std::num::NonZeroUsize;
 //! # #[cfg(feature = "macros")]
-//! use qip_program::program;
+//! use qip_macros::program;
 //! # #[cfg(feature = "macros")]
 //! # fn main() -> CircuitResult<()> {
 //!
@@ -97,6 +94,7 @@
 //!     // Applies gamma to |ra[0] ra[1]>|ra[2]>
 //!     gamma ra[0..2], ra[2];
 //!     // Applies gamma to |ra[0] rb[0]>|ra[2]>
+//!     // Notice ra[0] and rb[0] are grouped by brackets.
 //!     gamma [ra[0], rb[0]], ra[2];
 //!     // Applies gamma to |ra[0]>|rb[0] ra[2]>
 //!     gamma ra[0], [rb[0], ra[2]];
@@ -104,6 +102,45 @@
 //!     control gamma rb, ra[0..2], ra[2];
 //!     // Applies gamma to |ra[0] ra[1]>|ra[2]> if rb == |110> (rb[0] == |0>, rb[1] == 1, ...)
 //!     control(0b110) gamma rb, ra[0..2], ra[2];
+//! )?;
+//! let r = b.merge_two_registers(ra, rb);
+//!
+//! # Ok(())
+//! # }
+//! # #[cfg(not(feature = "macros"))]
+//! # fn main() {}
+//! ```
+//! # The Invert Macro
+//! It's often useful to define functions of registers as well as their inverses, the `#[invert]`
+//! macro automates much of this process.
+//! ```
+//! use qip::prelude::*;
+//! use std::num::NonZeroUsize;
+//! # #[cfg(feature = "macros")]
+//! use qip_macros::*;
+//! # #[cfg(feature = "macros")]
+//! # fn main() -> CircuitResult<()> {
+//!
+//! use qip::inverter::Invertable;
+//! // Make gamma and its inverse: gamma_inv
+//! #[invert(gamma_inv)]
+//! fn gamma<B>(b: &mut B, ra: B::Register, rb: B::Register) -> CircuitResult<(B::Register, B::Register)>
+//!    where B: AdvancedCircuitBuilder<f64> + Invertable<SimilarBuilder=B>
+//! {
+//!     let (ra, rb) = b.toffoli(ra, rb)?;
+//!     let (rb, ra) = b.toffoli(rb, ra)?;
+//!     Ok((ra, rb))
+//! }
+//!
+//! let n = NonZeroUsize::new(3).unwrap();
+//! let mut b = LocalBuilder::default();
+//! let ra = b.register(n);
+//! let rb = b.register(n);
+//!
+//!
+//! let (ra, rb) = program!(&mut b; ra, rb;
+//!     gamma ra[0..2], ra[2];
+//!     gamma_inv ra[0..2], ra[2];
 //! )?;
 //! let r = b.merge_two_registers(ra, rb);
 //!

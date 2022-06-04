@@ -758,9 +758,9 @@ impl<P: Precision> Conditionable for LocalBuilder<P> {
 
 fn split_vector_at<T>(mut v: Vec<T>, x: usize) -> (Vec<T>, Vec<T>) {
     let n = v.len();
-    assert!(n > x);
+    assert!(n >= x);
     let mut b = vec![];
-    for _ in 0..x {
+    for _ in 0..(n - x) {
         b.push(v.pop().unwrap());
     }
     b.reverse();
@@ -833,8 +833,8 @@ fn apply_pipeline_objects<CB, CO>(
         .flat_map(|(indices, _)| indices.iter().cloned().max())
         .max()
         .unwrap();
-    // Need temp qubits for the max_r_index - rn
-    if let Some(temp_n) = NonZeroUsize::new(max_r_index - rn) {
+    // Need temp qubits for excess.
+    if let Some(temp_n) = NonZeroUsize::new(1 + max_r_index - rn) {
         let temp = cb.make_zeroed_temp_register(temp_n);
         rs.extend(cb.split_all_register(temp).into_iter());
     }

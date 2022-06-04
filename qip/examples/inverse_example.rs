@@ -1,28 +1,32 @@
 use qip::inverter::Invertable;
 use qip::prelude::*;
+use qip::prelude::*;
+use std::num::NonZeroUsize;
+use qip::builder::Qudit;
+#[cfg(feature = "macros")]
 use qip_macros::*;
 
-#[invert(gamma_inv, _arg)]
-#[cfg(feature = "macros")]
-fn gamma<P: Precision, CB: CliffordTBuilder<P> + Invertable<SimilarBuilder=CB>>(
-    cb: &mut CB,
-    _arg: usize,
-    ra: CB::Register,
-    rb: CB::Register,
-) -> Result<(CB::Register, CB::Register), CircuitError> {
-    cb.cnot(ra, rb)
+#[invert(gamma_inv)]
+fn gamma<B>(b: &mut B, ra: B::Register, rb: B::Register) -> CircuitResult<(B::Register, B::Register)>
+    where B: AdvancedCircuitBuilder<f64> + Invertable<SimilarBuilder=B>
+{
+    let (ra, rb) = b.toffoli(ra, rb)?;
+    let (rb, ra) = b.toffoli(rb, ra)?;
+    Ok((ra, rb))
 }
 
 #[cfg(feature = "macros")]
-fn main() -> Result<(), CircuitError> {
-    let mut b = LocalBuilder::<f64>::default();
-    let ra = b.qudit(3).unwrap();
-    let rb = b.qudit(3).unwrap();
+fn main() -> CircuitResult<()> {
+    let n = NonZeroUsize::new(3).unwrap();
+    let mut b = LocalBuilder::default();
+    let ra = b.register(n);
+    let rb = b.register(n);
 
-    let (_ra, _rb) = program!(&mut b; ra, rb;
-        gamma(10) ra, rb;
-        gamma_inv(10) ra, rb;
+    let (ra, rb) = program!(&mut b; ra, rb;
+        // gamma ra[0..2], ra[2];
+        gamma_inv ra[0..2], ra[2];
     )?;
+    let r = b.merge_two_registers(ra, rb);
 
     Ok(())
 }
