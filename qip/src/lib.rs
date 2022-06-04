@@ -259,6 +259,5 @@ pub mod prelude {
     pub use crate::builder_traits::*;
     pub use crate::conditioning::*;
     pub use crate::errors::*;
-    #[cfg(feature = "macros")]
-    pub use macros::RecursiveCircuitBuilder;
+    pub use crate::inverter::RecursiveCircuitBuilder;
 }

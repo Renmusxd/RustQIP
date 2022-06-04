@@ -1,11 +1,10 @@
 use qip::inverter::Invertable;
 use qip::prelude::*;
-use qip::prelude::*;
 use std::num::NonZeroUsize;
-use qip::builder::Qudit;
 #[cfg(feature = "macros")]
 use qip_macros::*;
 
+#[cfg(feature = "macros")]
 #[invert(gamma_inv)]
 fn gamma<B>(b: &mut B, ra: B::Register, rb: B::Register) -> CircuitResult<(B::Register, B::Register)>
     where B: AdvancedCircuitBuilder<f64> + Invertable<SimilarBuilder=B>
@@ -26,7 +25,7 @@ fn main() -> CircuitResult<()> {
         // gamma ra[0..2], ra[2];
         gamma_inv ra[0..2], ra[2];
     )?;
-    let r = b.merge_two_registers(ra, rb);
+    let _r = b.merge_two_registers(ra, rb);
 
     Ok(())
 }

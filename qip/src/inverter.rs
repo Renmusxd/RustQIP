@@ -13,7 +13,6 @@ Invertable<SimilarBuilder=Self::RecursiveSimilarBuilder>
     type RecursiveSimilarBuilder: RecursiveCircuitBuilder<P>;
 }
 
-
 pub trait Invertable: Subcircuitable {
     type SimilarBuilder: Subcircuitable<Subcircuit=Self::Subcircuit>;
 

@@ -3,9 +3,9 @@ extern crate self as qip;
 use crate::errors::CircuitError;
 use crate::macros::program_ops::*;
 use crate::prelude::*;
-use crate::{invert_fn, wrap_and_invert, wrap_fn};
-use qip_program::program;
+use qip_macros::*;
 use std::num::NonZeroUsize;
+use crate::inverter::RecursiveCircuitBuilder;
 
 /// A collection of circuits from chapter 6.4 of "Quantum Computing: A gentle introduction"
 /// by Eleanor Rieffle and Wolfgang Polak.
@@ -13,6 +13,7 @@ use std::num::NonZeroUsize;
 /// Add together ra and rb using rc as carry, result is in rb.
 /// This works when the highest order bit of rb and rc are both |0>. Undefined behavior otherwise.
 /// ra and rc have m qubits, rb has m+1 qubits.
+#[invert]
 pub fn add<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
     rc: CB::Register,
@@ -46,6 +47,7 @@ pub fn add<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     result
 }
 
+#[invert]
 fn sum<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
     rc: CB::Register,
@@ -61,13 +63,14 @@ fn sum<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     Ok((rc, ra, rb))
 }
 
+#[invert]
 fn carry<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
     rc: CB::Register,
     ra: CB::Register,
     rb: CB::Register,
     rcp: CB::Register,
-) -> Result<(CB::Register, CB::Register, CB::Register, CB::Register), CircuitError> {
+) -> CircuitResult<(CB::Register, CB::Register, CB::Register, CB::Register)> {
     let (rc, ra, rb, rcp) = program!(&mut *b; rc, ra, rb, rcp;
         control x [ra, rb] rcp;
         control x ra, rb;
@@ -80,6 +83,7 @@ fn carry<P: Precision, CB: RecursiveCircuitBuilder<P>>(
 
 /// Addition of ra and rb modulo rm. Conditions are:
 /// `a,b < M`, `M > 0`.
+#[invert]
 pub fn add_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
     ra: CB::Register,
@@ -122,6 +126,7 @@ pub fn add_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
 
 /// Maps `|a>|b>|M>|p>` to `|a>|b>|M>|(p + ba) mod M>`
 /// With `a[n+1]`, `b[k]`, `M[n]`, and `p[n+1]`, and `a,p < M`, `M > 0`.
+#[invert]
 pub fn times_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
     ra: CB::Register,
@@ -181,10 +186,11 @@ pub fn times_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
 }
 
 /// Right shift the qubits in a register (or left shift by providing a negative number).
+#[invert(lshift)]
 pub fn rshift<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
     r: CB::Register,
-) -> CB::Register {
+) -> CircuitResult<CB::Register> {
     let n = r.n();
     let mut rs: Vec<Option<CB::Register>> = b.split_all_register(r).into_iter().map(Some).collect();
     (0..n - 1).rev().for_each(|indx| {
@@ -201,10 +207,11 @@ pub fn rshift<P: Precision, CB: RecursiveCircuitBuilder<P>>(
         rs[offset as usize] = Some(rb);
     });
 
-    b.merge_registers(rs.into_iter().flatten()).unwrap()
+    Ok(b.merge_registers(rs.into_iter().flatten()).unwrap())
 }
 
 /// Performs |a>|b> -> |a>|a ^ b>, which for b=0 is a copy operation.
+#[invert]
 pub fn copy<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
     ra: CB::Register,
@@ -236,6 +243,7 @@ pub fn copy<P: Precision, CB: RecursiveCircuitBuilder<P>>(
 }
 
 /// Performs |a>|m>|s> -> |a>|m>|(s + a*a) % m>.
+#[invert]
 pub fn square_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
     ra: CB::Register,
@@ -269,6 +277,7 @@ pub fn square_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
 }
 
 /// Maps |a>|b>|m>|p>|0> -> |a>|b>|m>|p>|(p*a^b) mod m>
+#[invert]
 pub fn exp_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
     ra: CB::Register,
