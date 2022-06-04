@@ -110,6 +110,47 @@ unused_qualifications
 //! # #[cfg(not(feature = "macros"))]
 //! # fn main() {}
 //! ```
+//!
+//! We can also apply this to function which take other argument. Here `gamma` takes a boolean
+//! argument `skip` which is passed in before the registers.
+//! *The arguments to functions in the program macro may not reference the input registers*
+//! ```rust
+//! use qip::prelude::*;
+//! use std::num::NonZeroUsize;
+//! # #[cfg(feature = "macros")]
+//! use qip_macros::program;
+//! # #[cfg(feature = "macros")]
+//! # fn main() -> CircuitResult<()> {
+//!
+//! fn gamma<B>(b: &mut B, skip: bool, ra: B::Register, rb: B::Register) -> CircuitResult<(B::Register, B::Register)>
+//!    where B: AdvancedCircuitBuilder<f64>
+//! {
+//!     let (ra, rb) = b.toffoli(ra, rb)?;
+//!     let (rb, ra) = if skip {
+//!         b.toffoli(rb, ra)?
+//!     } else {
+//!         (rb, ra)
+//!     };
+//!     Ok((ra, rb))
+//! }
+//!
+//! let n = NonZeroUsize::new(3).unwrap();
+//! let mut b = LocalBuilder::default();
+//! let ra = b.register(n);
+//! let rb = b.register(n);
+//!
+//! let (ra, rb) = program!(&mut b; ra, rb;
+//!     gamma(true) ra[0..2], ra[2];
+//!     gamma(0 == 1) ra[0..2], ra[2];
+//! )?;
+//! let r = b.merge_two_registers(ra, rb);
+//!
+//! # Ok(())
+//! # }
+//! # #[cfg(not(feature = "macros"))]
+//! # fn main() {}
+//! ```
+//!
 //! # The Invert Macro
 //! It's often useful to define functions of registers as well as their inverses, the `#[invert]`
 //! macro automates much of this process.
@@ -141,6 +182,47 @@ unused_qualifications
 //! let (ra, rb) = program!(&mut b; ra, rb;
 //!     gamma ra[0..2], ra[2];
 //!     gamma_inv ra[0..2], ra[2];
+//! )?;
+//! let r = b.merge_two_registers(ra, rb);
+//!
+//! # Ok(())
+//! # }
+//! # #[cfg(not(feature = "macros"))]
+//! # fn main() {}
+//! ```
+//!
+//! To invert functions with additional arguments, we must list the non-register arguments.
+//! ```
+//! use qip::prelude::*;
+//! use std::num::NonZeroUsize;
+//! # #[cfg(feature = "macros")]
+//! use qip_macros::*;
+//! # #[cfg(feature = "macros")]
+//! # fn main() -> CircuitResult<()> {
+//!
+//! use qip::inverter::Invertable;
+//! // Make gamma and its inverse: gamma_inv
+//! #[invert(gamma_inv, skip)]
+//! fn gamma<B>(b: &mut B, skip: bool, ra: B::Register, rb: B::Register) -> CircuitResult<(B::Register, B::Register)>
+//!    where B: AdvancedCircuitBuilder<f64> + Invertable<SimilarBuilder=B>
+//! {
+//!     let (ra, rb) = b.toffoli(ra, rb)?;
+//!     let (rb, ra) = if skip {
+//!         b.toffoli(rb, ra)?
+//!     } else {
+//!         (rb, ra)
+//!     };
+//!     Ok((ra, rb))
+//! }
+//!
+//! let n = NonZeroUsize::new(3).unwrap();
+//! let mut b = LocalBuilder::default();
+//! let ra = b.register(n);
+//! let rb = b.register(n);
+//!
+//! let (ra, rb) = program!(&mut b; ra, rb;
+//!     gamma(true) ra[0..2], ra[2];
+//!     gamma_inv(true) ra[0..2], ra[2];
 //! )?;
 //! let r = b.merge_two_registers(ra, rb);
 //!
