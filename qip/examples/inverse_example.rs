@@ -1,12 +1,12 @@
 use qip::inverter::Invertable;
 use qip::prelude::*;
-use qip_program::*;
+use qip_macros::*;
 
-#[invert(gamma_inv, arg)]
+#[invert(gamma_inv, _arg)]
 #[cfg(feature = "macros")]
-fn gamma<P: Precision, CB: CliffordTBuilder<P> + Invertable<SimilarBuilder = CB>>(
+fn gamma<P: Precision, CB: CliffordTBuilder<P> + Invertable<SimilarBuilder=CB>>(
     cb: &mut CB,
-    arg: usize,
+    _arg: usize,
     ra: CB::Register,
     rb: CB::Register,
 ) -> Result<(CB::Register, CB::Register), CircuitError> {

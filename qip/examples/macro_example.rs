@@ -1,7 +1,7 @@
 #[cfg(feature = "macros")]
 use qip::prelude::*;
 #[cfg(feature = "macros")]
-use qip_program::*;
+use qip_macros::program;
 
 #[cfg(feature = "macros")]
 fn gamma<P: Precision, CB: CliffordTBuilder<P>>(

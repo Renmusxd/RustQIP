@@ -3,7 +3,7 @@ use qip::macros::program_ops::*;
 #[cfg(feature = "macros")]
 use qip::prelude::*;
 #[cfg(feature = "macros")]
-use qip_program::program;
+use qip_macros::program;
 #[cfg(feature = "macros")]
 use rand::{thread_rng, Rng};
 #[cfg(feature = "macros")]

@@ -1,5 +1,5 @@
 [package]
-name = "qip-program"
+name = "qip-macros"
 version = "1.0.0"
 authors = ["Sumner Hearth <sumnernh@gmail.com>"]
 description = "A procedural macro for QIP"
@@ -8,5 +8,5 @@ license = "MIT"
 edition = "2021"
 
 [lib]
-name = "qip_program"
+name = "qip_macros"
 proc-macro = true

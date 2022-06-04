@@ -13,7 +13,7 @@ name = "qip"
 [features]
 default = ["parallel"]
 parallel = ["rayon"]
-macros = ["qip-program"]
+macros = ["qip-macros"]
 boolean_circuits = ["macros"]
 optimization = []
 
@@ -25,6 +25,6 @@ rayon = { version = "^1.5", optional = true }
 rand = "^0.8"
 smallvec = "^1.8"
 
-[dependencies.qip-program]
-path = "../qip-program"
+[dependencies.qip-macros]
+path = "../qip-macros"
 optional = true
