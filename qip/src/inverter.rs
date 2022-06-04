@@ -1,8 +1,21 @@
-use crate::builder_traits::{CircuitBuilder, QubitRegister, SplitManyResult, Subcircuitable};
+use crate::builder_traits::{AdvancedCircuitBuilder, CircuitBuilder, QubitRegister, SplitManyResult, Subcircuitable};
+use crate::conditioning::{Conditionable, ConditionableSubcircuit};
 use crate::errors::CircuitResult;
+use crate::Precision;
+
+pub trait RecursiveCircuitBuilder<P: Precision>:
+Invertable<SimilarBuilder=Self::RecursiveSimilarBuilder>
++ Conditionable
++ AdvancedCircuitBuilder<P>
++ Subcircuitable
++ ConditionableSubcircuit
+{
+    type RecursiveSimilarBuilder: RecursiveCircuitBuilder<P>;
+}
+
 
 pub trait Invertable: Subcircuitable {
-    type SimilarBuilder: Subcircuitable<Subcircuit = Self::Subcircuit>;
+    type SimilarBuilder: Subcircuitable<Subcircuit=Self::Subcircuit>;
 
     fn new_similar(&self) -> Self::SimilarBuilder;
     fn invert_subcircuit(sc: Self::Subcircuit) -> CircuitResult<Self::Subcircuit>;
@@ -22,13 +35,13 @@ pub fn inverter_args<T, CB, F>(
     f: F,
     t: T,
 ) -> CircuitResult<Vec<CB::Register>>
-where
-    CB: Invertable,
-    F: Fn(
-        &mut CB::SimilarBuilder,
-        Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>,
-        T,
-    ) -> CircuitResult<Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>>,
+    where
+        CB: Invertable,
+        F: Fn(
+            &mut CB::SimilarBuilder,
+            Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>,
+            T,
+        ) -> CircuitResult<Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>>,
 {
     let mut sub_cb = cb.new_similar();
     let sub_rs = rs
@@ -53,129 +66,14 @@ where
 }
 
 pub fn inverter<CB, F>(cb: &mut CB, r: Vec<CB::Register>, f: F) -> CircuitResult<Vec<CB::Register>>
-where
-    CB: Invertable,
-    F: Fn(
-        &mut CB::SimilarBuilder,
-        Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>,
-    ) -> CircuitResult<Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>>,
+    where
+        CB: Invertable,
+        F: Fn(
+            &mut CB::SimilarBuilder,
+            Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>,
+        ) -> CircuitResult<Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>>,
 {
     inverter_args(cb, r, |r, cb, _| f(r, cb), ())
-}
-
-/// Wrap a function to create a version compatible with `program!` as well as an inverse which is
-/// also compatible.
-#[macro_export]
-macro_rules! invert_fn {
-    (pub $newinvert:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), $func:expr) => {
-        /// Invert the given function.
-        pub fn $newinvert<CB: $($typetail)*>(
-            b: &mut CB,
-            rs: Vec<CB::Register>,
-            $arg: $argtype,
-        ) -> Result<Vec<CB::Register>, $crate::errors::CircuitError> {
-            $crate::macros::inverter::inverter_args(b, rs, $func, $arg)
-        }
-    };
-    ($newinvert:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), $func:expr) => {
-        fn $newinvert<CB: $($typetail)*>(
-            b: &mut CB,
-            rs: Vec<CB::Register>,
-            $arg: $argtype,
-        ) -> Result<Vec<CB::Register>, $crate::errors::CircuitError> {
-            $crate::macros::inverter::inverter_args(b, rs, $func, $arg)
-        }
-    };
-    (pub $newinvert:ident($arg:ident: $argtype:ident), $func:expr) => {
-        /// Invert the given function.
-        pub fn $newinvert<P: Precision, CB: $crate::macros::RecursiveCircuitBuilder<P>>(
-            b: &mut CB,
-            rs: Vec<CB::Register>,
-            $arg: $argtype,
-        ) -> Result<Vec<CB::Register>, $crate::errors::CircuitError> {
-            $crate::macros::inverter::inverter_args(b, rs, $func, $arg)
-        }
-    };
-    ($newinvert:ident($arg:ident: $argtype:ident), $func:expr) => {
-        fn $newinvert<P: Precision, CB: $crate::macros::RecursiveCircuitBuilder<P>>(
-            b: &mut CB,
-            rs: Vec<CB::Register>,
-            $arg: $argtype,
-        ) -> Result<Vec<CB::Register>, $crate::errors::CircuitError> {
-            $crate::macros::inverter::inverter_args(b, rs, $func, $arg)
-        }
-    };
-    (pub $newinvert:ident, $func:expr) => {
-        /// Invert the given function.
-        pub fn $newinvert<P: Precision, CB: $crate::macros::RecursiveCircuitBuilder<P>>(
-            b: &mut CB,
-            rs: Vec<CB::Register>,
-        ) -> Result<Vec<CB::Register>, $crate::errors::CircuitError> {
-            $crate::macros::inverter::inverter(b, rs, $func)
-        }
-    };
-    ($newinvert:ident, $func:expr) => {
-        fn $newinvert<P: Precision, CB: $crate::macros::RecursiveCircuitBuilder<P>>(
-            b: &mut CB,
-            rs: Vec<CB::Register>,
-        ) -> Result<Vec<CB::Register>, $crate::errors::CircuitError> {
-            $crate::macros::inverter::inverter(b, rs, $func)
-        }
-    };
-}
-
-/// Wrap a function to create a version compatible with `program!` as well as an inverse which is
-/// also compatible.
-#[macro_export]
-macro_rules! wrap_and_invert {
-    (pub $newfunc:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), pub $newinvert:ident, $($tail:tt)*) => {
-        wrap_fn!(pub $newfunc[$($typetail)*]($arg: $argtype), $($tail)*);
-        invert_fn!(pub $newinvert[$($typetail)*]($arg: $argtype), $newfunc);
-    };
-    ($newfunc:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), pub $newinvert:ident, $($tail:tt)*) => {
-        wrap_fn!($newfunc[$($typetail)*]($arg: $argtype), $($tail)*);
-        invert_fn!(pub $newinvert[$($typetail)*]($arg: $argtype), $newfunc);
-    };
-    (pub $newfunc:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), $newinvert:ident, $($tail:tt)*) => {
-        wrap_fn!(pub $newfunc[$($typetail)*]($arg: $argtype), $($tail)*);
-        invert_fn!($newinvert[$($typetail)*]($arg: $argtype), $newfunc);
-    };
-    ($newfunc:ident[$($typetail:tt)*]($arg:ident: $argtype:ident), $newinvert:ident, $($tail:tt)*) => {
-        wrap_fn!($newfunc[$($typetail)*]($arg: $argtype), $($tail)*);
-        invert_fn!($newinvert[$($typetail)*]($arg: $argtype), $newfunc);
-    };
-    (pub $newfunc:ident($arg:ident: $argtype:ident), pub $newinvert:ident, $($tail:tt)*) => {
-        wrap_fn!(pub $newfunc($arg: $argtype), $($tail)*);
-        invert_fn!(pub $newinvert($arg: $argtype), $newfunc);
-    };
-    ($newfunc:ident($arg:ident: $argtype:ident), pub $newinvert:ident, $($tail:tt)*) => {
-        wrap_fn!($newfunc($arg: $argtype), $($tail)*);
-        invert_fn!(pub $newinvert($arg: $argtype), $newfunc);
-    };
-    (pub $newfunc:ident($arg:ident: $argtype:ident), $newinvert:ident, $($tail:tt)*) => {
-        wrap_fn!(pub $newfunc($arg: $argtype), $($tail)*);
-        invert_fn!($newinvert($arg: $argtype), $newfunc);
-    };
-    ($newfunc:ident($arg:ident: $argtype:ident), $newinvert:ident, $($tail:tt)*) => {
-        wrap_fn!($newfunc($arg: $argtype), $($tail)*);
-        invert_fn!($newinvert($arg: $argtype), $newfunc);
-    };
-    (pub $newfunc:ident, pub $newinvert:ident, $($tail:tt)*) => {
-        wrap_fn!(pub $newfunc, $($tail)*);
-        invert_fn!(pub $newinvert, $newfunc);
-    };
-    ($newfunc:ident, pub $newinvert:ident, $($tail:tt)*) => {
-        wrap_fn!($newfunc, $($tail)*);
-        invert_fn!(pub $newinvert, $newfunc);
-    };
-    (pub $newfunc:ident, $newinvert:ident, $($tail:tt)*) => {
-        wrap_fn!(pub $newfunc, $($tail)*);
-        invert_fn!($newinvert, $newfunc);
-    };
-    ($newfunc:ident, $newinvert:ident, $($tail:tt)*) => {
-        wrap_fn!($newfunc, $($tail)*);
-        invert_fn!($newinvert, $newfunc);
-    }
 }
 
 #[cfg(test)]

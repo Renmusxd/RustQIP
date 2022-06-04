@@ -1,9 +1,7 @@
 use crate::builder_traits::{QubitRegister, SplitResult, Subcircuitable};
 use crate::errors::{CircuitError, CircuitResult};
-#[cfg(feature = "macros")]
-use crate::macros::inverter::Invertable;
-#[cfg(feature = "macros")]
-use crate::macros::RecursiveCircuitBuilder;
+use crate::inverter::Invertable;
+use crate::inverter::RecursiveCircuitBuilder;
 use crate::prelude::{
     AdvancedCircuitBuilder, CircuitBuilder, CliffordTBuilder, RotationsBuilder,
     TemporaryRegisterBuilder, UnitaryBuilder,
@@ -232,7 +230,6 @@ impl<'a, CB: ConditionableSubcircuit + Conditionable> Subcircuitable for Conditi
     }
 }
 
-#[cfg(feature = "macros")]
 impl<'a, CB: Invertable + ConditionableSubcircuit + Conditionable> Invertable
 for Conditioned<'a, CB>
 {
@@ -247,8 +244,6 @@ for Conditioned<'a, CB>
     }
 }
 
-
-#[cfg(feature = "macros")]
 impl<'a, CB: Invertable + ConditionableSubcircuit + Conditionable> ConditionableSubcircuit
 for Conditioned<'a, CB>
 {
@@ -273,7 +268,6 @@ for Conditioned<'a, CB>
     }
 }
 
-#[cfg(feature = "macros")]
 impl<'a, P: Precision, CB: RecursiveCircuitBuilder<P>> RecursiveCircuitBuilder<P>
 for Conditioned<'a, CB>
     where

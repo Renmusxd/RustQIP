@@ -1,6 +1,6 @@
 use crate::prelude::CliffordTBuilder;
 use crate::Precision;
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 
 /// Negate all the qubits in a register where the mask bit == 0.
 pub fn negate_bitmask<P: Precision, CB: CliffordTBuilder<P>>(
@@ -24,15 +24,15 @@ pub fn negate_bitmask<P: Precision, CB: CliffordTBuilder<P>>(
 /// Helper for indexing into Qubits
 #[derive(Debug)]
 pub struct QubitIndices<It>
-    where
-        It: IntoIterator<Item=usize>,
+where
+    It: IntoIterator<Item = usize>,
 {
     it: It,
 }
 
 impl<It> From<It> for QubitIndices<It>
-    where
-        It: IntoIterator<Item=usize>,
+where
+    It: IntoIterator<Item = usize>,
 {
     fn from(it: It) -> Self {
         Self { it }
@@ -40,8 +40,8 @@ impl<It> From<It> for QubitIndices<It>
 }
 
 impl<It> IntoIterator for QubitIndices<It>
-    where
-        It: IntoIterator<Item=usize>,
+where
+    It: IntoIterator<Item = usize>,
 {
     type Item = It::Item;
     type IntoIter = It::IntoIter;
@@ -53,6 +53,13 @@ impl<It> IntoIterator for QubitIndices<It>
 
 impl From<[Range<usize>; 1]> for QubitIndices<Range<usize>> {
     fn from(it: [Range<usize>; 1]) -> Self {
+        let it = it[0].clone();
+        Self { it }
+    }
+}
+
+impl From<[RangeInclusive<usize>; 1]> for QubitIndices<RangeInclusive<usize>> {
+    fn from(it: [RangeInclusive<usize>; 1]) -> Self {
         let it = it[0].clone();
         Self { it }
     }

@@ -1,10 +1,8 @@
 use crate::builder_traits::*;
 use crate::conditioning::{Conditionable, ConditionableSubcircuit};
 use crate::errors::{CircuitError, CircuitResult};
-#[cfg(feature = "macros")]
-use crate::macros::inverter::Invertable;
-#[cfg(feature = "macros")]
-use crate::macros::RecursiveCircuitBuilder;
+use crate::inverter::Invertable;
+use crate::inverter::RecursiveCircuitBuilder;
 use crate::state_ops::matrix_ops::{apply_op, make_control_op, make_matrix_op, make_swap_op};
 use crate::state_ops::measurement_ops::{measure, measure_probs};
 use crate::types::Precision;
@@ -785,7 +783,6 @@ impl<P: Precision> Subcircuitable for LocalBuilder<P> {
     }
 }
 
-#[cfg(feature = "macros")]
 impl<P: Precision> Invertable for LocalBuilder<P> {
     type SimilarBuilder = Self;
 
@@ -865,7 +862,6 @@ fn apply_pipeline_objects<CB, CO>(
     Ok(r)
 }
 
-#[cfg(feature = "macros")]
 fn invert_circuit_object<P: Precision>(
     co: BuilderCircuitObject<P>,
 ) -> CircuitResult<Vec<BuilderCircuitObject<P>>> {
@@ -912,7 +908,6 @@ fn invert_circuit_object<P: Precision>(
     }
 }
 
-#[cfg(feature = "macros")]
 impl<P: Precision> RecursiveCircuitBuilder<P> for LocalBuilder<P> {
     type RecursiveSimilarBuilder = Self::SimilarBuilder;
 }

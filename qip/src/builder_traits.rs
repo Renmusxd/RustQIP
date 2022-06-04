@@ -27,6 +27,22 @@ pub enum SplitManyResult<R: QubitRegister + Debug> {
     Remaining(Vec<R>, R),
 }
 
+impl<R: QubitRegister + Debug> SplitManyResult<R> {
+    pub fn get_all_selected(self) -> Result<Vec<R>, Vec<R>> {
+        match self {
+            SplitManyResult::AllSelected(v) => Ok(v),
+            SplitManyResult::Remaining(v, _) => Err(v),
+        }
+    }
+
+    pub fn get_selected(self) -> Vec<R> {
+        match self {
+            SplitManyResult::AllSelected(v) => v,
+            SplitManyResult::Remaining(v, _) => v,
+        }
+    }
+}
+
 pub trait CircuitBuilder {
     type Register: QubitRegister + Debug;
     type CircuitObject;

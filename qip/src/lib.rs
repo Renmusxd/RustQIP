@@ -1,13 +1,13 @@
 #![forbid(unsafe_code)]
 #![deny(
-unreachable_pub,
-missing_debug_implementations,
-missing_copy_implementations,
-trivial_casts,
-trivial_numeric_casts,
-unstable_features,
-unused_import_braces,
-unused_qualifications
+    unreachable_pub,
+    missing_debug_implementations,
+    missing_copy_implementations,
+    trivial_casts,
+    trivial_numeric_casts,
+    unstable_features,
+    unused_import_braces,
+    unused_qualifications
 )]
 
 //! Quantum Computing library leveraging graph building to build efficient quantum circuit
@@ -113,10 +113,13 @@ unused_qualifications
 //! # fn main() {}
 //! ```
 
+// #[cfg(feature = "macros")]
+// pub mod boolean_circuits;
 pub mod builder;
 pub mod builder_traits;
 pub mod conditioning;
 pub mod errors;
+pub mod inverter;
 #[cfg(feature = "macros")]
 pub mod macros;
 #[cfg(feature = "optimization")]

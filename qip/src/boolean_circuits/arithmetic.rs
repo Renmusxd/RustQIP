@@ -1,10 +1,14 @@
+extern crate self as qip;
+
 use crate::errors::CircuitError;
 use crate::macros::program_ops::*;
 use crate::prelude::*;
+use crate::{invert_fn, wrap_and_invert, wrap_fn};
+use qip_program::program;
+use std::num::NonZeroUsize;
+
 /// A collection of circuits from chapter 6.4 of "Quantum Computing: A gentle introduction"
 /// by Eleanor Rieffle and Wolfgang Polak.
-use crate::{invert_fn, program, wrap_and_invert, wrap_fn};
-use std::num::NonZeroUsize;
 
 /// Add together ra and rb using rc as carry, result is in rb.
 /// This works when the highest order bit of rb and rc are both |0>. Undefined behavior otherwise.
@@ -14,23 +18,22 @@ pub fn add<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     rc: CB::Register,
     ra: CB::Register,
     rb: CB::Register,
-) -> Result<(CB::Register, CB::Register, CB::Register), CircuitError> {
-    // b.push_name_scope("add");
+) -> CircuitResult<(CB::Register, CB::Register, CB::Register)> {
     let result = match (rc.n(), ra.n(), rb.n()) {
         (1, 1, 2) => {
-            let (rc, ra, rb) = program!(b, rc, ra, rb;
-                carry_op rc, ra, rb[0], rb[1];
-                sum_op rc, ra, rb[0];
+            let (rc, ra, rb) = program!(&mut *b; rc, ra, rb;
+                carry rc, ra, rb[0], rb[1];
+                sum rc, ra, rb[0];
             )?;
             Ok((rc, ra, rb))
         }
         (nc, na, nb) if nc == na && nc + 1 == nb => {
             let n = nc;
-            let (rc, ra, rb) = program!(b, rc, ra, rb;
-                carry_op rc[0], ra[0], rb[0], rc[1];
-                add_op rc[1..n], ra[1..n], rb[1..=n];
+            let (rc, ra, rb) = program!(&mut *b; rc, ra, rb;
+                carry rc[0], ra[0], rb[0], rc[1];
+                add rc[1..n], ra[1..n], rb[1..=n];
                 carry_inv rc[0], ra[0], rb[0], rc[1];
-                sum_op rc[0], ra[0], rb[0];
+                sum rc[0], ra[0], rb[0];
             )?;
             Ok((rc, ra, rb))
         }
@@ -39,27 +42,24 @@ pub fn add<P: Precision, CB: RecursiveCircuitBuilder<P>>(
             nc, na, nb
         ))),
     };
-    // b.pop_name_scope();
+
     result
 }
-wrap_and_invert!(pub add_op, pub add_inv, (add), ra, rb, rc);
 
 fn sum<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
     rc: CB::Register,
     ra: CB::Register,
     rb: CB::Register,
-) -> (CB::Register, CB::Register, CB::Register) {
-    // b.push_name_scope("sum");
-    let (ra, rb, rc) = program!(b, ra, rb, rc;
+) -> CircuitResult<(CB::Register, CB::Register, CB::Register)> {
+    let (ra, rb, rc) = program!(&mut *b; ra, rb, rc;
         control x ra, rb;
         control x rc, rb;
     )
-    .unwrap();
-    // b.pop_name_scope();
-    (rc, ra, rb)
+        .unwrap();
+
+    Ok((rc, ra, rb))
 }
-wrap_fn!(sum_op, sum, rc, ra, rb);
 
 fn carry<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
@@ -68,17 +68,15 @@ fn carry<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     rb: CB::Register,
     rcp: CB::Register,
 ) -> Result<(CB::Register, CB::Register, CB::Register, CB::Register), CircuitError> {
-    // b.push_name_scope("carry");
-    let (rc, ra, rb, rcp) = program!(b, rc, ra, rb, rcp;
-        control x |ra, rb,| rcp;
+    let (rc, ra, rb, rcp) = program!(&mut *b; rc, ra, rb, rcp;
+        control x [ra, rb] rcp;
         control x ra, rb;
-        control x |rc, rb,| rcp;
+        control x [rc, rb] rcp;
         control x ra, rb;
     )?;
-    // b.pop_name_scope();
+
     Ok((rc, ra, rb, rcp))
 }
-wrap_and_invert!(carry_op, carry_inv, (carry), rc, ra, rb, rcp);
 
 /// Addition of ra and rb modulo rm. Conditions are:
 /// `a,b < M`, `M > 0`.
@@ -87,7 +85,7 @@ pub fn add_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     ra: CB::Register,
     rb: CB::Register,
     rm: CB::Register,
-) -> Result<(CB::Register, CB::Register, CB::Register), CircuitError> {
+) -> CircuitResult<(CB::Register, CB::Register, CB::Register)> {
     if ra.n() != rm.n() {
         Err(CircuitError::new(format!(
             "Expected rm.n == ra.n == {}, found rm.n={}.",
@@ -101,28 +99,26 @@ pub fn add_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
             rb.n()
         )))
     } else {
-        // b.push_name_scope("add_mod");
         let n = ra.n();
 
         let rt = b.make_zeroed_temp_qubit();
         let rc = b.make_zeroed_temp_register(NonZeroUsize::new(n).unwrap());
 
-        let (ra, rb, rm, rt, rc) = program!(b, ra, rb, rm, rt, rc;
-            add_op rc, ra, rb;
+        let (ra, rb, rm, rt, rc) = program!(&mut *b; ra, rb, rm, rt, rc;
+            add rc, ra, rb;
             add_inv rc, rm, rb;
             control x rb[n], rt;
-            control add_op rt, rc, rm, rb;
+            control add rt, rc, rm, rb;
             add_inv rc, ra, rb;
             control(0) x rb[n], rt;
-            add_op rc, ra, rb;
+            add rc, ra, rb;
         )?;
         b.return_zeroed_temp_register(rt);
         b.return_zeroed_temp_register(rc);
-        // b.pop_name_scope();
+
         Ok((ra, rb, rm))
     }
 }
-wrap_and_invert!(pub add_mod_op, pub add_mod_inv, (add_mod), ra, rb, rm);
 
 /// Maps `|a>|b>|M>|p>` to `|a>|b>|M>|(p + ba) mod M>`
 /// With `a[n+1]`, `b[k]`, `M[n]`, and `p[n+1]`, and `a,p < M`, `M > 0`.
@@ -132,7 +128,7 @@ pub fn times_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     rb: CB::Register,
     rm: CB::Register,
     rp: CB::Register,
-) -> Result<(CB::Register, CB::Register, CB::Register, CB::Register), CircuitError> {
+) -> CircuitResult<(CB::Register, CB::Register, CB::Register, CB::Register)> {
     let n = rm.n();
     let k = rb.n();
     if ra.n() != n + 1 {
@@ -148,52 +144,47 @@ pub fn times_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
             rp.n()
         )))
     } else {
-        // b.push_name_scope("times_mod");
         let rt = b.make_zeroed_temp_register(NonZeroUsize::new(k).unwrap());
         let rc = b.make_zeroed_temp_register(NonZeroUsize::new(n).unwrap());
 
         let rs = (ra, rb, rm, rp, rt, rc);
         let rs = (0..k).try_fold(rs, |rs, indx| {
             let (ra, rb, rm, rp, rt, rc) = rs;
-            // b.push_name_scope(&format!("first_{}", indx));
-            let ret = program!(b, ra, rb, rm, rp, rt, rc;
+
+            program!(&mut *b; ra, rb, rm, rp, rt, rc;
                 add_inv rc, rm, ra;
                 control x ra[n], rt[indx];
-                control add_op rt[indx], rc, rm, ra;
-                control add_mod_op rb[indx], ra[0 .. n], rp, rm;
-                rshift_op ra;
-            );
-            // b.pop_name_scope();
-            ret
+                control add rt[indx], rc, rm, ra;
+                control add_mod rb[indx], ra[0 .. n], rp, rm;
+                rshift ra;
+            )
         })?;
         let rs = (0..k).rev().try_fold(rs, |rs, indx| {
             let (ra, rb, rm, rp, rt, rc) = rs;
-            // b.push_name_scope(&format!("second_{}", indx));
-            let (ra, rm, rt, rc) = program!(b, ra, rm, rt, rc;
-                lshift_op ra;
+
+            let (ra, rm, rt, rc) = program!(&mut *b; ra, rm, rt, rc;
+                lshift ra;
                 control add_inv rt[indx], rc, rm, ra;
                 control x ra[n], rt[indx];
-                add_op rc, rm, ra;
+                add rc, rm, ra;
             )?;
-            // b.pop_name_scope();
+
             Ok((ra, rb, rm, rp, rt, rc))
         })?;
         let (ra, rb, rm, rp, rt, rc) = rs;
 
         b.return_zeroed_temp_register(rc);
         b.return_zeroed_temp_register(rt);
-        // b.pop_name_scope();
+
         Ok((ra, rb, rm, rp))
     }
 }
-wrap_and_invert!(pub times_mod_op, pub times_mod_inv, (times_mod), ra, rb, rm, rp);
 
 /// Right shift the qubits in a register (or left shift by providing a negative number).
 pub fn rshift<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
     r: CB::Register,
 ) -> CB::Register {
-    // b.push_name_scope("rshift");
     let n = r.n();
     let mut rs: Vec<Option<CB::Register>> = b.split_all_register(r).into_iter().map(Some).collect();
     (0..n - 1).rev().for_each(|indx| {
@@ -209,17 +200,16 @@ pub fn rshift<P: Precision, CB: RecursiveCircuitBuilder<P>>(
         rs[indx] = Some(ra);
         rs[offset as usize] = Some(rb);
     });
-    // b.pop_name_scope();
+
     b.merge_registers(rs.into_iter().flatten()).unwrap()
 }
-wrap_and_invert!(pub rshift_op, pub lshift_op, rshift, r);
 
 /// Performs |a>|b> -> |a>|a ^ b>, which for b=0 is a copy operation.
 pub fn copy<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
     ra: CB::Register,
     rb: CB::Register,
-) -> Result<(CB::Register, CB::Register), CircuitError> {
+) -> CircuitResult<(CB::Register, CB::Register)> {
     if ra.n() != rb.n() {
         Err(CircuitError::new(format!(
             "Expected ra.n = rb.n, but found {} and {}",
@@ -227,7 +217,6 @@ pub fn copy<P: Precision, CB: RecursiveCircuitBuilder<P>>(
             rb.n()
         )))
     } else {
-        // b.push_name_scope("copy");
         let ras = b.split_all_register(ra);
         let rbs = b.split_all_register(rb);
         let (ras, rbs) = ras.into_iter().zip(rbs.into_iter()).try_fold(
@@ -241,11 +230,10 @@ pub fn copy<P: Precision, CB: RecursiveCircuitBuilder<P>>(
         )?;
         let ra = b.merge_registers(ras).unwrap();
         let rb = b.merge_registers(rbs).unwrap();
-        // b.pop_name_scope();
+
         Ok((ra, rb))
     }
 }
-wrap_and_invert!(pub copy_op, pub copy_inv, (copy), ra, rb);
 
 /// Performs |a>|m>|s> -> |a>|m>|(s + a*a) % m>.
 pub fn square_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
@@ -253,7 +241,7 @@ pub fn square_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     ra: CB::Register,
     rm: CB::Register,
     rs: CB::Register,
-) -> Result<(CB::Register, CB::Register, CB::Register), CircuitError> {
+) -> CircuitResult<(CB::Register, CB::Register, CB::Register)> {
     let n = rm.n();
     if ra.n() != n + 1 {
         Err(CircuitError::new(format!(
@@ -268,19 +256,17 @@ pub fn square_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
             rs.n()
         )))
     } else {
-        // b.push_name_scope("square_mod");
         let rt = b.make_zeroed_temp_register(NonZeroUsize::new(n).unwrap());
-        let (ra, rm, rs, rt) = program!(b, ra, rm, rs, rt;
-            copy_op ra[0 .. n], rt;
-            times_mod_op ra, rt, rm, rs;
+        let (ra, rm, rs, rt) = program!(&mut *b; ra, rm, rs, rt;
+            copy ra[0 .. n], rt;
+            times_mod ra, rt, rm, rs;
             copy_inv ra[0 .. n], rt;
         )?;
         b.return_zeroed_temp_register(rt);
-        // b.pop_name_scope();
+
         Ok((ra, rm, rs))
     }
 }
-wrap_and_invert!(pub square_mod_op, pub square_mod_inv, (square_mod), ra, rm, rs);
 
 /// Maps |a>|b>|m>|p>|0> -> |a>|b>|m>|p>|(p*a^b) mod m>
 pub fn exp_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
@@ -290,16 +276,13 @@ pub fn exp_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     rm: CB::Register,
     rp: CB::Register,
     re: CB::Register,
-) -> Result<
-    (
-        CB::Register,
-        CB::Register,
-        CB::Register,
-        CB::Register,
-        CB::Register,
-    ),
-    CircuitError,
-> {
+) -> CircuitResult<(
+    CB::Register,
+    CB::Register,
+    CB::Register,
+    CB::Register,
+    CB::Register,
+)> {
     let n = rm.n();
     let k = rb.n();
     if ra.n() != n + 1 {
@@ -321,21 +304,20 @@ pub fn exp_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
             re.n()
         )))
     } else {
-        // b.push_name_scope("exp_mod");
         let ret = if k == 1 {
-            program!(b, ra, rb, rm, rp, re;
-                control(0) copy_op rb[0], rp, re;
-                control times_mod_op rb[0], ra, rp, rm, re;
+            program!(&mut *b; ra, rb, rm, rp, re;
+                control(0) copy rb[0], rp, re;
+                control times_mod rb[0], ra, rp, rm, re;
             )
         } else {
             let ru = b.make_zeroed_temp_register(NonZeroUsize::new(n + 1).unwrap());
             let rv = b.make_zeroed_temp_register(NonZeroUsize::new(n + 1).unwrap());
 
-            let (ra, rb, rm, rp, re, ru, rv) = program!(b, ra, rb, rm, rp, re, ru, rv;
-                control(0) copy_op rb[0], rp, rv;
-                control times_mod_op rb[0], ra, rp, rm, re;
-                square_mod_op ra, rm, ru;
-                exp_mod_op ru, rb[1 .. k], rm, rv, re;
+            let (ra, rb, rm, rp, re, ru, rv) = program!(&mut *b; ra, rb, rm, rp, re, ru, rv;
+                control(0) copy rb[0], rp, rv;
+                control times_mod rb[0], ra, rp, rm, re;
+                square_mod ra, rm, ru;
+                exp_mod ru, rb[1 .. k], rm, rv, re;
                 square_mod_inv ra, rm, ru;
                 control times_mod_inv rb[0], ra, rp, rm, re;
                 control(0) copy_inv rb[0], rp, rv;
@@ -346,11 +328,10 @@ pub fn exp_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
 
             Ok((ra, rb, rm, rp, re))
         };
-        // b.pop_name_scope();
+
         ret
     }
 }
-wrap_and_invert!(pub exp_mod_op, pub exp_mod_inv, (exp_mod), ra, rb, rm, rp, re);
 
 #[cfg(test)]
 mod arithmetic_tests {
@@ -363,8 +344,8 @@ mod arithmetic_tests {
         b: &mut CB,
         rs: Vec<CB::Register>,
     ) -> (Vec<CB::Register>, Vec<CB::MeasurementHandle>)
-    where
-        CB: MeasurementBuilder,
+        where
+            CB: MeasurementBuilder,
     {
         rs.into_iter()
             .fold((vec![], vec![]), |(mut rs, mut ms), r| {
@@ -382,10 +363,10 @@ mod arithmetic_tests {
         assertion: G,
         filter: FilterFn,
     ) -> CircuitResult<()>
-    where
-        F: Fn(&mut LocalBuilder<f64>, Vec<Qudit>) -> CircuitResult<Vec<Qudit>>,
-        G: Fn(Vec<usize>, Vec<usize>, usize),
-        FilterFn: Fn(&Vec<usize>) -> bool,
+        where
+            F: Fn(&mut LocalBuilder<f64>, Vec<Qudit>) -> CircuitResult<Vec<Qudit>>,
+            G: Fn(Vec<usize>, Vec<usize>, usize),
+            FilterFn: Fn(&Vec<usize>) -> bool,
     {
         let n: usize = rs.iter().map(|r| r.n()).sum();
         let index_groups = rs.iter().map(|r| r.indices().to_vec()).collect::<Vec<_>>();
@@ -429,9 +410,9 @@ mod arithmetic_tests {
         f: F,
         assertion: G,
     ) -> CircuitResult<()>
-    where
-        F: Fn(&mut LocalBuilder<f64>, Vec<Qudit>) -> CircuitResult<Vec<Qudit>>,
-        G: Fn(Vec<usize>, Vec<usize>, usize),
+        where
+            F: Fn(&mut LocalBuilder<f64>, Vec<Qudit>) -> CircuitResult<Vec<Qudit>>,
+            G: Fn(Vec<usize>, Vec<usize>, usize),
     {
         assert_on_registers_and_filter(b, rs, f, assertion, |_| true)
     }
@@ -447,7 +428,7 @@ mod arithmetic_tests {
         assert_on_registers(
             &mut b,
             vec![rc, ra, rb, rcp],
-            carry_op,
+            carry,
             |befores, afters, _| {
                 let c = 0 != befores[0];
                 let a = 0 != befores[1];
@@ -477,7 +458,7 @@ mod arithmetic_tests {
         let ra = b.qubit();
         let rb = b.qubit();
 
-        assert_on_registers(&mut b, vec![rc, ra, rb], sum_op, |befores, afters, _| {
+        assert_on_registers(&mut b, vec![rc, ra, rb], sum, |befores, afters, _| {
             let c = 0 != befores[0];
             let a = 0 != befores[1];
             let b = 0 != befores[2];

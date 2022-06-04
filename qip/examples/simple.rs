@@ -33,6 +33,5 @@ fn main() -> Result<(), CircuitError> {
     Ok(())
 }
 
-
 #[cfg(not(feature = "macros"))]
 fn main() {}
