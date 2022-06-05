@@ -1,14 +1,16 @@
 #![forbid(unsafe_code)]
 #![deny(
-unreachable_pub,
-missing_debug_implementations,
-missing_copy_implementations,
-trivial_casts,
-trivial_numeric_casts,
-unstable_features,
-unused_import_braces,
-unused_qualifications
+    unreachable_pub,
+    missing_debug_implementations,
+    missing_copy_implementations,
+    trivial_casts,
+    trivial_numeric_casts,
+    unstable_features,
+    unused_import_braces,
+    unused_qualifications
 )]
+// TODO reintroduce the missing_docs deny.
+// missing_docs,
 
 //! Quantum Computing library leveraging graph building to build efficient quantum circuit
 //! simulations.
@@ -232,21 +234,34 @@ unused_qualifications
 //! # fn main() {}
 //! ```
 
-// #[cfg(feature = "macros")]
-// pub mod boolean_circuits;
+/// Quantum analog of reversible classical circuits, such as `and`, `or`, `add`, and `multiply`
+#[cfg(feature = "macros")]
+pub mod boolean_circuits;
+/// A circuit builder implementation which builds circuits out of simple elements.
 pub mod builder;
+/// Standard traits for circuit builders.
 pub mod builder_traits;
+/// Traits for constructing conditioned circuit builders.
 pub mod conditioning;
+/// Circuit builder error types.
 pub mod errors;
+/// Functions and traits for inverting circuits.
 pub mod inverter;
+/// Types for helping procedural macros.
 #[cfg(feature = "macros")]
 pub mod macros;
+/// Functions for optimizing circuits with monte carlo.
 #[cfg(feature = "optimization")]
 pub mod optimizer;
+/// Standard quantum fourier transform implementation.
 pub mod qfft;
+/// Helpers for converting from synchronous to parallel iterators.
 pub mod rayon_helper;
+/// Lower-level circuit operations.
 pub mod state_ops;
+/// Reusable types.
 pub mod types;
+/// Utility functions for bit and index manipulation
 pub mod utils;
 
 pub use num_complex::Complex;

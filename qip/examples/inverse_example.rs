@@ -1,13 +1,18 @@
 use qip::inverter::Invertable;
 use qip::prelude::*;
-use std::num::NonZeroUsize;
 #[cfg(feature = "macros")]
 use qip_macros::*;
+use std::num::NonZeroUsize;
 
 #[cfg(feature = "macros")]
 #[invert(gamma_inv)]
-fn gamma<B>(b: &mut B, ra: B::Register, rb: B::Register) -> CircuitResult<(B::Register, B::Register)>
-    where B: AdvancedCircuitBuilder<f64> + Invertable<SimilarBuilder=B>
+fn gamma<B>(
+    b: &mut B,
+    ra: B::Register,
+    rb: B::Register,
+) -> CircuitResult<(B::Register, B::Register)>
+where
+    B: AdvancedCircuitBuilder<f64> + Invertable<SimilarBuilder = B>,
 {
     let (ra, rb) = b.toffoli(ra, rb)?;
     let (rb, ra) = b.toffoli(rb, ra)?;

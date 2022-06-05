@@ -6,6 +6,7 @@ use num_traits::{One, Zero};
 use std::fmt::Debug;
 use std::num::NonZeroUsize;
 
+/// Standard functions needed by registers containing multiple qubits.
 pub trait QubitRegister {
     fn n(&self) -> usize;
     fn n_nonzero(&self) -> NonZeroUsize {
@@ -14,6 +15,7 @@ pub trait QubitRegister {
     fn indices(&self) -> &[usize];
 }
 
+/// Result of splitting a register in two.
 #[derive(Debug)]
 pub enum SplitResult<R: QubitRegister + Debug> {
     SELECTED(R),
@@ -21,6 +23,7 @@ pub enum SplitResult<R: QubitRegister + Debug> {
     SPLIT(R, R),
 }
 
+/// Result of splitting a register into multiple registers.
 #[derive(Debug)]
 pub enum SplitManyResult<R: QubitRegister + Debug> {
     AllSelected(Vec<R>),
@@ -43,27 +46,38 @@ impl<R: QubitRegister + Debug> SplitManyResult<R> {
     }
 }
 
+/// A base-level circuit builder trait, requiring definitions of registers, base circuit objects,
+/// and end-result quantum state.
 pub trait CircuitBuilder {
     type Register: QubitRegister + Debug;
     type CircuitObject;
     type StateCalculation;
 
+    /// Number of qubits in circuit.
     fn n(&self) -> usize;
 
+    /// Construct a single qubit.
     fn qubit(&mut self) -> Self::Register {
         self.register(NonZeroUsize::new(1).unwrap())
     }
+
+    /// Construct a register with multiple qubits. Fails if n=0.
     fn qudit(&mut self, n: usize) -> Option<Self::Register> {
         NonZeroUsize::new(n).map(|n| self.register(n))
     }
+
+    /// Construct a register with multiple qubits.
     fn register(&mut self, n: NonZeroUsize) -> Self::Register;
 
+    /// Construct a register with multiple qubits. Fails if n=0.
     fn try_register(&mut self, n: usize) -> Option<Self::Register> {
-        NonZeroUsize::new(n).map(|n| self.register(n))
+        self.qudit(n)
     }
 
+    /// Merge two registers into a single register with first the r1 indices, then the r2 indices.
     fn merge_two_registers(&mut self, r1: Self::Register, r2: Self::Register) -> Self::Register;
 
+    /// Merge multiple registers together into a single register, returns None if none given.
     fn merge_registers<It>(&mut self, rs: It) -> Option<Self::Register>
     where
         It: IntoIterator<Item = Self::Register>,
@@ -73,6 +87,8 @@ pub trait CircuitBuilder {
             None => Some(r1),
         })
     }
+
+    /// Split a register into two, selecting the relative indices from the `indices` iterator.
     fn split_register_relative<It>(
         &mut self,
         r: Self::Register,
@@ -81,6 +97,7 @@ pub trait CircuitBuilder {
     where
         It: IntoIterator<Item = usize>;
 
+    /// Split a register into two, selecting the indices from the `indices` iterator.
     fn split_register_absolute<It>(
         &mut self,
         r: Self::Register,
@@ -97,10 +114,13 @@ pub trait CircuitBuilder {
         self.split_register_relative(r, r_rel_indices)
     }
 
+    /// Split the register into `r.n()` individual registers of 1 qubit each.
     fn split_all_register(&mut self, r: Self::Register) -> Vec<Self::Register> {
         split_helper(self, r, vec![])
     }
 
+    /// Split off the first qubit from the register, returns the optional remaining registers
+    /// and the first qubit.
     fn split_first_qubit(&mut self, r: Self::Register) -> (Option<Self::Register>, Self::Register) {
         match self.split_register_relative(r, [0]) {
             SplitResult::SELECTED(r) => (None, r),
@@ -109,6 +129,7 @@ pub trait CircuitBuilder {
         }
     }
 
+    /// Similar to [split_first_qubit] but the last qubit.
     fn split_last_qubit(&mut self, r: Self::Register) -> (Self::Register, Option<Self::Register>) {
         let n = r.n();
         match self.split_register_relative(r, [n - 1]) {
@@ -118,6 +139,13 @@ pub trait CircuitBuilder {
         }
     }
 
+    /// Split into multiple qubits, each with relative indices given by the sub-iterators.
+    ///
+    /// # Example
+    /// ```
+    /// // TODO make example
+    /// unimplemented!()
+    /// ```
     fn split_relative_index_groups<
         It: IntoIterator<Item = Itt>,
         Itt: IntoIterator<Item = usize>,
@@ -145,16 +173,20 @@ pub trait CircuitBuilder {
         }
     }
 
+    /// Apply a circuit object to the circuit directly.
     fn apply_circuit_object(
         &mut self,
         r: Self::Register,
         c: Self::CircuitObject,
     ) -> CircuitResult<Self::Register>;
 
+    /// Calculate the quantum state at the end of the circuit, using |0> as input.
     fn calculate_state(&mut self) -> Self::StateCalculation {
         self.calculate_state_with_init(None)
     }
 
+    /// Calculate the state at the end of the circuit using an initial state given by each register
+    /// and the classical state in that register.
     fn calculate_state_with_init<'a, It>(&mut self, it: It) -> Self::StateCalculation
     where
         Self::Register: 'a,
@@ -178,7 +210,9 @@ where
     }
 }
 
+/// Standard functions for building unitary circuits.
 pub trait UnitaryBuilder<P: Precision>: CircuitBuilder {
+    /// Apply an arbitrary matrix to the circuit given by a vector.
     fn apply_vec_matrix(
         &mut self,
         r: Self::Register,
@@ -188,6 +222,7 @@ pub trait UnitaryBuilder<P: Precision>: CircuitBuilder {
         self.apply_circuit_object(r, Self::vec_matrix_to_circuitobject(n, data))
     }
 
+    /// Apply an arbitrary matrix to the circuit given by an array.
     fn apply_matrix<const N: usize>(
         &mut self,
         r: Self::Register,

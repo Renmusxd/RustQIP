@@ -6,7 +6,7 @@ use std::iter::Peekable;
 use std::str::FromStr;
 
 /// Eats a ident <Group>
-fn parse_register_and_indices<It: Iterator<Item=TokenTree>>(
+fn parse_register_and_indices<It: Iterator<Item = TokenTree>>(
     input_stream: &mut Peekable<It>,
 ) -> (String, Option<TokenTree>) {
     let register = if let Some(tokentree) = input_stream.next() {
@@ -33,7 +33,7 @@ fn parse_register_and_indices<It: Iterator<Item=TokenTree>>(
 }
 
 /// Consumes a list of registers and punctuation up to the next line.
-fn parse_list_of_registers<It: Iterator<Item=TokenTree>>(
+fn parse_list_of_registers<It: Iterator<Item = TokenTree>>(
     input_stream: &mut Peekable<It>,
 ) -> (Vec<Vec<String>>, Vec<Vec<Option<TokenTree>>>) {
     let mut register_groups: Vec<Vec<String>> = Vec::default();
@@ -230,7 +230,7 @@ pub fn program(input_stream: TokenStream) -> TokenStream {
                     "let {} = _program_builder.merge_registers({}).unwrap();",
                     reg_name, full_string
                 ))
-                    .unwrap(),
+                .unwrap(),
             );
         }
         output_stream.extend(line_stream);
@@ -310,7 +310,7 @@ pub fn program(input_stream: TokenStream) -> TokenStream {
                         "for i in {} {{ {}[i] = {}[{}_index].take(); {}_index += 1;  }}",
                         s, r, reg_name, reg_name, reg_name
                     ))
-                        .unwrap(),
+                    .unwrap(),
                 );
             }
         }
@@ -356,10 +356,10 @@ fn parse_function_args(arg_stream: TokenStream, to: &mut Vec<String>) {
     while let Some(token) = arg_stream.next() {
         match (token, arg_stream.peek()) {
             (TokenTree::Ident(ident), Some(TokenTree::Punct(punct)))
-            if punct.as_char() == ':' && punct.spacing() == Spacing::Alone =>
-                {
-                    to.push(ident.to_string());
-                }
+                if punct.as_char() == ':' && punct.spacing() == Spacing::Alone =>
+            {
+                to.push(ident.to_string());
+            }
             _ => {}
         }
     }
