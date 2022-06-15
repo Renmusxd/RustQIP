@@ -79,8 +79,8 @@ pub trait CircuitBuilder {
 
     /// Merge multiple registers together into a single register, returns None if none given.
     fn merge_registers<It>(&mut self, rs: It) -> Option<Self::Register>
-    where
-        It: IntoIterator<Item = Self::Register>,
+        where
+            It: IntoIterator<Item=Self::Register>,
     {
         rs.into_iter().fold(None, |acc, r1| match acc {
             Some(r2) => Some(self.merge_two_registers(r2, r1)),
@@ -94,8 +94,8 @@ pub trait CircuitBuilder {
         r: Self::Register,
         indices: It,
     ) -> SplitResult<Self::Register>
-    where
-        It: IntoIterator<Item = usize>;
+        where
+            It: IntoIterator<Item=usize>;
 
     /// Split a register into two, selecting the indices from the `indices` iterator.
     fn split_register_absolute<It>(
@@ -103,8 +103,8 @@ pub trait CircuitBuilder {
         r: Self::Register,
         indices: It,
     ) -> SplitResult<Self::Register>
-    where
-        It: IntoIterator<Item = usize>,
+        where
+            It: IntoIterator<Item=usize>,
     {
         let r_indices = r.indices().to_vec();
         let r_rel_indices = indices.into_iter().filter_map(move |abs_index| {
@@ -143,12 +143,27 @@ pub trait CircuitBuilder {
     ///
     /// # Example
     /// ```
-    /// // TODO make example
-    /// unimplemented!()
+    /// # use qip::prelude::*;
+    ///
+    /// # fn main() {
+    /// let mut b = LocalBuilder::<f64>::default();
+    /// let ra = b.qudit(5).expect("5 is non-negative");
+    /// let rb = b.qudit(5).expect("5 is non-negative");
+    /// assert_eq!(ra.indices(), &[0,1,2,3,4]);
+    /// let split_res = b.split_relative_index_groups(rb, [[0,1], [2,3]]);
+    /// if let SplitManyResult::Remaining(groups, remaining) = split_res {
+    ///     assert_eq!(groups[0].indices(), &[5, 6]);
+    ///     assert_eq!(groups[1].indices(), &[7, 8]);
+    ///     assert_eq!(remaining.indices(), &[9])
+    /// } else {
+    ///     assert!(false);
+    /// };
+    ///
+    /// # }
     /// ```
     fn split_relative_index_groups<
-        It: IntoIterator<Item = Itt>,
-        Itt: IntoIterator<Item = usize>,
+        It: IntoIterator<Item=Itt>,
+        Itt: IntoIterator<Item=usize>,
     >(
         &mut self,
         r: Self::Register,
@@ -188,14 +203,14 @@ pub trait CircuitBuilder {
     /// Calculate the state at the end of the circuit using an initial state given by each register
     /// and the classical state in that register.
     fn calculate_state_with_init<'a, It>(&mut self, it: It) -> Self::StateCalculation
-    where
-        Self::Register: 'a,
-        It: IntoIterator<Item = (&'a Self::Register, usize)>;
+        where
+            Self::Register: 'a,
+            It: IntoIterator<Item=(&'a Self::Register, usize)>;
 }
 
 fn split_helper<CB>(cb: &mut CB, r: CB::Register, mut acc: Vec<CB::Register>) -> Vec<CB::Register>
-where
-    CB: CircuitBuilder + ?Sized,
+    where
+        CB: CircuitBuilder + ?Sized,
 {
     match cb.split_register_relative(r, Some(0)) {
         SplitResult::SELECTED(r) => {
@@ -232,6 +247,8 @@ pub trait UnitaryBuilder<P: Precision>: CircuitBuilder {
         self.apply_circuit_object(r, Self::matrix_to_circuitobject(n, data))
     }
 
+    /// Single qubit matrices can be applied to each qubit in a register unambiguously.
+    /// Matrix is organized as  |0><0|, |0><1|, |1><0|, |1><1|
     fn broadcast_single_qubit_matrix(
         &mut self,
         r: Self::Register,
@@ -242,6 +259,8 @@ pub trait UnitaryBuilder<P: Precision>: CircuitBuilder {
             .unwrap()
     }
 
+    /// Make a circuit object out of an arbitrary matrix
+    /// Single Qubit matrix is organized as  |0><0|, |0><1|, |1><0|, |1><1|
     fn matrix_to_circuitobject<const N: usize>(
         n: usize,
         data: [Complex<P>; N],
@@ -249,10 +268,14 @@ pub trait UnitaryBuilder<P: Precision>: CircuitBuilder {
         Self::vec_matrix_to_circuitobject(n, data.to_vec())
     }
 
+    /// Make a circuit object out of an arbitrary matrix
+    /// Single Qubit matrix is organized as  |0><0|, |0><1|, |1><0|, |1><1|
     fn vec_matrix_to_circuitobject(n: usize, data: Vec<Complex<P>>) -> Self::CircuitObject;
 }
 
 pub trait CliffordTBuilder<P: Precision>: UnitaryBuilder<P> {
+    /// Make a circuit object representing the X gate on a single qubit.
+    /// Equivalent to calling `matrix_to_circuitobject` with \[0, 1, 1, 0\]
     fn make_x(&self) -> Self::CircuitObject {
         Self::matrix_to_circuitobject(
             1,
@@ -260,10 +283,13 @@ pub trait CliffordTBuilder<P: Precision>: UnitaryBuilder<P> {
                 Complex::zero(),
                 Complex::one(),
                 Complex::one(),
-                -Complex::zero(),
+                Complex::zero(),
             ],
         )
     }
+
+    /// Make a circuit object representing the Y gate on a single qubit.
+    /// Equivalent to calling `matrix_to_circuitobject` with \[0, -i, i, 0\]
     fn make_y(&self) -> Self::CircuitObject {
         Self::matrix_to_circuitobject(
             1,
@@ -275,6 +301,9 @@ pub trait CliffordTBuilder<P: Precision>: UnitaryBuilder<P> {
             ],
         )
     }
+
+    /// Make a circuit object representing the Z gate on a single qubit.
+    /// Equivalent to calling `matrix_to_circuitobject` with \[1, 0, 0, -1\]
     fn make_z(&self) -> Self::CircuitObject {
         Self::matrix_to_circuitobject(
             1,
@@ -286,10 +315,16 @@ pub trait CliffordTBuilder<P: Precision>: UnitaryBuilder<P> {
             ],
         )
     }
+
+    /// Make a circuit object representing the H gate on a single qubit.
+    /// Equivalent to calling `matrix_to_circuitobject` with \[1, 1, 1, -1\]/sqrt(2)
     fn make_h(&self) -> Self::CircuitObject {
         let l = Complex::one() * P::from(std::f64::consts::FRAC_1_SQRT_2).unwrap();
         Self::matrix_to_circuitobject(1, [l, l, l, -l])
     }
+
+    /// Make a circuit object representing the S (phase) gate on a single qubit.
+    /// Equivalent to calling `matrix_to_circuitobject` with \[1, 0, 0, -i\]
     fn make_s(&self) -> Self::CircuitObject {
         Self::matrix_to_circuitobject(
             1,
@@ -301,6 +336,9 @@ pub trait CliffordTBuilder<P: Precision>: UnitaryBuilder<P> {
             ],
         )
     }
+
+    /// Make a circuit object representing the T gate on a single qubit.
+    /// Equivalent to calling `matrix_to_circuitobject` with \[1, 0, 0, e^{i pi / 4} \]
     fn make_t(&self) -> Self::CircuitObject {
         Self::matrix_to_circuitobject(
             1,
@@ -312,41 +350,64 @@ pub trait CliffordTBuilder<P: Precision>: UnitaryBuilder<P> {
             ],
         )
     }
+
+    /// Make a circuit object representing the CNOT gate on a pair of qubits
+    /// Equivalent to calling `matrix_to_circuitobject` with \[ I, 0, 0, X \]
+    /// where I is the identity matrix and X is the x-gate.
     fn make_cnot(&self) -> Self::CircuitObject {
         let l = Complex::one();
         let o = Complex::zero();
         Self::matrix_to_circuitobject(2, [l, o, o, o, o, l, o, o, o, o, o, l, o, o, l, o])
     }
 
+    /// Create and apply an NOT (or X) gate circuit object.
     fn not(&mut self, r: Self::Register) -> Self::Register {
         self.x(r)
     }
+
+    /// Create and apply an X (or NOT) gate circuit object.
     fn x(&mut self, r: Self::Register) -> Self::Register {
         self.apply_circuit_object(r, self.make_x()).unwrap()
     }
+
+    /// Create and apply a Y gate circuit object.
     fn y(&mut self, r: Self::Register) -> Self::Register {
         self.apply_circuit_object(r, self.make_y()).unwrap()
     }
+
+    /// Create and apply a Z gate circuit object.
     fn z(&mut self, r: Self::Register) -> Self::Register {
         self.apply_circuit_object(r, self.make_z()).unwrap()
     }
+
+    /// Create and apply an H gate circuit object.
     fn h(&mut self, r: Self::Register) -> Self::Register {
         self.apply_circuit_object(r, self.make_h()).unwrap()
     }
+
+    /// Create and apply a T gate circuit object.
     fn t(&mut self, r: Self::Register) -> Self::Register {
         self.apply_circuit_object(r, self.make_t()).unwrap()
     }
+
+    /// Create and apply a T^\dagger gate circuit object.
     fn t_dagger(&mut self, r: Self::Register) -> Self::Register {
         let r = self.s_dagger(r);
         self.t(r)
     }
+
+    /// Create and apply an S gate circuit object.
     fn s(&mut self, r: Self::Register) -> Self::Register {
         self.apply_circuit_object(r, self.make_s()).unwrap()
     }
+
+    /// Create and apply an S^\dagger gate circuit object.
     fn s_dagger(&mut self, r: Self::Register) -> Self::Register {
         let r = self.z(r);
         self.s(r)
     }
+
+    /// Create and apply a CNOT gate circuit object.
     fn cnot(
         &mut self,
         cr: Self::Register,
@@ -418,7 +479,7 @@ pub trait TemporaryRegisterBuilder: CircuitBuilder {
 }
 
 pub trait AdvancedCircuitBuilder<P: Precision>:
-    CliffordTBuilder<P> + TemporaryRegisterBuilder
+CliffordTBuilder<P> + TemporaryRegisterBuilder
 {
     fn basic_toffoli(
         &mut self,
@@ -551,10 +612,10 @@ pub trait Subcircuitable: CircuitBuilder {
 
 /// Create a circuit for the circuit given by `r`.
 pub fn make_circuit_matrix<CB, P, F>(cb: &mut CB, r: &CB::Register, f: F) -> Vec<Vec<Complex<P>>>
-where
-    CB: CircuitBuilder,
-    P: Precision,
-    F: Fn(CB::StateCalculation) -> Vec<Complex<P>>,
+    where
+        CB: CircuitBuilder,
+        P: Precision,
+        F: Fn(CB::StateCalculation) -> Vec<Complex<P>>,
 {
     (0..1 << r.n())
         .map(|indx| f(cb.calculate_state_with_init(Some((r, indx)))))
