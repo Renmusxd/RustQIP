@@ -2,7 +2,9 @@
 
 use num_complex::Complex;
 use qip::state_ops::iterators::UnitaryOp;
-use qip::state_ops::matrix_ops::{apply_op, from_reals};
+use qip::state_ops::matrix_ops::{apply_op, from_reals}; 
+use num_traits::One;
+use qip::types::Representation;
 
 /// Make the full op matrix from `ops`.
 /// Not very efficient, use only for debugging.
@@ -29,7 +31,7 @@ mod tests {
     extern crate test;
 
     use qip::state_ops::iterators::UnitaryOp::*;
-    use qip::state_ops::matrix_ops::{apply_ops, make_control_op, make_matrix_op};
+    use qip::state_ops::matrix_ops::{apply_ops, make_control_op, make_matrix_op, make_sparse_matrix_op};
     use test::Bencher;
 
     #[bench]
@@ -366,4 +368,30 @@ mod tests {
 
         b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
     }
+
+    #[bench]
+    fn bench_sparse_matrix(b: &mut Bencher) {
+
+        let n = 8;
+        let one = Complex::<f64>::one();
+        let expected_dat = vec![
+            vec![(1, one)],
+            vec![(2, one)],
+            vec![(3, one)],
+        ];
+
+        let SomeV: Vec<usize> = (0..n - 1).collect();
+
+        // let mat: Vec<f64> = from_reals(&[1.0, 0.0, 0.0, 1.0]);
+        let op = make_sparse_matrix_op(vec![n - 1], expected_dat,Representation::BigEndian).unwrap();
+        let op = make_sparse_matrix_op((0..n - 1).collect(),expected_dat, Representation::BigEndian).unwrap();
+
+        let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
+        let input = from_reals(&base_vector);
+        let mut output = from_reals(&base_vector);
+
+        b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
+    }
+    
+
 }
