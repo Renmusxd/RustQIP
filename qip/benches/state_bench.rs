@@ -376,21 +376,45 @@ mod tests {
         let one = Complex::<f64>::one();
         let expected_dat = vec![
             vec![(1, one)],
-            vec![(2, one)],
+            vec![(0, one)],
             vec![(3, one)],
+            vec![(2, one)],
         ];
-
-        let SomeV: Vec<usize> = (0..n - 1).collect();
-
+        
         // let mat: Vec<f64> = from_reals(&[1.0, 0.0, 0.0, 1.0]);
-        let op = make_sparse_matrix_op(vec![n - 1], expected_dat,Representation::BigEndian).unwrap();
-        let op = make_sparse_matrix_op((0..n - 1).collect(),expected_dat, Representation::BigEndian).unwrap();
+        let op = make_sparse_matrix_op(vec![0,1], expected_dat.clone(),Representation::BigEndian).unwrap();
+        let op = make_control_op((0..n - 1).collect(), op).unwrap();
 
         let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
         let input = from_reals(&base_vector);
         let mut output = from_reals(&base_vector);
 
         b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
+    }
+
+    #[bench]
+    fn bench_apply_two_sparse_swaps(b: &mut Bencher) {
+        let n = 3;
+        let one = Complex::<f64>::one();
+
+        let expected_dat = vec![
+            vec![(1, one)],
+            vec![(0, one)],
+            vec![(3, one)],
+            vec![(2, one)],
+        ];    
+
+        // This is still work in progress
+        // let op1 = make_sparse_matrix_op(vec![0,1], expected_dat.clone(), Representation::BigEndian).unwrap();
+        // let op2 = make_sparse_matrix_op(vec![0,1], expected_dat, Representation::BigEndian).unwrap();
+    
+        // let base_vector: Vec<f32> = (0..1 << n).map(|_| 0.0).collect();
+        // let input = from_reals(&base_vector);
+        // let output = from_reals(&base_vector);
+        // b.iter(|| {
+        //     apply_op(n, &op1, &input, &mut output,0,0 );
+        //     apply_op(n, &op2,&input, &mut output, 0, 0);
+        // })
     }
     
 
