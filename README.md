@@ -102,7 +102,7 @@ let (ra, rb) = program!(&mut b; ra, rb;
 )?;
 ```
 
-We can also apply this to function which take other argument. Here `gamma` takes a boolean
+We can also apply this to functions which take other arguments. Here `gamma` takes a boolean
 argument `skip` which is passed in before the registers.
 *The arguments to functions in the program macro may not reference the input registers*
 
