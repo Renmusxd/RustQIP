@@ -1,0 +1,12 @@
+[package]
+name = "qip-macros"
+version = "1.0.0"
+authors = ["Sumner Hearth <sumnernh@gmail.com>"]
+description = "A procedural macro for QIP"
+repository = "https://github.com/Renmusxd/RustQIP"
+license = "MIT"
+edition = "2021"
+
+[lib]
+name = "qip_macros"
+proc-macro = true

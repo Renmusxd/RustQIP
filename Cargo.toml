@@ -1,23 +1,2 @@
-[package]
-name = "qip"
-version = "0.15.3"
-authors = ["Sumner Hearth <sumnernh@gmail.com>"]
-description = "A library for efficient quantum computing simulations."
-repository = "https://github.com/Renmusxd/RustQIP"
-license = "MIT"
-edition = "2018"
-
-[lib]
-name = "qip"
-
-[features]
-default = ["parallel"]
-parallel = ["rayon"]
-
-[dependencies]
-num = "^0.4"
-rand = "^0.8"
-rayon = {version = "^1.5", optional = true }
-
-[dev-dependencies]
-bit-vec = "0.6.3"
+[workspace]
+members = ["qip", "qip-macros"]
