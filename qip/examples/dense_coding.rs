@@ -50,21 +50,25 @@ fn run_bob<P: Precision>(b: &mut LocalBuilder<P>, r_alice: Qudit, epr_bob: Qudit
 }
 
 
-// let r = b.merge(vec![r_bob, r_alice]).unwrap();
-// let (r, m) = b.measure(r);
+fn main() {
 
-// let (_, measurements) = run_local::<f64>(&r).unwrap();
-// let (m, _) = measurements.get_measurement(&m).unwrap();
-
-// ((m & 2) == 2, (m & 1) == 1)
-
-
-
-
-
-fn main() -> Result<(), CircuitError> {
-
+    let n = NonZeroUsize::new(1).unwrap();
     let bits_a = vec![true, false, true, false];
     let bits_b = vec![true, true, false, false];
+
+    for (bit_a, bit_b) in bits_a.into_iter().zip(bits_b.into_iter()) {
+        let mut b = LocalBuilder::<f64>::default();
+        let epr_alice = b.register(n);
+        let epr_bob = b.register(n);
+
+        let r_alice = run_alice(&mut b, epr_alice, bit_a, bit_b);
+        let (bob_a, bob_b) = run_bob(&mut b, r_alice, epr_bob);
+
+        println!(
+            "Alice: ({:?},{:?}) \tBob: ({:?}, {:?})",
+            bit_a, bit_b, bob_a, bob_b
+        );
+
+    }
 
 }
