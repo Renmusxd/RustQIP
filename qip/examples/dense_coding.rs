@@ -1,6 +1,6 @@
+use qip::builder::Qudit;
 use qip::prelude::*;
 use std::num::NonZeroUsize;
-use qip::builder::Qudit;
 
 /// Encode the two classical bits Alice wants to communicate to Bob.
 ///
@@ -13,18 +13,19 @@ use qip::builder::Qudit;
 /// Returns Alice qubit with applied gate.
 ///
 /// https://en.wikipedia.org/wiki/Superdense_coding#Encoding
-fn run_alice<P: Precision, CB: CliffordTBuilder<P>>(b: &mut CB, epr_alice: CB::Register , bit_a: bool, bit_b: bool) -> CB::Register {
-
+fn run_alice<P: Precision, CB: CliffordTBuilder<P>>(
+    b: &mut CB,
+    epr_alice: CB::Register,
+    bit_a: bool,
+    bit_b: bool,
+) -> CB::Register {
     match (bit_a, bit_b) {
         (false, false) => epr_alice,
         (false, true) => b.x(epr_alice),
         (true, false) => b.z(epr_alice),
         (true, true) => b.y(epr_alice),
-
     }
-
 }
-
 
 /// Decode the message Alice transmitted to Bob.
 ///
@@ -45,13 +46,10 @@ fn run_bob<P: Precision>(b: &mut LocalBuilder<P>, r_alice: Qudit, epr_bob: Qudit
     let (r, m) = b.measure(r);
     let (_, measurements) = b.calculate_state();
     let (m, _) = measurements.get_measurement(m);
-    ((m & 2) == 2,  (m & 1) == 1)
-    
+    ((m & 2) == 2, (m & 1) == 1)
 }
 
-
 fn main() {
-
     let n = NonZeroUsize::new(1).unwrap();
     let bits_a = vec![true, false, true, false];
     let bits_b = vec![true, true, false, false];
@@ -68,7 +66,5 @@ fn main() {
             "Alice: ({:?},{:?}) \tBob: ({:?}, {:?})",
             bit_a, bit_b, bob_a, bob_b
         );
-
     }
-
 }
