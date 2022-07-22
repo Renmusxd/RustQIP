@@ -1,21 +1,34 @@
+#[cfg(feature = "macros")]
 use qip::builder::Qudit;
+#[cfg(feature = "macros")]
 use qip::builder_traits::UnitaryBuilder;
+#[cfg(feature = "macros")]
 use qip::prelude::*;
+#[cfg(feature = "macros")]
 use std::num::NonZeroUsize;
 
-// fn apply_oracle<P: Precision>(
-//     &mut b: dyn UnitaryBuilder<P>,
-//     rx: Qudit,
-//     ry: Qudit,
-//     f: P,
-// ) -> Result<(Qudit, Qudit), CircuitError>
+#[cfg(feature = "macros")]
+fn apply_oracle<F>(
+    b: &mut dyn UnitaryBuilder,
+    rx: Qudit,
+    ry: Qudit,
+    f: F,
+) -> Result<(Qudit, Qudit), CircuitError>
+where
+    F: 'static + Fn(bool) -> bool + Send + Sync,
+{
+    let (rx, ry) = program!(b, rx, ry, move |input| {
+        let fx = f(input == 1);
+        (if fx { 1 } else { 0 }, 0.0)
+    }).unwrap();
+    Ok((rx, ry))
+}
 
-// {
-//     // let (rx, ry) = apply_function
-
-// }
-
-fn is_constant_f<P: Precision>(f: P) -> Result<bool, CircuitError> {
+#[cfg(feature = "macros")]
+fn is_constant_f<F>(f: F) -> Result<bool, CircuitError>
+where
+    F: 'static + Fn(bool) -> bool + Send + Sync,
+{
     let mut b = LocalBuilder::<f64>::default();
 
     // prepare |x> = |+>
@@ -39,7 +52,7 @@ fn is_constant_f<P: Precision>(f: P) -> Result<bool, CircuitError> {
     // function is constant if no phase flip has occurred and |x> == |+>
     Ok(result_x == 0)
 }
-
+#[cfg(feature = "macros")]
 fn main() -> Result<(), CircuitError> {
     let result = is_constant_f(|x| x)?;
     println!("f(x) = x is constant: {:?}", result);
@@ -55,3 +68,6 @@ fn main() -> Result<(), CircuitError> {
 
     Ok(())
 }
+
+#[cfg(not(feature = "macros"))]
+fn main() -> () {}
