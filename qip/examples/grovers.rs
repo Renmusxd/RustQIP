@@ -50,20 +50,21 @@ fn apply_uw(
     program!(b, search, ancillary, move |x| ((x == x0) as u64, 0.0))
 }
 
+#[cfg(feature = "macros")]
+fn apply_grover_iteration<P: Precision>(x: u64) -> Result<(), CircuitError> {
+    let mut b = LocalBuilder::<f64>::default();
 
-// #[cfg(feature = "macros")]
-// fn apply_grover_iteration<P: Precision>(
-//     x: u64,
-//     s: LocalQuantumState<P>,
-// ) -> Result<LocalQuantumState<P>, CircuitError> {
-//     let mut b = OpBuilder::new();
-//     let r = b.register(s.n() - 1)?;
-//     let anc = b.qubit();
+    let n = NonZeroUsize::new(b.n() - 1).unwrap();
 
-//     let (r, anc) = apply_uw(&mut b, r, anc, x)?;
-//     let (r, _) = apply_us(&mut b, r, anc)?;
-//     run_with_state(&r, s).map(|(s, _)| s)
-// }
+    let r = b.register(n);
+    let anc = b.qubit();
 
+    let (r, anc) = apply_uw(&mut b, r, anc, x).unwrap();
+    let (r, _) = apply_us(&mut b, r, anc).unwrap();
+
+    let (_, measured) = b.calculate_state_with_init([(&r, 0b000), (&anc, 0b001)]);
+
+    Ok(())
+}
 
 fn main() {}
