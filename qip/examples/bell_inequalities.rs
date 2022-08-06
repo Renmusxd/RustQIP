@@ -64,7 +64,7 @@ fn circuit3() -> Result<Vec<f64>, CircuitError> {
     ).unwrap();
     let (r, m_handle) = b.measure_stochastic(r); //returns (Self::Register, Self::StochasticMeasurementHandle)
     let (_, measurements) = b.calculate_state();
-    let (m, _) = measurements.get_measurement(m_handle);
+    let (m, _) = measurements.get_stochastic_measurement(m_handle);
 }
 
 #[cfg(not(feature = "macros"))]
