@@ -1,3 +1,4 @@
+use qip::builder::StochasticMeasurementHandle;
 #[cfg(feature = "macros")]
 use qip::prelude::*;
 #[cfg(feature = "macros")]
@@ -49,7 +50,7 @@ fn circuit2() -> Result<Vec<f64>, CircuitError>{
     measured.pop_stochastic_measurements(m_handle).unwrap()
 }
 // #[cfg(feature = "macros")]
-fn circuit3() -> Result<Vec<f64>, CircuitError> {
+fn circuit3() {
     let mut b = LocalBuilder::<f64>::default();
     let n = NonZeroUsize::new(2).unwrap();
     let r = b.register(n);
@@ -64,7 +65,7 @@ fn circuit3() -> Result<Vec<f64>, CircuitError> {
     ).unwrap();
     let (r, m_handle) = b.measure_stochastic(r); //returns (Self::Register, Self::StochasticMeasurementHandle)
     let (_, measurements) = b.calculate_state();
-    let (m, _) = measurements.get_stochastic_measurement(m_handle);
+    let stochastic_measurement_probability = measurements.get_stochastic_measurement(m_handle);
 }
 
 #[cfg(not(feature = "macros"))]
