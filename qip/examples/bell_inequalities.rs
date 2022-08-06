@@ -1,9 +1,11 @@
 #[cfg(feature = "macros")]
 use qip::prelude::*;
+#[cfg(feature = "macros")]
 use qip::prelude::{CircuitBuilder, CircuitError};
 #[cfg(feature = "macros")]
 use qip_macros::*;
 #[cfg(feature = "macros")]
+use qip::macros::program_ops::*;
 use std::num::NonZeroUsize;
 
 #[cfg(feature = "macros")]
@@ -27,7 +29,7 @@ fn circuit1() -> Result<Vec<f64>, CircuitError>{
     measured.pop_stochastic_measurements(m_handle).unwrap()
 }
 
-// #[cfg(feature = "macros")]
+#[cfg(feature = "macros")]
 fn circuit2() -> Result<Vec<f64>, CircuitError>{
     let mut b = LocalBuilder::<f64>::default();
     let n = NonZeroUsize::new(2).unwrap();
@@ -59,12 +61,10 @@ fn circuit3() -> Result<Vec<f64>, CircuitError> {
         rz(std::f64::consts::FRAC_PI_3) r[0];
         rz(2. * std::f64::consts::FRAC_PI_3) r[1];
         h r;
-    )?;
-    let (r, m_handle) = b.measure_stochastic(r);
-
-    // run and get probabilities
-    let (_, mut measured) = run_local::<f64>(&r).unwrap();
-    measured.pop_stochastic_measurements(m_handle).unwrap()
+    ).unwrap();
+    let (r, m_handle) = b.measure_stochastic(r); //returns (Self::Register, Self::StochasticMeasurementHandle)
+    let (_, measurements) = b.calculate_state();
+    let (m, _) = measurements.get_measurement(m_handle);
 }
 
 #[cfg(not(feature = "macros"))]
@@ -76,7 +76,7 @@ fn main() -> () {}
 /// https://arxiv.org/pdf/1712.05642.pdf - II.IMPLEMENTED EXPERIMENTS -> 3. Bell's inequality
 ///
 /// A violation of the inequality is expected in any quantum computer or simulator.
-// #[cfg(feature = "macros")]
+#[cfg(feature = "macros")]
 fn main() -> Result<(), CircuitError> {
     println!("Bell inequality: |P(a, b) - P(a, c)| - P(b, c) <= 1");
 
