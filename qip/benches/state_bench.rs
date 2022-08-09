@@ -339,7 +339,7 @@ mod tests {
 
     #[bench]
     fn bench_identity_sparse(b: &mut Bencher) {
-        let n = 3;
+        let n = 5;
 
         let one = Complex::<f64> { re: 1.0, im: 0.0 };
         let mat = (0..1 << n).map(|indx| vec![(indx, one)]).collect();
@@ -354,7 +354,22 @@ mod tests {
 
     #[bench]
     fn bench_identity_larger_sparse(b: &mut Bencher) {
-        let n = 8;
+        let n = 10;
+
+        let one = Complex::<f64> { re: 1.0, im: 0.0 };
+        let mat = (0..1 << n).map(|indx| vec![(indx, one)]).collect();
+        let op = SparseMatrix((0..n).collect(), mat);
+
+        let base_vector: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
+        let input = from_reals(&base_vector);
+        let mut output = from_reals(&base_vector);
+
+        b.iter(|| apply_op(n, &op, &input, &mut output, 0, 0));
+    }
+
+    #[bench]
+    fn bench_identity_giant_sparse(b: &mut Bencher) {
+        let n = 16;
 
         let one = Complex::<f64> { re: 1.0, im: 0.0 };
         let mat = (0..1 << n).map(|indx| vec![(indx, one)]).collect();
