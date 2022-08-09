@@ -8,29 +8,38 @@ use std::num::NonZeroUsize;
 
 /// Standard functions needed by registers containing multiple qubits.
 pub trait QubitRegister {
+    /// Size of the register in qubits.
     fn n(&self) -> usize;
+    /// Size of the register in qubits.
     fn n_nonzero(&self) -> NonZeroUsize {
         NonZeroUsize::new(self.n()).unwrap()
     }
+    /// Absolute indices represented by the register.
     fn indices(&self) -> &[usize];
 }
 
 /// Result of splitting a register in two.
 #[derive(Debug)]
 pub enum SplitResult<R: QubitRegister + Debug> {
+    /// All registers were selected
     SELECTED(R),
+    /// None of the registers were selected
     UNSELECTED(R),
+    /// Some registers were selected, some were not selected.
     SPLIT(R, R),
 }
 
 /// Result of splitting a register into multiple registers.
 #[derive(Debug)]
 pub enum SplitManyResult<R: QubitRegister + Debug> {
+    /// All registers were selected.
     AllSelected(Vec<R>),
+    /// Some were selected, remaining were not.
     Remaining(Vec<R>, R),
 }
 
 impl<R: QubitRegister + Debug> SplitManyResult<R> {
+    /// Returns select and unselected registers.
     pub fn get_all_selected(self) -> Result<Vec<R>, Vec<R>> {
         match self {
             SplitManyResult::AllSelected(v) => Ok(v),
@@ -38,6 +47,7 @@ impl<R: QubitRegister + Debug> SplitManyResult<R> {
         }
     }
 
+    /// Returns select registers, throws out remaining.
     pub fn get_selected(self) -> Vec<R> {
         match self {
             SplitManyResult::AllSelected(v) => v,
@@ -49,8 +59,11 @@ impl<R: QubitRegister + Debug> SplitManyResult<R> {
 /// A base-level circuit builder trait, requiring definitions of registers, base circuit objects,
 /// and end-result quantum state.
 pub trait CircuitBuilder {
+    /// The register type used for the circuit.
     type Register: QubitRegister + Debug;
+    /// The struct used to represent circuit objects.
     type CircuitObject;
+    /// Return type for state calculations.
     type StateCalculation;
 
     /// Number of qubits in circuit.
@@ -79,8 +92,8 @@ pub trait CircuitBuilder {
 
     /// Merge multiple registers together into a single register, returns None if none given.
     fn merge_registers<It>(&mut self, rs: It) -> Option<Self::Register>
-        where
-            It: IntoIterator<Item=Self::Register>,
+    where
+        It: IntoIterator<Item = Self::Register>,
     {
         rs.into_iter().fold(None, |acc, r1| match acc {
             Some(r2) => Some(self.merge_two_registers(r2, r1)),
@@ -94,8 +107,8 @@ pub trait CircuitBuilder {
         r: Self::Register,
         indices: It,
     ) -> SplitResult<Self::Register>
-        where
-            It: IntoIterator<Item=usize>;
+    where
+        It: IntoIterator<Item = usize>;
 
     /// Split a register into two, selecting the indices from the `indices` iterator.
     fn split_register_absolute<It>(
@@ -103,8 +116,8 @@ pub trait CircuitBuilder {
         r: Self::Register,
         indices: It,
     ) -> SplitResult<Self::Register>
-        where
-            It: IntoIterator<Item=usize>,
+    where
+        It: IntoIterator<Item = usize>,
     {
         let r_indices = r.indices().to_vec();
         let r_rel_indices = indices.into_iter().filter_map(move |abs_index| {
@@ -162,8 +175,8 @@ pub trait CircuitBuilder {
     /// # }
     /// ```
     fn split_relative_index_groups<
-        It: IntoIterator<Item=Itt>,
-        Itt: IntoIterator<Item=usize>,
+        It: IntoIterator<Item = Itt>,
+        Itt: IntoIterator<Item = usize>,
     >(
         &mut self,
         r: Self::Register,
@@ -203,14 +216,14 @@ pub trait CircuitBuilder {
     /// Calculate the state at the end of the circuit using an initial state given by each register
     /// and the classical state in that register.
     fn calculate_state_with_init<'a, It>(&mut self, it: It) -> Self::StateCalculation
-        where
-            Self::Register: 'a,
-            It: IntoIterator<Item=(&'a Self::Register, usize)>;
+    where
+        Self::Register: 'a,
+        It: IntoIterator<Item = (&'a Self::Register, usize)>;
 }
 
 fn split_helper<CB>(cb: &mut CB, r: CB::Register, mut acc: Vec<CB::Register>) -> Vec<CB::Register>
-    where
-        CB: CircuitBuilder + ?Sized,
+where
+    CB: CircuitBuilder + ?Sized,
 {
     match cb.split_register_relative(r, Some(0)) {
         SplitResult::SELECTED(r) => {
@@ -436,6 +449,7 @@ pub trait CliffordTBuilder<P: Precision>: UnitaryBuilder<P> {
         }
     }
 
+    /// Apply the SWAP gate to a pair of registers of equal sizes.
     fn swap(
         &mut self,
         ra: Self::Register,
@@ -468,19 +482,23 @@ pub trait CliffordTBuilder<P: Precision>: UnitaryBuilder<P> {
 }
 
 pub trait TemporaryRegisterBuilder: CircuitBuilder {
+    /// Make a temporary qubit, initialized to zero.
     fn make_zeroed_temp_qubit(&mut self) -> Self::Register;
+    /// Make a register of multiple qubits, initialized to zero.
     fn make_zeroed_temp_register(&mut self, n: NonZeroUsize) -> Self::Register {
         let rs = (0..usize::from(n))
             .map(|_| self.make_zeroed_temp_qubit())
             .collect::<Vec<_>>();
         self.merge_registers(rs).unwrap()
     }
+    /// Return a register which has been reset to zero.
     fn return_zeroed_temp_register(&mut self, r: Self::Register);
 }
 
 pub trait AdvancedCircuitBuilder<P: Precision>:
-CliffordTBuilder<P> + TemporaryRegisterBuilder
+    CliffordTBuilder<P> + TemporaryRegisterBuilder
 {
+    /// Applies a NOT gate to `r` for the two qubit control state `cr = 11`.
     fn basic_toffoli(
         &mut self,
         cr: Self::Register,
@@ -516,6 +534,7 @@ CliffordTBuilder<P> + TemporaryRegisterBuilder
         }
     }
 
+    /// Applies NOT to `r` if all qubits in `cr` are `1`.
     fn toffoli(
         &mut self,
         cr: Self::Register,
@@ -612,10 +631,10 @@ pub trait Subcircuitable: CircuitBuilder {
 
 /// Create a circuit for the circuit given by `r`.
 pub fn make_circuit_matrix<CB, P, F>(cb: &mut CB, r: &CB::Register, f: F) -> Vec<Vec<Complex<P>>>
-    where
-        CB: CircuitBuilder,
-        P: Precision,
-        F: Fn(CB::StateCalculation) -> Vec<Complex<P>>,
+where
+    CB: CircuitBuilder,
+    P: Precision,
+    F: Fn(CB::StateCalculation) -> Vec<Complex<P>>,
 {
     (0..1 << r.n())
         .map(|indx| f(cb.calculate_state_with_init(Some((r, indx)))))

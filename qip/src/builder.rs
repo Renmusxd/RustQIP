@@ -11,7 +11,11 @@ use num_rational::{Ratio, Rational64};
 use num_traits::{One, ToPrimitive, Zero};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
+use std::ops::Neg;
 
+/// A local circuit builder for constructing circuits out of standard gates.
+/// LocalBuilder breaks complicated multi-register gates, like toffoli, into combinations of simple
+/// gates like CNOT.
 #[derive(Default, Debug)]
 pub struct LocalBuilder<P: Precision> {
     pipeline: Vec<(Vec<usize>, BuilderCircuitObject<P>)>,
@@ -21,6 +25,7 @@ pub struct LocalBuilder<P: Precision> {
 }
 
 impl<P: Precision> LocalBuilder<P> {
+    /// Applies a phase to a qubit. This has no effect by default but has an impact if conditioned.
     pub fn apply_global_phase(&mut self, r: Qudit, theta: P) -> Qudit {
         let co = BuilderCircuitObject {
             n: r.n(),
@@ -30,6 +35,8 @@ impl<P: Precision> LocalBuilder<P> {
         };
         self.apply_circuit_object(r, co).unwrap()
     }
+
+    /// Applied a global phase to a qubit, expressed as a ratio rather than a float.
     pub fn apply_global_phase_ratio(&mut self, r: Qudit, theta: Rational64) -> Qudit {
         let co = BuilderCircuitObject {
             n: r.n(),
@@ -39,14 +46,19 @@ impl<P: Precision> LocalBuilder<P> {
         };
         self.apply_circuit_object(r, co).unwrap()
     }
+
+    /// Apply a global phase of pi/m for integer m.
     pub fn apply_global_phase_pi_by(&mut self, r: Qudit, m: i64) -> Qudit {
         self.apply_global_phase_ratio(r, Ratio::new(1, m))
     }
+
+    /// Returns the depth of the current circuit (pipeline).
     pub fn pipeline_depth(&self) -> usize {
         self.pipeline.len()
     }
 }
 
+/// The register implementation for the LocalBuilder.
 #[derive(Debug)]
 pub struct Qudit {
     indices: Vec<usize>,
@@ -83,47 +95,67 @@ impl Qudit {
     }
 }
 
+/// A pipeline object for the LocalBuilder.
 #[derive(Debug, Clone)]
 pub struct BuilderCircuitObject<P: Precision> {
     n: usize,
     object: BuilderCircuitObjectType<P>,
 }
 
+/// The type of pipeline object for LocalBuilder.
 #[derive(Debug, Clone)]
 pub enum BuilderCircuitObjectType<P: Precision> {
+    /// A unitary operation on the circuit.
     Unitary(UnitaryMatrixObject<P>),
+    /// A measurement operation on the circuit.
     Measurement(MeasurementObject),
 }
 
+/// The type of unitary matrix for LocalBuilder.
 #[derive(Debug, Clone)]
 pub enum UnitaryMatrixObject<P: Precision> {
+    /// A pauli X gate.
     X,
+    /// A pauli Y gate.
     Y,
+    /// A pauli Z gate.
     Z,
+    /// A hadamard gate.
     H,
+    /// A conditional phase gate by pi/4.
     S,
+    /// A conditional phase gate by pi/8.
     T,
+    /// A controlled pauli X gate, first qubit is control.
     CNOT,
+    /// A swap gate between two qubits.
     SWAP,
+    /// A conditional phase gate by RotationObject phase.
     Rz(RotationObject<P>),
-    // Generic Matrix
+    /// A Generic Matrix
     MAT(Vec<Complex<P>>),
-    // This normally doesn't matter but can have an effect
-    // when we are conditioning them.
+    /// A global phase applied on this qubit.
+    /// This normally doesn't matter but can have an effect
+    /// when we are conditioning them.
     GlobalPhase(RotationObject<P>),
 }
 
+/// Represents phase floats.
 #[derive(Debug, Clone)]
 pub enum RotationObject<P: Precision> {
+    /// A rotation represented by a floating point precision.
     Floating(P),
+    /// A rotation represented by a fixed ratio times pi.
     PiRational(Ratio<i64>),
 }
 
-impl<P: Precision> RotationObject<P> {
-    pub fn neg(&self) -> Self {
+impl<P: Precision> Neg for RotationObject<P> {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
         match self {
-            RotationObject::Floating(f) => Self::Floating(-(*f)),
-            RotationObject::PiRational(r) => Self::PiRational(-(*r)),
+            RotationObject::Floating(f) => Self::Floating(-f),
+            RotationObject::PiRational(r) => Self::PiRational(-r),
         }
     }
 }
@@ -232,18 +264,27 @@ impl<P: Precision> Hash for RotationObject<P> {
     }
 }
 
+/// Represents a type of measurement in the circuit.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum MeasurementObject {
+    /// Performs a single measurement and collapses the wavefunction.
     Measurement,
+    /// Simulates a series of measurements and returns a probability distribution over results.
+    /// Does not collapse the wavefunction.
     StochasticMeasurement,
 }
 
+/// Represents the result of a measurement on the circuit.
 #[derive(Debug, Clone)]
 pub enum MeasurementResults<P: Precision> {
+    /// The result of a single measurement on selected qubits, returns the measurement as well as
+    /// the likelyhood of that measurement taking place.
     Single(usize, P),
+    /// The probability of each measurement indexed by the measurement itself.
     Stochastic(Vec<P>),
 }
 
+/// A series of measurement results at the end of the circuit.
 #[derive(Debug)]
 pub struct Measurements<P: Precision> {
     measurements: Vec<MeasurementResults<P>>,

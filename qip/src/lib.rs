@@ -9,7 +9,7 @@
     unused_import_braces,
     unused_qualifications
 )]
-// TODO reintroduce the missing_docs deny.
+// TODO: add documentation and re-enable the missing_docs deny.
 // missing_docs,
 
 //! Quantum Computing library leveraging graph building to build efficient quantum circuit

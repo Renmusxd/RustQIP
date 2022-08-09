@@ -316,14 +316,14 @@ pub fn exp_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
         let rv = b.make_zeroed_temp_register(NonZeroUsize::new(n + 1).unwrap());
 
         let (ra, rb, rm, rp, re, ru, rv) = program!(&mut *b; ra, rb, rm, rp, re, ru, rv;
-                control(0) copy rb[0], rp, rv;
-                control times_mod rb[0], ra, rp, rm, re;
-                square_mod ra, rm, ru;
-                exp_mod ru, rb[1 .. k], rm, rv, re;
-                square_mod_inv ra, rm, ru;
-                control times_mod_inv rb[0], ra, rp, rm, re;
-                control(0) copy_inv rb[0], rp, rv;
-            )?;
+            control(0) copy rb[0], rp, rv;
+            control times_mod rb[0], ra, rp, rm, re;
+            square_mod ra, rm, ru;
+            exp_mod ru, rb[1 .. k], rm, rv, re;
+            square_mod_inv ra, rm, ru;
+            control times_mod_inv rb[0], ra, rp, rm, re;
+            control(0) copy_inv rb[0], rp, rv;
+        )?;
 
         b.return_zeroed_temp_register(ru);
         b.return_zeroed_temp_register(rv);
