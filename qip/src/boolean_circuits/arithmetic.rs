@@ -20,7 +20,7 @@ pub fn add<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     ra: CB::Register,
     rb: CB::Register,
 ) -> CircuitResult<(CB::Register, CB::Register, CB::Register)> {
-    let result = match (rc.n(), ra.n(), rb.n()) {
+    match (rc.n(), ra.n(), rb.n()) {
         (1, 1, 2) => {
             let (rc, ra, rb) = program!(&mut *b; rc, ra, rb;
                 carry rc, ra, rb[0], rb[1];
@@ -42,12 +42,9 @@ pub fn add<P: Precision, CB: RecursiveCircuitBuilder<P>>(
             "Expected rc[n] ra[n] and rb[n+1], but got ({},{},{})",
             nc, na, nb
         ))),
-    };
-
-    result
+    }
 }
 
-#[invert]
 fn sum<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
     rc: CB::Register,
@@ -309,17 +306,16 @@ pub fn exp_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
             n + 1,
             re.n()
         )))
+    } else if k == 1 {
+        program!(&mut *b; ra, rb, rm, rp, re;
+            control(0) copy rb[0], rp, re;
+            control times_mod rb[0], ra, rp, rm, re;
+        )
     } else {
-        let ret = if k == 1 {
-            program!(&mut *b; ra, rb, rm, rp, re;
-                control(0) copy rb[0], rp, re;
-                control times_mod rb[0], ra, rp, rm, re;
-            )
-        } else {
-            let ru = b.make_zeroed_temp_register(NonZeroUsize::new(n + 1).unwrap());
-            let rv = b.make_zeroed_temp_register(NonZeroUsize::new(n + 1).unwrap());
+        let ru = b.make_zeroed_temp_register(NonZeroUsize::new(n + 1).unwrap());
+        let rv = b.make_zeroed_temp_register(NonZeroUsize::new(n + 1).unwrap());
 
-            let (ra, rb, rm, rp, re, ru, rv) = program!(&mut *b; ra, rb, rm, rp, re, ru, rv;
+        let (ra, rb, rm, rp, re, ru, rv) = program!(&mut *b; ra, rb, rm, rp, re, ru, rv;
                 control(0) copy rb[0], rp, rv;
                 control times_mod rb[0], ra, rp, rm, re;
                 square_mod ra, rm, ru;
@@ -329,13 +325,10 @@ pub fn exp_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
                 control(0) copy_inv rb[0], rp, rv;
             )?;
 
-            b.return_zeroed_temp_register(ru);
-            b.return_zeroed_temp_register(rv);
+        b.return_zeroed_temp_register(ru);
+        b.return_zeroed_temp_register(rv);
 
-            Ok((ra, rb, rm, rp, re))
-        };
-
-        ret
+        Ok((ra, rb, rm, rp, re))
     }
 }
 
