@@ -10,52 +10,56 @@ use qip::macros::program_ops::*;
 use std::num::NonZeroUsize;
 
 #[cfg(feature = "macros")]
-fn circuit1() -> Result<Vec<f64>, CircuitError>{
+fn circuit1() -> &'static [f64]{
     let mut b = LocalBuilder::<f64>::default();
     let n = NonZeroUsize::new(2).unwrap();
 
     let q = b.qubit();
-    let ra = b.register(n);
-    let r = program!(&mut b; r;
+    let r1 = b.register(n);
+    let r = program!(&mut b; r1;
         not r;
         h r[0];
         control not r[0], r[1];
         rz(std::f64::consts::FRAC_PI_3) r[1];
         h r;
-    )?;
+    ).unwrap();
     let (r, m_handle) = b.measure_stochastic(r);
 
     //run and get probabilities
-    let (_, mut measured) = run_local::<f64>(&r).unwrap();
-    measured.pop_stochastic_measurements(m_handle).unwrap()
+    let (r, m_handle) = b.measure_stochastic(r); //returns (Self::Register, Self::StochasticMeasurementHandle)
+    let (_, measurements) = b.calculate_state();
+    let stochastic_measurement_probability = measurements.get_stochastic_measurement(m_handle);
+    return stochastic_measurement_probability;
 }
 
 #[cfg(feature = "macros")]
-fn circuit2() -> Result<Vec<f64>, CircuitError>{
+fn circuit2() -> &'static [f64]{
     let mut b = LocalBuilder::<f64>::default();
     let n = NonZeroUsize::new(2).unwrap();
 
-    let r = b.register(n);
-    let r = program!( &mut b; r;
+    let r2 = b.register(n);
+    let r = program!( &mut b; r2;
         not r;
         h r[0];
         control not r[0], r[1];
         rz(2. * std::f64::consts::FRAC_PI_3) r[1];
         h r;
-    )?;
+    ).unwrap();
     let (r, m_handle) = b.measure_stochastic(r);
 
     // run and get probabilities
-    let (_, mut measured) = run_local::<f64>(&r).unwrap();
-    measured.pop_stochastic_measurements(m_handle).unwrap()
+    let (r, m_handle) = b.measure_stochastic(r); //returns (Self::Register, Self::StochasticMeasurementHandle)
+    let (_, measurements) = b.calculate_state();
+    let stochastic_measurement_probability = measurements.get_stochastic_measurement(m_handle);
+    return stochastic_measurement_probability;
 }
-// #[cfg(feature = "macros")]
-fn circuit3() {
+#[cfg(feature = "macros")]
+fn circuit3() ->  &'static [f64] {
     let mut b = LocalBuilder::<f64>::default();
     let n = NonZeroUsize::new(2).unwrap();
-    let r = b.register(n);
+    let r3 = b.register(n);
 
-    let r = program!(&mut b; r;
+    let r = program!(&mut b; r3;
         not r;
         h r[0];
         control not r[0], r[1];
@@ -66,31 +70,30 @@ fn circuit3() {
     let (r, m_handle) = b.measure_stochastic(r); //returns (Self::Register, Self::StochasticMeasurementHandle)
     let (_, measurements) = b.calculate_state();
     let stochastic_measurement_probability = measurements.get_stochastic_measurement(m_handle);
+    return stochastic_measurement_probability;
+    
 }
 
 #[cfg(not(feature = "macros"))]
 fn main() -> () {}
 
-/// Bell inequality:
-/// |P(a, b) - P(a, c)| - P(b, c) <= 1
-/// To get P(a, b), P(a, c) and P(b, c) we use the 3 circuits presented in:
-/// https://arxiv.org/pdf/1712.05642.pdf - II.IMPLEMENTED EXPERIMENTS -> 3. Bell's inequality
-///
-/// A violation of the inequality is expected in any quantum computer or simulator.
+
+
 #[cfg(feature = "macros")]
 fn main() -> Result<(), CircuitError> {
     println!("Bell inequality: |P(a, b) - P(a, c)| - P(b, c) <= 1");
 
     let a_b = circuit1();
-    let p_of_a_b = (a_b?[0] + a_b?[3]) - (a_b?[1] + a_b?[2]);
+    let p_of_a_b = (a_b[0] + a_b[3]) - (a_b[1] + a_b[2]);
     println!("P(a, b) = {:.2}", p_of_a_b);
 
     let a_c = circuit2();
-    let p_of_a_c = (a_c?[0] + a_c?[3]) - (a_c?[1] + a_c?[2]);
+    let p_of_a_c = (a_c[0] + a_c[3]) - (a_c[1] + a_c[2]);
     println!("P(a, c) = {:.2}", p_of_a_c);
-
+    
     let b_c = circuit3();
-    let p_of_b_c = (b_c?[0] + b_c?[3]) - (b_c?[1] + b_c?[2]);
+    println!("{:?}", b_c);
+    let p_of_b_c = (b_c[0] + b_c[3]) - (b_c[1] + b_c[2]);
     println!("P(b, c) = {:.2}", p_of_b_c);
 
     let left_side = (p_of_a_b - p_of_a_c).abs() - p_of_b_c;
