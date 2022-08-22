@@ -76,8 +76,8 @@ impl QubitRegister for Qudit {
 
 impl Qudit {
     fn new<It>(indices: It) -> Option<Self>
-    where
-        It: Into<Vec<usize>>,
+        where
+            It: Into<Vec<usize>>,
     {
         let indices = indices.into();
         if !indices.is_empty() {
@@ -87,8 +87,8 @@ impl Qudit {
         }
     }
     fn new_from_iter<It>(indices: It) -> Option<Self>
-    where
-        It: Iterator<Item = usize>,
+        where
+            It: Iterator<Item=usize>,
     {
         let indices = indices.into_iter().collect::<Vec<_>>();
         Self::new(indices)
@@ -330,8 +330,8 @@ impl<P: Precision> CircuitBuilder for LocalBuilder<P> {
         r: Self::Register,
         indices: It,
     ) -> SplitResult<Self::Register>
-    where
-        It: IntoIterator<Item = usize>,
+        where
+            It: IntoIterator<Item=usize>,
     {
         let selected_indices = indices.into_iter().filter_map(|i| {
             if i <= r.indices.len() {
@@ -381,9 +381,9 @@ impl<P: Precision> CircuitBuilder for LocalBuilder<P> {
     }
 
     fn calculate_state_with_init<'a, It>(&mut self, it: It) -> Self::StateCalculation
-    where
-        Self::Register: 'a,
-        It: IntoIterator<Item = (&'a Self::Register, usize)>,
+        where
+            Self::Register: 'a,
+            It: IntoIterator<Item=(&'a Self::Register, usize)>,
     {
         let n = self.n();
         let mut state = vec![Complex::zero(); 1 << n];
@@ -788,13 +788,45 @@ impl<P: Precision> Conditionable for LocalBuilder<P> {
                         SplitResult::UNSELECTED(_) => unreachable!(),
                     }
                 }
-                UnitaryMatrixObject::MAT(_data) => todo!(),
+                UnitaryMatrixObject::MAT(data) => {
+                    // TODO improve this by breaking some matrices into A CNOT B CNOT C
+                    let new_data = make_conditioned_matrix(cr.n(), r.n(), &data).collect::<Vec<_>>();
+                    let crn = cr.n();
+                    let new_r = self.merge_two_registers(cr, r);
+                    let new_r = self.apply_vec_matrix(new_r, new_data)?;
+                    match self.split_register_relative(new_r, 0..crn) {
+                        SplitResult::SPLIT(cr, r) => Ok((cr, r)),
+                        SplitResult::SELECTED(_) => unreachable!(),
+                        SplitResult::UNSELECTED(_) => unreachable!(),
+                    }
+                }
             },
             BuilderCircuitObjectType::Measurement(_) => {
                 Err(CircuitError::new("Cannot condition measurements."))
             }
         }
     }
+}
+
+// TODO: test this
+fn make_conditioned_matrix<P: Precision>(crn: usize, rn: usize, mat: &[Complex<P>]) -> impl Iterator<Item=Complex<P>> + '_ {
+    let mut cindex_max = 0;
+    (0..crn).for_each(|i| {
+        cindex_max |= 1 << i;
+    });
+
+    (0..2usize.pow(crn as u32)).flat_map(move |cindex| {
+        let top_sec = cindex << rn;
+        (0..2usize.pow(rn as u32)).flat_map(move |rindex| {
+            let mut row = vec![Complex::zero(); 2usize.pow((crn + rn) as u32)];
+            if cindex == cindex_max {
+                row[top_sec..].iter_mut().zip(mat.iter()).for_each(|(entry, data)| *entry = *data)
+            } else {
+                row[top_sec | rindex] = Complex::one();
+            }
+            row.into_iter()
+        })
+    })
 }
 
 fn split_vector_at<T>(mut v: Vec<T>, x: usize) -> (Vec<T>, Vec<T>) {
@@ -862,9 +894,9 @@ fn apply_pipeline_objects<CB, CO>(
     sc: CB::Subcircuit,
     r: CB::Register,
 ) -> CircuitResult<CB::Register>
-where
-    CB: CircuitBuilder<CircuitObject = CO>
-        + Subcircuitable<Subcircuit = Vec<(Vec<usize>, CO)>>
+    where
+        CB: CircuitBuilder<CircuitObject=CO>
+        + Subcircuitable<Subcircuit=Vec<(Vec<usize>, CO)>>
         + TemporaryRegisterBuilder,
 {
     let rn = r.n();
@@ -1021,9 +1053,9 @@ pub mod optimizers {
             &self,
             rules: It,
         ) -> CircuitResult<MonteCarloOptimizer<BuilderCircuitObjectType<P>>>
-        where
-            S: AsRef<str>,
-            It: IntoIterator<Item = S>,
+            where
+                S: AsRef<str>,
+                It: IntoIterator<Item=S>,
         {
             let trie = IndexTrie::new_from_lines(rules, Self::simple_map_strings)?;
             self.make_circuit_optimizer_from_trie(trie)
@@ -1033,16 +1065,16 @@ pub mod optimizers {
             &self,
             filepath: S,
         ) -> CircuitResult<MonteCarloOptimizer<BuilderCircuitObjectType<P>>>
-        where
-            S: AsRef<Path>,
+            where
+                S: AsRef<Path>,
         {
             let trie = IndexTrie::new_from_filepath(filepath, Self::simple_map_strings)?;
             self.make_circuit_optimizer_from_trie(trie)
         }
 
         pub fn apply_optimizer_circuit<It>(&mut self, r: Qudit, it: It) -> CircuitResult<Qudit>
-        where
-            It: IntoIterator<Item = (Vec<usize>, BuilderCircuitObjectType<P>)>,
+            where
+                It: IntoIterator<Item=(Vec<usize>, BuilderCircuitObjectType<P>)>,
         {
             it.into_iter().try_fold(
                 r,
