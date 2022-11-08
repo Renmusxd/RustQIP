@@ -27,4 +27,5 @@ smallvec = "^1.10"
 
 [dependencies.qip-macros]
 path = "../qip-macros"
+version = "1.0.0-beta.0"
 optional = true
