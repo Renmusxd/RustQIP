@@ -24,6 +24,7 @@ impl<T, V> Default for Node<T, V> {
     }
 }
 
+/// An index trie which tracks replacement rules for sequences of keys of type `T`.
 #[derive(Debug, Clone)]
 pub struct IndexTrie<T, V> {
     data: Node<T, V>,
@@ -38,13 +39,14 @@ impl<T, V> Default for IndexTrie<T, V> {
 }
 
 impl<T, V> IndexTrie<T, V>
-where
-    T: Hash + Eq,
-{
-    pub fn new<It, ItIt>(data: It) -> Self
     where
-        It: IntoIterator<Item = (ItIt, V)>,
-        ItIt: IntoIterator<Item = T>,
+        T: Hash + Eq,
+{
+    /// Construct a new IndexTrie from an iterator of rules.
+    pub fn new<It, ItIt>(data: It) -> Self
+        where
+            It: IntoIterator<Item=(ItIt, V)>,
+            ItIt: IntoIterator<Item=T>,
     {
         let mut trie = Self::default();
         data.into_iter().for_each(|(s, value): (ItIt, V)| {
@@ -57,29 +59,32 @@ where
 
         trie
     }
+    /// Get the root values.
     pub fn get_root_values(&self) -> &[V] {
         &self.data.values
     }
 }
 
 impl<CO> IndexTrie<(Vec<usize>, CO), Vec<(Vec<usize>, CO)>>
-where
-    CO: Hash + Eq + Clone,
-{
-    pub fn new_from_valid_lines<It, F, S>(lines: It, f: F) -> CircuitResult<Self>
     where
-        S: AsRef<str>,
-        It: IntoIterator<Item = S>,
-        F: Fn(&str) -> CO,
+        CO: Hash + Eq + Clone,
+{
+    /// Construct an IndexTrie from a series of verified strings.
+    pub fn new_from_valid_lines<It, F, S>(lines: It, f: F) -> CircuitResult<Self>
+        where
+            S: AsRef<str>,
+            It: IntoIterator<Item=S>,
+            F: Fn(&str) -> CO,
     {
         Self::new_from_lines(lines, |x| Ok(f(x)))
     }
 
+    /// Construct an IndexTrie from a series of strings.
     pub fn new_from_lines<It, F, S>(lines: It, f: F) -> CircuitResult<Self>
-    where
-        S: AsRef<str>,
-        It: IntoIterator<Item = S>,
-        F: Fn(&str) -> CircuitResult<CO>,
+        where
+            S: AsRef<str>,
+            It: IntoIterator<Item=S>,
+            F: Fn(&str) -> CircuitResult<CO>,
     {
         let mut lhss = vec![];
         let mut rhss = vec![];
@@ -114,10 +119,11 @@ where
         Ok(Self::new(iter))
     }
 
+    /// Construct an IndexTrie from a filepath.
     pub fn new_from_filepath<P, F>(filename: P, f: F) -> CircuitResult<Self>
-    where
-        P: AsRef<Path>,
-        F: Fn(&str) -> CircuitResult<CO>,
+        where
+            P: AsRef<Path>,
+            F: Fn(&str) -> CircuitResult<CO>,
     {
         let lines = read_lines(filename)
             .map_err(|err| CircuitError::new(format!("IOError: {:?}", err)))?
@@ -130,11 +136,11 @@ where
     }
 }
 
-// The output is wrapped in a Result to allow matching on errors
-// Returns an Iterator to the Reader of the lines of the file.
+/// The output is wrapped in a Result to allow matching on errors
+/// Returns an Iterator to the Reader of the lines of the file.
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where
-    P: AsRef<Path>,
+    where
+        P: AsRef<Path>,
 {
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
@@ -151,8 +157,8 @@ fn parse_num_array(s: &str) -> Result<Vec<usize>, ParseIntError> {
 }
 
 fn parse_str<CO, F>(mut s: &str, f: F) -> Result<Vec<(Vec<usize>, CO)>, CircuitError>
-where
-    F: Fn(&str) -> CircuitResult<CO>,
+    where
+        F: Fn(&str) -> CircuitResult<CO>,
 {
     let mut res = vec![];
     // Expect ident[indices]
@@ -179,18 +185,20 @@ where
 }
 
 impl<T, V> IndexTrie<(Vec<usize>, T), V>
-where
-    T: Hash + Eq + Clone,
-    V: Clone,
-{
-    pub fn index_walker<K>(&self) -> IndexWalker<K, T, V>
     where
-        K: Clone,
+        T: Hash + Eq + Clone,
+        V: Clone,
+{
+    /// Construct a walker.
+    pub fn index_walker<K>(&self) -> IndexWalker<K, T, V>
+        where
+            K: Clone,
     {
         IndexWalker::new(self)
     }
 }
 
+/// An IndexWalker takes in a series of keys and outputs values as they become available.
 #[derive(Debug)]
 pub struct IndexWalker<'a, K, T, V> {
     trie: &'a IndexTrie<(Vec<usize>, T), V>,
@@ -198,10 +206,10 @@ pub struct IndexWalker<'a, K, T, V> {
 }
 
 impl<'a, K, T, V> IndexWalker<'a, K, T, V>
-where
-    T: Hash + Eq + Clone,
-    K: Clone,
-    V: Clone,
+    where
+        T: Hash + Eq + Clone,
+        K: Clone,
+        V: Clone,
 {
     fn new(trie: &'a IndexTrie<(Vec<usize>, T), V>) -> Self {
         Self {
@@ -210,10 +218,12 @@ where
         }
     }
 
+    /// Feed in a key and a marker to be returned with any matches starting with that key.
     pub fn feed(&mut self, indices: Vec<usize>, t: T, marker: K) -> Vec<(K, Vec<usize>, Vec<V>)> {
         self.feed_acc(indices, t, marker, |k, _| k)
     }
 
+    /// Feed in a key and a marker to be returned with any matches starting with that key.
     pub fn feed_acc<F>(
         &mut self,
         indices: Vec<usize>,
@@ -221,8 +231,8 @@ where
         init_state: K,
         f: F,
     ) -> Vec<(K, Vec<usize>, Vec<V>)>
-    where
-        F: Fn(K, &T) -> K,
+        where
+            F: Fn(K, &T) -> K,
     {
         assert_eq!(indices, {
             let mut ni = indices.clone();

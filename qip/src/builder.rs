@@ -76,8 +76,8 @@ impl QubitRegister for Qudit {
 
 impl Qudit {
     fn new<It>(indices: It) -> Option<Self>
-    where
-        It: Into<Vec<usize>>,
+        where
+            It: Into<Vec<usize>>,
     {
         let indices = indices.into();
         if !indices.is_empty() {
@@ -87,8 +87,8 @@ impl Qudit {
         }
     }
     fn new_from_iter<It>(indices: It) -> Option<Self>
-    where
-        It: Iterator<Item = usize>,
+        where
+            It: Iterator<Item=usize>,
     {
         let indices = indices.into_iter().collect::<Vec<_>>();
         Self::new(indices)
@@ -291,12 +291,14 @@ pub struct Measurements<P: Precision> {
 }
 
 impl<P: Precision> Measurements<P> {
+    /// Get a measurement result given a handle.
     pub fn get_measurement(&self, handle: MeasurementHandle) -> (usize, P) {
         match &self.measurements[handle.id] {
             MeasurementResults::Single(val, prob) => (*val, *prob),
             MeasurementResults::Stochastic(_) => unreachable!(),
         }
     }
+    /// Get a stochastic measurement result given a handle.
     pub fn get_stochastic_measurement(&self, handle: StochasticMeasurementHandle) -> &[P] {
         match &self.measurements[handle.id] {
             MeasurementResults::Single(_, _) => unreachable!(),
@@ -330,8 +332,8 @@ impl<P: Precision> CircuitBuilder for LocalBuilder<P> {
         r: Self::Register,
         indices: It,
     ) -> SplitResult<Self::Register>
-    where
-        It: IntoIterator<Item = usize>,
+        where
+            It: IntoIterator<Item=usize>,
     {
         let selected_indices = indices.into_iter().filter_map(|i| {
             if i <= r.indices.len() {
@@ -381,9 +383,9 @@ impl<P: Precision> CircuitBuilder for LocalBuilder<P> {
     }
 
     fn calculate_state_with_init<'a, It>(&mut self, it: It) -> Self::StateCalculation
-    where
-        Self::Register: 'a,
-        It: IntoIterator<Item = (&'a Self::Register, usize)>,
+        where
+            Self::Register: 'a,
+            It: IntoIterator<Item=(&'a Self::Register, usize)>,
     {
         let n = self.n();
         let mut state = vec![Complex::zero(); 1 << n];
@@ -573,6 +575,7 @@ impl<P: Precision> TemporaryRegisterBuilder for LocalBuilder<P> {
 
 impl<P: Precision> AdvancedCircuitBuilder<P> for LocalBuilder<P> {}
 
+/// A handle which points to a measurement result.
 #[derive(Debug, Clone, Copy)]
 pub struct MeasurementHandle {
     id: usize,
@@ -593,6 +596,7 @@ impl<P: Precision> MeasurementBuilder for LocalBuilder<P> {
     }
 }
 
+/// A handle which points to a stochastic measurement result.
 #[derive(Debug, Clone, Copy)]
 pub struct StochasticMeasurementHandle {
     id: usize,
@@ -862,9 +866,9 @@ fn apply_pipeline_objects<CB, CO>(
     sc: CB::Subcircuit,
     r: CB::Register,
 ) -> CircuitResult<CB::Register>
-where
-    CB: CircuitBuilder<CircuitObject = CO>
-        + Subcircuitable<Subcircuit = Vec<(Vec<usize>, CO)>>
+    where
+        CB: CircuitBuilder<CircuitObject=CO>
+        + Subcircuitable<Subcircuit=Vec<(Vec<usize>, CO)>>
         + TemporaryRegisterBuilder,
 {
     let rn = r.n();
@@ -953,6 +957,7 @@ impl<P: Precision> RecursiveCircuitBuilder<P> for LocalBuilder<P> {
     type RecursiveSimilarBuilder = Self::SimilarBuilder;
 }
 
+/// Monte Carlo optimizer implementations.
 #[cfg(feature = "optimization")]
 pub mod optimizers {
     use super::*;
@@ -960,12 +965,14 @@ pub mod optimizers {
     use crate::optimizer::mc_optimizer::MonteCarloOptimizer;
     use std::path::Path;
 
+    /// A Trie for circuit sequences.
     pub type OptimizerTrie<P> = IndexTrie<
         (Vec<usize>, BuilderCircuitObjectType<P>),
         Vec<(Vec<usize>, BuilderCircuitObjectType<P>)>,
     >;
 
     impl<P: Precision> LocalBuilder<P> {
+        /// Map strings to circuit objects.
         pub fn simple_map_strings(x: &str) -> CircuitResult<BuilderCircuitObjectType<P>> {
             let res = match x {
                 "X" => BuilderCircuitObjectType::Unitary(UnitaryMatrixObject::X),
@@ -1005,6 +1012,7 @@ pub mod optimizers {
             Ok(res)
         }
 
+        /// Turn a trie into a circuit optimizer with replacement rules.
         pub fn make_circuit_optimizer_from_trie(
             &self,
             trie: OptimizerTrie<P>,
@@ -1017,32 +1025,35 @@ pub mod optimizers {
             ))
         }
 
+        /// Turn a set of rules into a circuit optimizer.
         pub fn make_circuit_optimizer<It, S>(
             &self,
             rules: It,
         ) -> CircuitResult<MonteCarloOptimizer<BuilderCircuitObjectType<P>>>
-        where
-            S: AsRef<str>,
-            It: IntoIterator<Item = S>,
+            where
+                S: AsRef<str>,
+                It: IntoIterator<Item=S>,
         {
             let trie = IndexTrie::new_from_lines(rules, Self::simple_map_strings)?;
             self.make_circuit_optimizer_from_trie(trie)
         }
 
+        /// Read a rules file and construct a circuit optimizer.
         pub fn make_circuit_optimizer_from_file<S>(
             &self,
             filepath: S,
         ) -> CircuitResult<MonteCarloOptimizer<BuilderCircuitObjectType<P>>>
-        where
-            S: AsRef<Path>,
+            where
+                S: AsRef<Path>,
         {
             let trie = IndexTrie::new_from_filepath(filepath, Self::simple_map_strings)?;
             self.make_circuit_optimizer_from_trie(trie)
         }
 
+        /// Apply the resulting optmized circuit to a qudit `r`.
         pub fn apply_optimizer_circuit<It>(&mut self, r: Qudit, it: It) -> CircuitResult<Qudit>
-        where
-            It: IntoIterator<Item = (Vec<usize>, BuilderCircuitObjectType<P>)>,
+            where
+                It: IntoIterator<Item=(Vec<usize>, BuilderCircuitObjectType<P>)>,
         {
             it.into_iter().try_fold(
                 r,

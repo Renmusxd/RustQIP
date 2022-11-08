@@ -1,16 +1,15 @@
 #![forbid(unsafe_code)]
 #![deny(
-    unreachable_pub,
-    missing_debug_implementations,
-    missing_copy_implementations,
-    trivial_casts,
-    trivial_numeric_casts,
-    unstable_features,
-    unused_import_braces,
-    unused_qualifications
+unreachable_pub,
+missing_debug_implementations,
+missing_copy_implementations,
+trivial_casts,
+trivial_numeric_casts,
+unstable_features,
+unused_import_braces,
+unused_qualifications,
+missing_docs
 )]
-// TODO: add documentation and re-enable the missing_docs deny.
-// missing_docs,
 
 //! Quantum Computing library leveraging graph building to build efficient quantum circuit
 //! simulations.
@@ -268,6 +267,10 @@ pub use num_complex::Complex;
 pub use rand;
 pub use types::Precision;
 
+/// Commonly used types and traits.
+/// ```
+/// use qip::prelude::*;
+/// ```
 pub mod prelude {
     pub use super::*;
     pub use crate::builder::LocalBuilder;

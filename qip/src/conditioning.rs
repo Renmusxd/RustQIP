@@ -10,7 +10,9 @@ use crate::{Complex, Precision};
 use num_rational::Rational64;
 use std::num::NonZeroUsize;
 
+/// A CircuitBuilder is conditionable if it can condition all unitaries with a given register.
 pub trait Conditionable: CircuitBuilder {
+    /// Attempt to condition a circuit object `co` applied to `r` with the register `cr`.
     fn try_apply_with_condition(
         &mut self,
         cr: Self::Register,
@@ -18,11 +20,13 @@ pub trait Conditionable: CircuitBuilder {
         co: Self::CircuitObject,
     ) -> Result<(Self::Register, Self::Register), CircuitError>;
 
+    /// Construct a new circuitbuilder which conditions all unitaries with `cr`.
     fn condition_with(&mut self, cr: Self::Register) -> Conditioned<Self> {
         Conditioned::new(self, cr)
     }
 }
 
+/// A CircuitBuilder which conditions all unitaries with a given register.
 #[derive(Debug)]
 pub struct Conditioned<'a, CB: Conditionable + ?Sized> {
     parent: &'a mut CB,
@@ -30,13 +34,14 @@ pub struct Conditioned<'a, CB: Conditionable + ?Sized> {
 }
 
 impl<'a, CB: Conditionable + ?Sized> Conditioned<'a, CB> {
-    pub fn new(cb: &'a mut CB, cr: CB::Register) -> Self {
+    fn new(cb: &'a mut CB, cr: CB::Register) -> Self {
         Self {
             parent: cb,
             cr: Some(cr),
         }
     }
 
+    /// Dissolve the Conditioned circuit builder and retrieve the conditioning register.
     pub fn dissolve(self) -> CB::Register {
         self.cr.unwrap()
     }
@@ -64,8 +69,8 @@ impl<'a, CB: Conditionable + ?Sized> CircuitBuilder for Conditioned<'a, CB> {
         r: Self::Register,
         indices: It,
     ) -> SplitResult<Self::Register>
-    where
-        It: IntoIterator<Item = usize>,
+        where
+            It: IntoIterator<Item=usize>,
     {
         self.parent.split_register_relative(r, indices)
     }
@@ -82,16 +87,16 @@ impl<'a, CB: Conditionable + ?Sized> CircuitBuilder for Conditioned<'a, CB> {
     }
 
     fn calculate_state_with_init<'b, It>(&mut self, it: It) -> Self::StateCalculation
-    where
-        Self::Register: 'b,
-        It: IntoIterator<Item = (&'b Self::Register, usize)>,
+        where
+            Self::Register: 'b,
+            It: IntoIterator<Item=(&'b Self::Register, usize)>,
     {
         self.parent.calculate_state_with_init(it)
     }
 }
 
 impl<'a, P: Precision, CB: Conditionable + UnitaryBuilder<P> + ?Sized> UnitaryBuilder<P>
-    for Conditioned<'a, CB>
+for Conditioned<'a, CB>
 {
     fn vec_matrix_to_circuitobject(n: usize, data: Vec<Complex<P>>) -> Self::CircuitObject {
         CB::vec_matrix_to_circuitobject(n, data)
@@ -99,7 +104,7 @@ impl<'a, P: Precision, CB: Conditionable + UnitaryBuilder<P> + ?Sized> UnitaryBu
 }
 
 impl<'a, P: Precision, CB: Conditionable + CliffordTBuilder<P> + ?Sized> CliffordTBuilder<P>
-    for Conditioned<'a, CB>
+for Conditioned<'a, CB>
 {
     fn make_x(&self) -> Self::CircuitObject {
         self.parent.make_x()
@@ -125,7 +130,7 @@ impl<'a, P: Precision, CB: Conditionable + CliffordTBuilder<P> + ?Sized> Cliffor
 }
 
 impl<'a, P: Precision, CB: Conditionable + RotationsBuilder<P> + ?Sized> RotationsBuilder<P>
-    for Conditioned<'a, CB>
+for Conditioned<'a, CB>
 {
     fn rz(&mut self, r: Self::Register, theta: P) -> Self::Register {
         self.parent.rz(r, theta)
@@ -165,7 +170,7 @@ impl<'a, P: Precision, CB: Conditionable + RotationsBuilder<P> + ?Sized> Rotatio
 }
 
 impl<'a, CB: Conditionable + TemporaryRegisterBuilder + ?Sized> TemporaryRegisterBuilder
-    for Conditioned<'a, CB>
+for Conditioned<'a, CB>
 {
     fn make_zeroed_temp_qubit(&mut self) -> Self::Register {
         self.parent.make_zeroed_temp_qubit()
@@ -177,9 +182,8 @@ impl<'a, CB: Conditionable + TemporaryRegisterBuilder + ?Sized> TemporaryRegiste
 }
 
 impl<'a, P: Precision, CB: Conditionable + AdvancedCircuitBuilder<P> + ?Sized>
-    AdvancedCircuitBuilder<P> for Conditioned<'a, CB>
-{
-}
+AdvancedCircuitBuilder<P> for Conditioned<'a, CB>
+{}
 
 impl<'a, CB: Conditionable> Conditionable for Conditioned<'a, CB> {
     fn try_apply_with_condition(
@@ -203,7 +207,9 @@ impl<'a, CB: Conditionable> Conditionable for Conditioned<'a, CB> {
     }
 }
 
+/// A ConditionableSubcircuit may apply an entire subcircuit under the condition of `cr`.
 pub trait ConditionableSubcircuit: Subcircuitable {
+    /// Apply `sc` to register `r` using condition `cr`.
     fn apply_conditioned_subcircuit(
         &mut self,
         sc: Self::Subcircuit,
@@ -232,7 +238,7 @@ impl<'a, CB: ConditionableSubcircuit + Conditionable> Subcircuitable for Conditi
 }
 
 impl<'a, CB: Invertable + ConditionableSubcircuit + Conditionable> Invertable
-    for Conditioned<'a, CB>
+for Conditioned<'a, CB>
 {
     type SimilarBuilder = CB::SimilarBuilder;
 
@@ -246,7 +252,7 @@ impl<'a, CB: Invertable + ConditionableSubcircuit + Conditionable> Invertable
 }
 
 impl<'a, CB: Invertable + ConditionableSubcircuit + Conditionable> ConditionableSubcircuit
-    for Conditioned<'a, CB>
+for Conditioned<'a, CB>
 {
     fn apply_conditioned_subcircuit(
         &mut self,
@@ -270,9 +276,9 @@ impl<'a, CB: Invertable + ConditionableSubcircuit + Conditionable> Conditionable
 }
 
 impl<'a, P: Precision, CB: RecursiveCircuitBuilder<P>> RecursiveCircuitBuilder<P>
-    for Conditioned<'a, CB>
-where
-    <CB as Invertable>::SimilarBuilder: RecursiveCircuitBuilder<P>,
+for Conditioned<'a, CB>
+    where
+        <CB as Invertable>::SimilarBuilder: RecursiveCircuitBuilder<P>,
 {
     type RecursiveSimilarBuilder = Self::SimilarBuilder;
 }

@@ -15,10 +15,11 @@ struct Node<CO> {
     co: CO,
 }
 
+/// An optmizer using monte carlo weights and simulated annealing.
 #[derive(Debug)]
 pub struct MonteCarloOptimizer<CO>
-where
-    CO: Eq + Hash,
+    where
+        CO: Eq + Hash,
 {
     data: Vec<Node<CO>>,
     head: Option<usize>,
@@ -27,8 +28,8 @@ where
 }
 
 impl<CO> MonteCarloOptimizer<CO>
-where
-    CO: Eq + Hash + Clone + Debug,
+    where
+        CO: Eq + Hash + Clone + Debug,
 {
     fn verify(&self) -> bool {
         let mut prev = None;
@@ -51,17 +52,19 @@ where
         count == self.data.len()
     }
 
+    /// Construct froma file path.
     pub fn new_from_path<SC, F, P>(sc: SC, trie_path: P, f: F) -> CircuitResult<Self>
-    where
-        SC: IntoIterator<Item = (Vec<usize>, CO)>,
-        F: Fn(&str) -> CircuitResult<CO>,
-        P: AsRef<Path>,
+        where
+            SC: IntoIterator<Item=(Vec<usize>, CO)>,
+            F: Fn(&str) -> CircuitResult<CO>,
+            P: AsRef<Path>,
     {
         let trie = IndexTrie::new_from_filepath(trie_path, f)?;
         Ok(Self::new(sc, trie))
     }
 
-    pub fn new<SC: IntoIterator<Item = (Vec<usize>, CO)>>(
+    /// Construct from an IndexTrie.
+    pub fn new<SC: IntoIterator<Item=(Vec<usize>, CO)>>(
         sc: SC,
         replacement_trie: IndexTrie<(Vec<usize>, CO), Vec<(Vec<usize>, CO)>>,
     ) -> Self {
@@ -90,12 +93,6 @@ where
         } else {
             None
         };
-        // let nvars = data
-        //     .iter()
-        //     .map(|node| node.indices.iter().cloned().max())
-        //     .flatten()
-        //     .max()
-        //     .unwrap_or(0);
         Self {
             data,
             head,
@@ -106,8 +103,8 @@ where
 
     /// Returns the index just before the replaced region, and the index just after.
     fn replace<It>(&mut self, start_inc: usize, end_inc: usize, with: It) -> CircuitResult<()>
-    where
-        It: IntoIterator<Item = (Vec<usize>, CO)>,
+        where
+            It: IntoIterator<Item=(Vec<usize>, CO)>,
     {
         let mut sel = start_inc;
         let mut replacements = with.into_iter();
@@ -149,8 +146,8 @@ where
     }
 
     fn insert_after<V>(&mut self, after: usize, indices: V, co: CO) -> usize
-    where
-        V: Into<Vec<usize>>,
+        where
+            V: Into<Vec<usize>>,
     {
         let next_node = self.data[after].next;
         let n = Node {
@@ -290,10 +287,12 @@ where
         assert!(self.verify());
     }
 
+    /// Get the depth of the optimizer rules.
     pub fn get_opts_depth(&self) -> usize {
         self.data.len()
     }
 
+    /// Get the set of optimizations.
     pub fn get_ops(&self) -> Vec<(Vec<usize>, CO)> {
         let mut res = vec![];
 
@@ -312,8 +311,8 @@ where
     }
 
     fn insert_identities<F, R: Rng>(&mut self, beta: f64, energy_function: F, rng: &mut R)
-    where
-        F: Fn(&CO) -> i32,
+        where
+            F: Fn(&CO) -> i32,
     {
         let trie = self.trie.take().unwrap();
 
@@ -367,14 +366,15 @@ where
         self.trie = Some(trie);
     }
 
+    /// Run a pass of the optimizer.
     pub fn run_optimizer_pass<F, R: Rng>(
         &mut self,
         beta: f64,
         energy_function: F,
         rng: &mut R,
     ) -> CircuitResult<()>
-    where
-        F: Fn(&CO) -> i32,
+        where
+            F: Fn(&CO) -> i32,
     {
         // Sort by index to group similar operators.
         self.sort_by_index();
@@ -498,9 +498,9 @@ mod mc_opt_tests {
     use rand::thread_rng;
 
     fn is_sorted<It, T>(it: It) -> bool
-    where
-        It: IntoIterator<Item = T>,
-        T: Ord,
+        where
+            It: IntoIterator<Item=T>,
+            T: Ord,
     {
         it.into_iter()
             .try_fold(None, |acc, i| match acc {

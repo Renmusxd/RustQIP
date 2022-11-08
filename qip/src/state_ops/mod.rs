@@ -1,3 +1,4 @@
+/// Iterators for modifying states.
 pub mod iterators;
 /// Operations on matrices.
 pub mod matrix_ops;
