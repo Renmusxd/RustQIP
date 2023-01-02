@@ -21,7 +21,7 @@ optimization = []
 num-rational = "^0.4"
 num-traits = "^0.2"
 num-complex = "^0.4"
-rayon = { version = "^1.5", optional = true }
+rayon = { version = "^1.6", optional = true }
 rand = "^0.8"
 smallvec = "^1.10"
 
