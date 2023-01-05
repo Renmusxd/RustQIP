@@ -6,14 +6,14 @@ Quantum Computing library leveraging graph building to build efficient quantum c
 [![qip docs](https://img.shields.io/badge/docs-docs.rs-orange.svg)](https://docs.rs/qip)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
 
-See all the examples in the [examples directory](https://github.com/Renmusxd/RustQIP/tree/master/examples).
+See all the examples in the [examples directory](https://github.com/Renmusxd/RustQIP/tree/master/qip/examples).
 
 *PRs welcome*
 
 Rust is a great language for quantum computing with gate models because the borrow checker
 is very similar to the [No-cloning theorem](https://wikipedia.org/wiki/No-cloning_theorem).
 
-See all the examples in the [examples directory](https://github.com/Renmusxd/RustQIP/tree/master/examples) of the Github
+See all the examples in the [examples directory](https://github.com/Renmusxd/RustQIP/tree/master/qip/examples) of the Github
 repository.
 
 # Example (CSWAP)
