@@ -15,7 +15,6 @@ default = ["parallel"]
 parallel = ["rayon"]
 macros = ["qip-macros"]
 boolean_circuits = ["macros"]
-optimization = []
 
 [dependencies]
 num-rational = "^0.4"

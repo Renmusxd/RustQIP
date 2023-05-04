@@ -249,9 +249,6 @@ pub mod inverter;
 /// Types for helping procedural macros.
 #[cfg(feature = "macros")]
 pub mod macros;
-/// Functions for optimizing circuits with monte carlo.
-#[cfg(feature = "optimization")]
-pub mod optimizer;
 /// Standard quantum fourier transform implementation.
 pub mod qfft;
 /// Helpers for converting from synchronous to parallel iterators.
