@@ -1,6 +1,6 @@
 [package]
 name = "qip-macros"
-version = "1.0.0-beta.0"
+version = "1.0.0"
 authors = ["Sumner Hearth <sumnernh@gmail.com>"]
 description = "A procedural macro for QIP"
 repository = "https://github.com/Renmusxd/RustQIP"
