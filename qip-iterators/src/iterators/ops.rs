@@ -1,21 +1,19 @@
-use num_complex::Complex;
-use qip_types::Precision;
 use std::fmt;
 
 /// Ops which can be applied to quantum states.
 #[derive(Clone)]
-pub enum UnitaryOp<P: Precision> {
+pub enum UnitaryOp<P> {
     /// Indices, Matrix data
-    Matrix(Vec<usize>, Vec<Complex<P>>),
+    Matrix(Vec<usize>, Vec<P>),
     /// Indices, per row [(col, value)]
-    SparseMatrix(Vec<usize>, Vec<Vec<(usize, Complex<P>)>>),
+    SparseMatrix(Vec<usize>, Vec<Vec<(usize, P)>>),
     /// A indices, B indices
     Swap(Vec<usize>, Vec<usize>),
     /// Control indices, Op indices, Op
     Control(Vec<usize>, Vec<usize>, Box<UnitaryOp<P>>),
 }
 
-impl<P: Precision> fmt::Debug for UnitaryOp<P> {
+impl<P> fmt::Debug for UnitaryOp<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (name, indices) = match self {
             UnitaryOp::Matrix(indices, _) => ("Matrix".to_string(), indices.clone()),
@@ -43,7 +41,7 @@ impl<P: Precision> fmt::Debug for UnitaryOp<P> {
 }
 
 /// Get the number of indices represented by `op`
-pub fn num_indices<P: Precision>(op: &UnitaryOp<P>) -> usize {
+pub fn num_indices<P>(op: &UnitaryOp<P>) -> usize {
     match &op {
         UnitaryOp::Matrix(indices, _) => indices.len(),
         UnitaryOp::SparseMatrix(indices, _) => indices.len(),

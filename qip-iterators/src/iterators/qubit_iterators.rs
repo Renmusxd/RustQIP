@@ -1,22 +1,26 @@
-use num_complex::Complex;
-use num_traits::One;
-use qip_types::Precision;
+use num_traits::{One, Zero};
 use std::marker::PhantomData;
 
 use crate::utils::*;
 
 /// Iterator which provides the indices of nonzero columns for a given row of a matrix
 #[derive(Debug)]
-pub struct MatrixOpIterator<'a, P: Precision> {
+pub struct MatrixOpIterator<'a, P>
+where
+    P: Clone + Zero,
+{
     n: usize,
-    data: &'a [Complex<P>],
+    data: &'a [P],
     last_col: Option<usize>,
 }
 
-impl<'a, P: Precision> MatrixOpIterator<'a, P> {
+impl<'a, P> MatrixOpIterator<'a, P>
+where
+    P: Clone + Zero,
+{
     /// Build a new iterator using the row index, the number of qubits in the matrix, and the
     /// complex values of the matrix.
-    pub fn new(row: usize, n: usize, data: &'a [Complex<P>]) -> MatrixOpIterator<P> {
+    pub fn new(row: usize, n: usize, data: &'a [P]) -> MatrixOpIterator<P> {
         let lower = get_flat_index(n, row, 0);
         let upper = get_flat_index(n, row, 1 << n);
         MatrixOpIterator {
@@ -27,8 +31,11 @@ impl<'a, P: Precision> MatrixOpIterator<'a, P> {
     }
 }
 
-impl<'a, P: Precision> Iterator for MatrixOpIterator<'a, P> {
-    type Item = (usize, Complex<P>);
+impl<'a, P> Iterator for MatrixOpIterator<'a, P>
+where
+    P: Clone + Zero,
+{
+    type Item = (usize, P);
 
     fn next(&mut self) -> Option<Self::Item> {
         let pos = if let Some(last_col) = self.last_col {
@@ -38,10 +45,10 @@ impl<'a, P: Precision> Iterator for MatrixOpIterator<'a, P> {
         };
         self.last_col = None;
         for col in pos..(1 << self.n) {
-            let val = self.data[col];
-            if val != Complex::default() {
+            let val = &self.data[col];
+            if !val.is_zero() {
                 self.last_col = Some(col);
-                return Some((col, val));
+                return Some((col, val.clone()));
             }
         }
         None
@@ -50,14 +57,20 @@ impl<'a, P: Precision> Iterator for MatrixOpIterator<'a, P> {
 
 /// Iterator which provides the indices of nonzero columns for a given row of a sparse matrix
 #[derive(Debug)]
-pub struct SparseMatrixOpIterator<'a, P: Precision> {
-    data: &'a [(usize, Complex<P>)],
+pub struct SparseMatrixOpIterator<'a, P>
+where
+    P: Clone,
+{
+    data: &'a [(usize, P)],
     last_index: Option<usize>,
 }
 
-impl<'a, P: Precision> SparseMatrixOpIterator<'a, P> {
+impl<'a, P> SparseMatrixOpIterator<'a, P>
+where
+    P: Clone,
+{
     /// Build a new iterator using the row index, and the sparse matrix data.
-    pub fn new(row: usize, data: &'a [Vec<(usize, Complex<P>)>]) -> SparseMatrixOpIterator<P> {
+    pub fn new(row: usize, data: &'a [Vec<(usize, P)>]) -> SparseMatrixOpIterator<P> {
         SparseMatrixOpIterator {
             data: &data[row],
             last_index: None,
@@ -65,8 +78,11 @@ impl<'a, P: Precision> SparseMatrixOpIterator<'a, P> {
     }
 }
 
-impl<'a, P: Precision> Iterator for SparseMatrixOpIterator<'a, P> {
-    type Item = (usize, Complex<P>);
+impl<'a, P> Iterator for SparseMatrixOpIterator<'a, P>
+where
+    P: Clone,
+{
+    type Item = (usize, P);
 
     fn next(&mut self) -> Option<Self::Item> {
         let pos = if let Some(last_index) = self.last_index {
@@ -80,21 +96,29 @@ impl<'a, P: Precision> Iterator for SparseMatrixOpIterator<'a, P> {
             None
         } else {
             self.last_index = Some(pos);
-            Some(self.data[pos])
+            Some(self.data[pos].clone())
         }
     }
 }
 
 /// Iterator which provides the indices of nonzero columns for a given row of a COp
 #[derive(Debug)]
-pub struct ControlledOpIterator<P: Precision, It: Iterator<Item = (usize, Complex<P>)>> {
+pub struct ControlledOpIterator<P, It>
+where
+    P: Clone + Zero,
+    It: Iterator<Item = (usize, P)>,
+{
     row: usize,
     index_threshold: usize,
     op_iter: Option<It>,
     last_col: Option<usize>,
 }
 
-impl<P: Precision, It: Iterator<Item = (usize, Complex<P>)>> ControlledOpIterator<P, It> {
+impl<P, It> ControlledOpIterator<P, It>
+where
+    P: Clone + Zero,
+    It: Iterator<Item = (usize, P)>,
+{
     /// Build a new iterator using the row index, the number of controlling indices, the number of
     /// op indices, and the iterator for the op.
     pub fn new<F: FnOnce(usize) -> It>(
@@ -119,16 +143,18 @@ impl<P: Precision, It: Iterator<Item = (usize, Complex<P>)>> ControlledOpIterato
     }
 }
 
-impl<P: Precision, It: Iterator<Item = (usize, Complex<P>)>> Iterator
-    for ControlledOpIterator<P, It>
+impl<P, It> Iterator for ControlledOpIterator<P, It>
+where
+    P: Clone + Zero + One,
+    It: Iterator<Item = (usize, P)>,
 {
-    type Item = (usize, Complex<P>);
+    type Item = (usize, P);
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(it) = &mut self.op_iter {
             let cval = it.next();
             let ret_val = cval.map(|(i, val)| (i + self.index_threshold, val));
-            self.last_col = ret_val.map(|(i, _)| i);
+            self.last_col = ret_val.as_ref().map(|(i, _)| *i);
             ret_val
         } else {
             if let Some(last_col) = self.last_col {
@@ -140,21 +166,27 @@ impl<P: Precision, It: Iterator<Item = (usize, Complex<P>)>> Iterator
             } else {
                 self.last_col = Some(self.row);
             }
-            self.last_col.map(|c| (c, Complex::<P>::one()))
+            self.last_col.map(|c| (c, P::one()))
         }
     }
 }
 
 /// Iterator which provides the indices of nonzero columns for a given row of a SwapOp
 #[derive(Debug)]
-pub struct SwapOpIterator<P: Precision> {
+pub struct SwapOpIterator<P>
+where
+    P: One,
+{
     row: usize,
     half_n: usize,
     last_col: Option<usize>,
     phantom: PhantomData<P>,
 }
 
-impl<P: Precision> SwapOpIterator<P> {
+impl<P> SwapOpIterator<P>
+where
+    P: One,
+{
     /// Build a new iterator using the row index, and the total number of qubits being swapped
     /// (should be a multiple of 2).
     pub fn new(row: usize, n_qubits: usize) -> SwapOpIterator<P> {
@@ -167,8 +199,11 @@ impl<P: Precision> SwapOpIterator<P> {
     }
 }
 
-impl<P: Precision> Iterator for SwapOpIterator<P> {
-    type Item = (usize, Complex<P>);
+impl<P> Iterator for SwapOpIterator<P>
+where
+    P: One,
+{
+    type Item = (usize, P);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.last_col.is_none() {
@@ -179,13 +214,13 @@ impl<P: Precision> Iterator for SwapOpIterator<P> {
         } else {
             self.last_col = None;
         }
-        self.last_col.map(|col| (col, Complex::<P>::one()))
+        self.last_col.map(|col| (col, P::one()))
     }
 }
 
 /// Iterator which provides the indices of nonzero columns for a given function.
 #[derive(Debug)]
-pub struct FunctionOpIterator<P: Precision> {
+pub struct FunctionOpIterator<P> {
     output_n: usize,
     x: usize,
     fx_xor_y: usize,
@@ -194,10 +229,10 @@ pub struct FunctionOpIterator<P: Precision> {
     phantom: PhantomData<P>,
 }
 
-impl<P: Precision> FunctionOpIterator<P> {
+impl<P> FunctionOpIterator<P> {
     /// Build a new iterator using the row index, the number of qubits in the input register, the
     /// number in the output register, and a function which maps rows to a column and a phase.
-    pub fn new<F: Fn(usize) -> (usize, f64)>(
+    pub fn new<F: Fn(usize) -> (usize, P)>(
         row: usize,
         input_n: usize,
         output_n: usize,
@@ -207,7 +242,6 @@ impl<P: Precision> FunctionOpIterator<P> {
         let (fx, theta) = f(flip_bits(input_n, x));
         let y = row & ((1 << output_n) - 1);
         let fx_xor_y = y ^ flip_bits(output_n, fx);
-        let theta = P::from(theta).unwrap();
         FunctionOpIterator {
             output_n,
             x,
@@ -219,8 +253,11 @@ impl<P: Precision> FunctionOpIterator<P> {
     }
 }
 
-impl<P: Precision> Iterator for FunctionOpIterator<P> {
-    type Item = (usize, Complex<P>);
+impl<P> Iterator for FunctionOpIterator<P>
+where
+    P: Clone,
+{
+    type Item = (usize, P);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.last_col.is_some() {
@@ -229,21 +266,21 @@ impl<P: Precision> Iterator for FunctionOpIterator<P> {
             let colbits = (self.x << self.output_n) | self.fx_xor_y;
             self.last_col = Some(colbits);
         };
-        self.last_col
-            .map(|col| (col, Complex::from_polar(P::one(), self.theta)))
+        self.last_col.map(|col| (col, self.theta.clone()))
     }
 }
 
 #[cfg(test)]
 mod iterator_tests {
     use super::*;
+    use num_complex::Complex;
     use num_traits::One;
 
     /// Make a vector of complex numbers whose reals are given by `data`
-    pub fn from_reals<P: Precision>(data: &[P]) -> Vec<Complex<P>> {
+    pub fn from_reals<P: Zero + Clone>(data: &[P]) -> Vec<Complex<P>> {
         data.iter()
             .map(|x| Complex::<P> {
-                re: *x,
+                re: x.clone(),
                 im: P::zero(),
             })
             .collect()

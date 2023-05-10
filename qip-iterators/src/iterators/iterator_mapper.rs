@@ -1,31 +1,27 @@
 use crate::iterators::*;
-use num_complex::Complex;
-use qip_types::Precision;
+use num_traits::{One, Zero};
+use std::iter::Sum;
+use std::ops::Mul;
 
 /// Using the function `f` which maps from a column and `row` to a complex value for the op matrix,
 /// sums for all nonzero entries for a given `op` more efficiently than trying each column between
 /// 0 and 2^nindices.
 /// This really needs to be cleaned up, but runs in a tight loop. This makes it hard since Box
 /// is unfeasible and the iterator types aren't the same size.
-pub fn sum_for_op_cols<T, P: Precision, F>(
-    nindices: usize,
-    row: usize,
-    op: &UnitaryOp<P>,
-    f: F,
-) -> T
+pub fn sum_for_op_cols<T, P, F>(nindices: usize, row: usize, op: &UnitaryOp<P>, f: F) -> T
 where
-    T: std::iter::Sum,
-    F: Fn((usize, Complex<P>)) -> T,
+    T: Sum,
+    P: Clone + Zero + One,
+    F: Fn((usize, P)) -> T,
 {
     act_on_iterator(nindices, row, op, move |iter| iter.map(f).sum())
 }
 
 /// Like `sum_for_op_cols` but takes multiple ops at once.
-pub fn sum_for_ops_cols<P: Precision, F: Fn((usize, Complex<P>)) -> Complex<P>>(
-    row: usize,
-    ops: &[UnitaryOp<P>],
-    f: F,
-) -> Complex<P> {
+pub fn sum_for_ops_cols<P, F: Fn((usize, P)) -> P>(row: usize, ops: &[UnitaryOp<P>], f: F) -> P
+where
+    P: Sum + Clone + Mul + One + Zero,
+{
     let ns = ops.iter().map(num_indices).collect::<Vec<_>>();
     let (v, _) =
         ops.iter()
@@ -48,25 +44,24 @@ pub fn sum_for_ops_cols<P: Precision, F: Fn((usize, Complex<P>)) -> Complex<P>>(
 }
 
 /// Fold across rows hitting nonzero columns.
-pub fn fold_for_op_cols<P: Precision, T, F: Fn(T, (usize, Complex<P>)) -> T>(
+pub fn fold_for_op_cols<P, T, F: Fn(T, (usize, P)) -> T>(
     nindices: usize,
     row: usize,
     op: &UnitaryOp<P>,
     init: T,
     f: F,
-) -> T {
+) -> T
+where
+    P: Clone + Zero + One,
+{
     act_on_iterator(nindices, row, op, move |iter| iter.fold(init, f))
 }
 
 /// Apply function f to the iterator for `op`, return result.
-pub fn act_on_iterator<T, F, P: Precision>(
-    nindices: usize,
-    row: usize,
-    op: &UnitaryOp<P>,
-    f: F,
-) -> T
+pub fn act_on_iterator<T, F, P>(nindices: usize, row: usize, op: &UnitaryOp<P>, f: F) -> T
 where
-    F: FnOnce(&mut dyn Iterator<Item = (usize, Complex<P>)>) -> T,
+    F: FnOnce(&mut dyn Iterator<Item = (usize, P)>) -> T,
+    P: Clone + Zero + One,
 {
     match &op {
         UnitaryOp::Matrix(_, data) => f(&mut MatrixOpIterator::new(row, nindices, data)),
@@ -82,7 +77,7 @@ where
     }
 }
 
-fn act_on_control_iterator<T, F, P: Precision>(
+fn act_on_control_iterator<T, F, P>(
     row: usize,
     op: &UnitaryOp<P>,
     n_control_indices: usize,
@@ -90,7 +85,8 @@ fn act_on_control_iterator<T, F, P: Precision>(
     f: F,
 ) -> T
 where
-    F: FnOnce(&mut dyn Iterator<Item = (usize, Complex<P>)>) -> T,
+    F: FnOnce(&mut dyn Iterator<Item = (usize, P)>) -> T,
+    P: Clone + One + Zero + Mul,
 {
     match &op {
         UnitaryOp::Matrix(_, data) => {

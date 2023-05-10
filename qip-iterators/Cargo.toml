@@ -12,10 +12,11 @@ default = ["parallel"]
 parallel = ["rayon"]
 
 [dependencies]
-num-rational = "^0.4"
 num-traits = "^0.2"
-num-complex = "^0.4"
 rayon = { version = "^1.7", optional = true }
 
 [dependencies.qip-types]
 path = "../qip-types"
+
+[dev-dependencies]
+num-complex = "^0.4"

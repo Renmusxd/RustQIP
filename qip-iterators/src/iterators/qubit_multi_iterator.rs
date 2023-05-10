@@ -1,22 +1,21 @@
-use num_complex::Complex;
 use num_traits::One;
-use qip_types::Precision;
+use std::ops::Mul;
 
 /// Iterator which provides the indices of nonzero columns for a given row for a collection of ops.
 #[derive(Debug)]
-pub struct MultiOpIterator<'a, P: Precision> {
+pub struct MultiOpIterator<'a, P> {
     iter_ns: &'a [usize],
-    iter_outputs: &'a [&'a [(usize, Complex<P>)]],
+    iter_outputs: &'a [&'a [(usize, P)]],
     curr_poss: Vec<usize>,
     overflow: bool,
 }
 
-impl<'a, P: Precision> MultiOpIterator<'a, P> {
+impl<'a, P> MultiOpIterator<'a, P> {
     /// Build a new iterator using the number of qubits in each sub iterator, and the outputs of
     /// said iterators on a given row.
     pub fn new(
         iter_ns: &'a [usize],
-        iter_outputs: &'a [&'a [(usize, Complex<P>)]],
+        iter_outputs: &'a [&'a [(usize, P)]],
     ) -> MultiOpIterator<'a, P> {
         let curr_poss: Vec<usize> = iter_ns.iter().map(|_| 0).collect();
         MultiOpIterator {
@@ -28,15 +27,18 @@ impl<'a, P: Precision> MultiOpIterator<'a, P> {
     }
 }
 
-impl<'a, P: Precision> Iterator for MultiOpIterator<'a, P> {
-    type Item = (usize, Complex<P>);
+impl<'a, P> Iterator for MultiOpIterator<'a, P>
+where
+    P: One + Clone + Mul<P>,
+{
+    type Item = (usize, P);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.overflow {
             self.overflow = false;
             None
         } else {
-            let init = (0usize, Complex::one());
+            let init = (0usize, P::one());
             let ret_val = self
                 .curr_poss
                 .iter()
@@ -44,7 +46,7 @@ impl<'a, P: Precision> Iterator for MultiOpIterator<'a, P> {
                 .zip(self.iter_ns.iter().cloned())
                 .zip(self.iter_outputs.iter())
                 .fold(init, |(acc_col, acc_val), ((cur_pos, n_pos), outs)| {
-                    let (col, val) = outs[cur_pos];
+                    let (col, val) = outs[cur_pos].clone();
                     let acc_col = (acc_col << n_pos) | col;
                     (acc_col, acc_val * val)
                 });
@@ -77,6 +79,7 @@ impl<'a, P: Precision> Iterator for MultiOpIterator<'a, P> {
 #[cfg(test)]
 mod multi_iter_tests {
     use super::*;
+    use num_complex::Complex;
 
     #[test]
     fn test_trivial() {

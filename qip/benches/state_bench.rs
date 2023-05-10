@@ -6,7 +6,7 @@ use qip_iterators::iterators::UnitaryOp;
 
 /// Make the full op matrix from `ops`.
 /// Not very efficient, use only for debugging.
-fn make_ops_matrix(n: usize, ops: &[&UnitaryOp<f64>]) -> Vec<Vec<Complex<f64>>> {
+fn make_ops_matrix(n: usize, ops: &[&UnitaryOp<Complex<f64>>]) -> Vec<Vec<Complex<f64>>> {
     let zeros: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     (0..1 << n)
         .map(|i| {
@@ -29,7 +29,6 @@ mod tests {
     extern crate test;
 
     use qip::state_ops::matrix_ops::{apply_ops, make_control_op, make_matrix_op};
-    use qip_iterators::iterators::UnitaryOp;
     use qip_iterators::iterators::UnitaryOp::{Matrix, SparseMatrix};
     use test::Bencher;
 
@@ -39,7 +38,9 @@ mod tests {
 
         let mat = from_reals(&[1.0, 0.0, 0.0, 1.0]);
 
-        let ops: Vec<UnitaryOp<f64>> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
+        let ops = (0..n)
+            .map(|i| Matrix(vec![i], mat.clone()))
+            .collect::<Vec<_>>();
         let ops_ref = ops.iter().collect::<Vec<_>>();
 
         let mat_nested = make_ops_matrix(n, &ops_ref);
@@ -60,7 +61,9 @@ mod tests {
         let mult = (1.0 / 2.0f64).sqrt();
         let mat = from_reals(&[mult, mult, mult, -mult]);
 
-        let ops: Vec<UnitaryOp<f64>> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
+        let ops = (0..n)
+            .map(|i| Matrix(vec![i], mat.clone()))
+            .collect::<Vec<_>>();
         let ops_ref = ops.iter().collect::<Vec<_>>();
 
         let mat_nested = make_ops_matrix(n, &ops_ref);
@@ -94,7 +97,9 @@ mod tests {
 
         let mat = from_reals(&[1.0, 0.0, 0.0, 1.0]);
 
-        let ops: Vec<UnitaryOp<f64>> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
+        let ops = (0..n)
+            .map(|i| Matrix(vec![i], mat.clone()))
+            .collect::<Vec<_>>();
         let ops_ref = ops.iter().collect::<Vec<_>>();
 
         let mat_nested = make_ops_matrix(n, &ops_ref);
@@ -115,7 +120,9 @@ mod tests {
         let mult = (1.0 / 2.0f64).sqrt();
         let mat = from_reals(&[mult, mult, mult, -mult]);
 
-        let ops: Vec<UnitaryOp<f64>> = (0..n).map(|i| Matrix(vec![i], mat.clone())).collect();
+        let ops = (0..n)
+            .map(|i| Matrix(vec![i], mat.clone()))
+            .collect::<Vec<_>>();
         let ops_ref = ops.iter().collect::<Vec<_>>();
 
         let mat_nested = make_ops_matrix(n, &ops_ref);
