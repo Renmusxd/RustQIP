@@ -242,6 +242,8 @@ pub mod builder;
 pub mod builder_traits;
 /// Traits for constructing conditioned circuit builders.
 pub mod conditioning;
+/// Circuit builder error types.
+pub mod errors;
 /// Functions and traits for inverting circuits.
 pub mod inverter;
 /// Types for helping procedural macros.
@@ -257,8 +259,8 @@ pub mod types;
 pub mod utils;
 
 pub use num_complex::Complex;
-pub use qip_types::Precision;
 pub use rand;
+pub use types::*;
 
 /// Commonly used types and traits.
 /// ```
@@ -269,6 +271,6 @@ pub mod prelude {
     pub use crate::builder::LocalBuilder;
     pub use crate::builder_traits::*;
     pub use crate::conditioning::*;
+    pub use crate::errors::*;
     pub use crate::inverter::RecursiveCircuitBuilder;
-    pub use qip_types::errors::*;
 }

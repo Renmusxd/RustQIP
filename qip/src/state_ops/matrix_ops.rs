@@ -1,3 +1,6 @@
+/// Contains functions, structs, and enums for storing and manipulating the quantum state.
+use crate::errors::{CircuitError, CircuitResult};
+use crate::types::Representation;
 use crate::utils::*;
 use crate::{Complex, Precision};
 use num_traits::One;
@@ -5,9 +8,6 @@ use qip_iterators::iterators::UnitaryOp;
 use qip_iterators::iterators::*;
 use qip_iterators::utils::{flip_bits, get_flat_index};
 use qip_iterators::{iter, iter_mut};
-/// Contains functions, structs, and enums for storing and manipulating the quantum state.
-use qip_types::errors::{CircuitError, CircuitResult};
-use qip_types::Representation;
 use std::cmp::{max, min};
 
 /// Make a Matrix UnitaryOp

@@ -1,11 +1,11 @@
 use crate::builder_traits::{QubitRegister, SplitResult, Subcircuitable};
+use crate::errors::{CircuitError, CircuitResult};
 use crate::inverter::Invertable;
 use crate::inverter::RecursiveCircuitBuilder;
 use crate::prelude::*;
+use crate::types::Precision;
 use num_complex::Complex;
 use num_rational::Rational64;
-use qip_types::errors::{CircuitError, CircuitResult};
-use qip_types::Precision;
 use std::num::NonZeroUsize;
 
 /// A CircuitBuilder is conditionable if it can condition all unitaries with a given register.

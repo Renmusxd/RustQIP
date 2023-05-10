@@ -30,6 +30,3 @@ optional = true
 
 [dependencies.qip-iterators]
 path = "../qip-iterators"
-
-[dependencies.qip-types]
-path = "../qip-types"

@@ -1,10 +1,10 @@
 extern crate self as qip;
 
+use crate::errors::CircuitError;
 use crate::inverter::RecursiveCircuitBuilder;
 use crate::macros::program_ops::*;
 use crate::prelude::*;
 use qip_macros::*;
-use qip_types::errors::CircuitError;
 use std::num::NonZeroUsize;
 
 /// A collection of circuits from chapter 6.4 of "Quantum Computing: A gentle introduction"

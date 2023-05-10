@@ -1,8 +1,8 @@
+use crate::errors::{CircuitError, CircuitResult};
+use crate::types::Precision;
 use num_complex::Complex;
 use num_rational::Rational64;
 use num_traits::{One, Zero};
-use qip_types::errors::{CircuitError, CircuitResult};
-use qip_types::Precision;
 use std::fmt::Debug;
 use std::num::NonZeroUsize;
 

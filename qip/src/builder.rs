@@ -1,14 +1,14 @@
 use crate::builder_traits::*;
 use crate::conditioning::{Conditionable, ConditionableSubcircuit};
+use crate::errors::{CircuitError, CircuitResult};
 use crate::inverter::Invertable;
 use crate::inverter::RecursiveCircuitBuilder;
 use crate::state_ops::matrix_ops::{apply_op, make_control_op, make_matrix_op, make_swap_op};
 use crate::state_ops::measurement_ops::{measure, measure_probs};
+use crate::types::Precision;
 use crate::Complex;
 use num_rational::{Ratio, Rational64};
 use num_traits::{One, ToPrimitive, Zero};
-use qip_types::errors::{CircuitError, CircuitResult};
-use qip_types::Precision;
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::ops::Neg;

@@ -15,8 +15,5 @@ parallel = ["rayon"]
 num-traits = "^0.2"
 rayon = { version = "^1.7", optional = true }
 
-[dependencies.qip-types]
-path = "../qip-types"
-
 [dev-dependencies]
 num-complex = "^0.4"

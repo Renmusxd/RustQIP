@@ -2,8 +2,8 @@ use crate::builder_traits::{
     AdvancedCircuitBuilder, CircuitBuilder, QubitRegister, SplitManyResult, Subcircuitable,
 };
 use crate::conditioning::{Conditionable, ConditionableSubcircuit};
-use qip_types::errors::CircuitResult;
-use qip_types::Precision;
+use crate::errors::CircuitResult;
+use crate::types::Precision;
 
 /// A trait which recursively requires that subcircuit builders also implement the traits the
 /// original circuit builders implemented. This allows passing to functions which may arbitrarily
