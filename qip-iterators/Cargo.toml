@@ -1,6 +1,10 @@
 [package]
 name = "qip-iterators"
-version = "0.1.0"
+version = "1.0.0"
+authors = ["Sumner Hearth <sumnernh@gmail.com>"]
+description = "Iterators for tensor product matrix multiplication"
+repository = "https://github.com/Renmusxd/RustQIP"
+license = "MIT"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

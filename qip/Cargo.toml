@@ -1,6 +1,6 @@
 [package]
 name = "qip"
-version = "1.0.1"
+version = "1.1.0"
 authors = ["Sumner Hearth <sumnernh@gmail.com>"]
 description = "A library for efficient quantum computing simulations."
 repository = "https://github.com/Renmusxd/RustQIP"
@@ -26,7 +26,9 @@ smallvec = "^1.10"
 
 [dependencies.qip-macros]
 version = "1.0.0"
+path = "../qip-macros"
 optional = true
 
 [dependencies.qip-iterators]
+version = "1.0.0"
 path = "../qip-iterators"
