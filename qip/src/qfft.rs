@@ -1,7 +1,7 @@
 use crate::builder_traits::{CliffordTBuilder, RotationsBuilder};
 use crate::conditioning::Conditionable;
-use crate::errors::{CircuitError, CircuitResult};
-use crate::Precision;
+use qip_types::errors::{CircuitError, CircuitResult};
+use qip_types::Precision;
 
 /// Applies a quantum fourier transform to registers `r`.
 pub fn qfft<P, CB>(b: &mut CB, r: CB::Register) -> CircuitResult<CB::Register>

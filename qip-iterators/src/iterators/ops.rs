@@ -1,5 +1,5 @@
-use crate::types::Precision;
 use num_complex::Complex;
+use qip_types::Precision;
 use std::fmt;
 
 /// Ops which can be applied to quantum states.
@@ -39,5 +39,15 @@ impl<P: Precision> fmt::Debug for UnitaryOp<P> {
             .collect::<Vec<String>>();
 
         write!(f, "{}[{}]", name, int_strings.join(", "))
+    }
+}
+
+/// Get the number of indices represented by `op`
+pub fn num_indices<P: Precision>(op: &UnitaryOp<P>) -> usize {
+    match &op {
+        UnitaryOp::Matrix(indices, _) => indices.len(),
+        UnitaryOp::SparseMatrix(indices, _) => indices.len(),
+        UnitaryOp::Swap(a, b) => a.len() + b.len(),
+        UnitaryOp::Control(cs, os, _) => cs.len() + os.len(),
     }
 }

@@ -1,14 +1,14 @@
 use crate::builder_traits::*;
 use crate::conditioning::{Conditionable, ConditionableSubcircuit};
-use crate::errors::{CircuitError, CircuitResult};
 use crate::inverter::Invertable;
 use crate::inverter::RecursiveCircuitBuilder;
 use crate::state_ops::matrix_ops::{apply_op, make_control_op, make_matrix_op, make_swap_op};
 use crate::state_ops::measurement_ops::{measure, measure_probs};
-use crate::types::Precision;
 use crate::Complex;
 use num_rational::{Ratio, Rational64};
 use num_traits::{One, ToPrimitive, Zero};
+use qip_types::errors::{CircuitError, CircuitResult};
+use qip_types::Precision;
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::ops::Neg;
@@ -76,8 +76,8 @@ impl QubitRegister for Qudit {
 
 impl Qudit {
     fn new<It>(indices: It) -> Option<Self>
-        where
-            It: Into<Vec<usize>>,
+    where
+        It: Into<Vec<usize>>,
     {
         let indices = indices.into();
         if !indices.is_empty() {
@@ -87,8 +87,8 @@ impl Qudit {
         }
     }
     fn new_from_iter<It>(indices: It) -> Option<Self>
-        where
-            It: Iterator<Item=usize>,
+    where
+        It: Iterator<Item = usize>,
     {
         let indices = indices.into_iter().collect::<Vec<_>>();
         Self::new(indices)
@@ -332,8 +332,8 @@ impl<P: Precision> CircuitBuilder for LocalBuilder<P> {
         r: Self::Register,
         indices: It,
     ) -> SplitResult<Self::Register>
-        where
-            It: IntoIterator<Item=usize>,
+    where
+        It: IntoIterator<Item = usize>,
     {
         let selected_indices = indices.into_iter().filter_map(|i| {
             if i <= r.indices.len() {
@@ -383,9 +383,9 @@ impl<P: Precision> CircuitBuilder for LocalBuilder<P> {
     }
 
     fn calculate_state_with_init<'a, It>(&mut self, it: It) -> Self::StateCalculation
-        where
-            Self::Register: 'a,
-            It: IntoIterator<Item=(&'a Self::Register, usize)>,
+    where
+        Self::Register: 'a,
+        It: IntoIterator<Item = (&'a Self::Register, usize)>,
     {
         let n = self.n();
         let mut state = vec![Complex::zero(); 1 << n];
@@ -866,9 +866,9 @@ fn apply_pipeline_objects<CB, CO>(
     sc: CB::Subcircuit,
     r: CB::Register,
 ) -> CircuitResult<CB::Register>
-    where
-        CB: CircuitBuilder<CircuitObject=CO>
-        + Subcircuitable<Subcircuit=Vec<(Vec<usize>, CO)>>
+where
+    CB: CircuitBuilder<CircuitObject = CO>
+        + Subcircuitable<Subcircuit = Vec<(Vec<usize>, CO)>>
         + TemporaryRegisterBuilder,
 {
     let rn = r.n();
@@ -1030,9 +1030,9 @@ pub mod optimizers {
             &self,
             rules: It,
         ) -> CircuitResult<MonteCarloOptimizer<BuilderCircuitObjectType<P>>>
-            where
-                S: AsRef<str>,
-                It: IntoIterator<Item=S>,
+        where
+            S: AsRef<str>,
+            It: IntoIterator<Item = S>,
         {
             let trie = IndexTrie::new_from_lines(rules, Self::simple_map_strings)?;
             self.make_circuit_optimizer_from_trie(trie)
@@ -1043,8 +1043,8 @@ pub mod optimizers {
             &self,
             filepath: S,
         ) -> CircuitResult<MonteCarloOptimizer<BuilderCircuitObjectType<P>>>
-            where
-                S: AsRef<Path>,
+        where
+            S: AsRef<Path>,
         {
             let trie = IndexTrie::new_from_filepath(filepath, Self::simple_map_strings)?;
             self.make_circuit_optimizer_from_trie(trie)
@@ -1052,8 +1052,8 @@ pub mod optimizers {
 
         /// Apply the resulting optmized circuit to a qudit `r`.
         pub fn apply_optimizer_circuit<It>(&mut self, r: Qudit, it: It) -> CircuitResult<Qudit>
-            where
-                It: IntoIterator<Item=(Vec<usize>, BuilderCircuitObjectType<P>)>,
+        where
+            It: IntoIterator<Item = (Vec<usize>, BuilderCircuitObjectType<P>)>,
         {
             it.into_iter().try_fold(
                 r,

@@ -2,9 +2,9 @@
 pub(crate) use rayon::prelude::*;
 
 use crate::utils::extract_bits;
-use crate::{into_iter, iter, iter_mut};
 use crate::{Complex, Precision};
 use num_traits::Zero;
+use qip_iterators::{into_iter, iter, iter_mut};
 use std::cmp::{max, min};
 
 /// Get total magnitude of state.

@@ -1,6 +1,6 @@
-use crate::errors::CircuitResult;
 use crate::prelude::{AdvancedCircuitBuilder, CliffordTBuilder};
-use crate::Precision;
+use qip_types::errors::CircuitResult;
+use qip_types::Precision;
 
 macro_rules! make_single_qubit_op {
     ($opname:ident, $funccall:ident) => {

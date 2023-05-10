@@ -1,9 +1,8 @@
+use num_complex::Complex;
+use num_traits::One;
+use qip_types::Precision;
 use std::marker::PhantomData;
 
-use crate::Complex;
-use num_traits::One;
-
-use crate::types::Precision;
 use crate::utils::*;
 
 /// Iterator which provides the indices of nonzero columns for a given row of a matrix
@@ -238,8 +237,17 @@ impl<P: Precision> Iterator for FunctionOpIterator<P> {
 #[cfg(test)]
 mod iterator_tests {
     use super::*;
-    use crate::state_ops::matrix_ops::from_reals;
     use num_traits::One;
+
+    /// Make a vector of complex numbers whose reals are given by `data`
+    pub fn from_reals<P: Precision>(data: &[P]) -> Vec<Complex<P>> {
+        data.iter()
+            .map(|x| Complex::<P> {
+                re: *x,
+                im: P::zero(),
+            })
+            .collect()
+    }
 
     #[test]
     fn test_mat_iterator() {

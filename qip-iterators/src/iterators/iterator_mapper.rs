@@ -1,9 +1,6 @@
-use super::ops::UnitaryOp;
-use super::qubit_iterators::*;
-use crate::state_ops::iterators::MultiOpIterator;
-use crate::state_ops::matrix_ops::num_indices;
-use crate::types::Precision;
-use crate::Complex;
+use crate::iterators::*;
+use num_complex::Complex;
+use qip_types::Precision;
 
 /// Using the function `f` which maps from a column and `row` to a complex value for the op matrix,
 /// sums for all nonzero entries for a given `op` more efficiently than trying each column between

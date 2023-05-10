@@ -1,11 +1,13 @@
-/// Contains functions, structs, and enums for storing and manipulating the quantum state.
-use crate::errors::{CircuitError, CircuitResult};
-use crate::state_ops::iterators::*;
-use crate::types::Representation;
 use crate::utils::*;
-use crate::{iter, iter_mut};
 use crate::{Complex, Precision};
 use num_traits::One;
+use qip_iterators::iterators::UnitaryOp;
+use qip_iterators::iterators::*;
+use qip_iterators::utils::{flip_bits, get_flat_index};
+use qip_iterators::{iter, iter_mut};
+/// Contains functions, structs, and enums for storing and manipulating the quantum state.
+use qip_types::errors::{CircuitError, CircuitResult};
+use qip_types::Representation;
 use std::cmp::{max, min};
 
 /// Make a Matrix UnitaryOp
@@ -262,16 +264,6 @@ pub fn sub_to_full(n: usize, mat_indices: &[usize], sub_index: usize, base: usiz
         let bit = get_bit(sub_index, nindices - 1 - j);
         set_bit(acc, n - 1 - *indx, bit)
     })
-}
-
-/// Get the number of indices represented by `op`
-pub fn num_indices<P: Precision>(op: &UnitaryOp<P>) -> usize {
-    match &op {
-        UnitaryOp::Matrix(indices, _) => indices.len(),
-        UnitaryOp::SparseMatrix(indices, _) => indices.len(),
-        UnitaryOp::Swap(a, b) => a.len() + b.len(),
-        UnitaryOp::Control(cs, os, _) => cs.len() + os.len(),
-    }
 }
 
 /// Get the `i`th qubit index for `op`

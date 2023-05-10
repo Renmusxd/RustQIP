@@ -2,23 +2,23 @@ use crate::builder_traits::{
     AdvancedCircuitBuilder, CircuitBuilder, QubitRegister, SplitManyResult, Subcircuitable,
 };
 use crate::conditioning::{Conditionable, ConditionableSubcircuit};
-use crate::errors::CircuitResult;
-use crate::Precision;
+use qip_types::errors::CircuitResult;
+use qip_types::Precision;
 
 /// A trait which recursively requires that subcircuit builders also implement the traits the
 /// original circuit builders implemented. This allows passing to functions which may arbitrarily
 /// call other functions without type-tracking the depth of the stack.
 pub trait RecursiveCircuitBuilder<P: Precision>:
-Invertable<SimilarBuilder=Self::RecursiveSimilarBuilder>
-+ Conditionable
-+ AdvancedCircuitBuilder<P>
-+ Subcircuitable
-+ ConditionableSubcircuit
+    Invertable<SimilarBuilder = Self::RecursiveSimilarBuilder>
+    + Conditionable
+    + AdvancedCircuitBuilder<P>
+    + Subcircuitable
+    + ConditionableSubcircuit
 {
     /// The similar builder which also implements the recursive circuit builder, it may be the same
     /// type or different.
     type RecursiveSimilarBuilder: RecursiveCircuitBuilder<P>
-    + Subcircuitable<Subcircuit=Self::Subcircuit>;
+        + Subcircuitable<Subcircuit = Self::Subcircuit>;
 }
 
 /// An Invertable circuit builder must be able to produce a similar circuit builder with the
@@ -26,7 +26,7 @@ Invertable<SimilarBuilder=Self::RecursiveSimilarBuilder>
 /// and then apply.
 pub trait Invertable: Subcircuitable {
     /// A similar circuit builder which can be used to construct circuits for the parent.
-    type SimilarBuilder: Subcircuitable<Subcircuit=Self::Subcircuit>;
+    type SimilarBuilder: Subcircuitable<Subcircuit = Self::Subcircuit>;
 
     /// Make a similar circuit builder.
     fn new_similar(&self) -> Self::SimilarBuilder;
@@ -51,13 +51,13 @@ pub fn inverter_args<T, CB, F>(
     f: F,
     t: T,
 ) -> CircuitResult<Vec<CB::Register>>
-    where
-        CB: Invertable,
-        F: Fn(
-            &mut CB::SimilarBuilder,
-            Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>,
-            T,
-        ) -> CircuitResult<Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>>,
+where
+    CB: Invertable,
+    F: Fn(
+        &mut CB::SimilarBuilder,
+        Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>,
+        T,
+    ) -> CircuitResult<Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>>,
 {
     let mut sub_cb = cb.new_similar();
     let sub_rs = rs
@@ -84,12 +84,12 @@ pub fn inverter_args<T, CB, F>(
 /// Invert the circuit made by `f`. Apply the inverted circuit to registers `rs` using
 /// circuitbuilder `cb`.
 pub fn inverter<CB, F>(cb: &mut CB, r: Vec<CB::Register>, f: F) -> CircuitResult<Vec<CB::Register>>
-    where
-        CB: Invertable,
-        F: Fn(
-            &mut CB::SimilarBuilder,
-            Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>,
-        ) -> CircuitResult<Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>>,
+where
+    CB: Invertable,
+    F: Fn(
+        &mut CB::SimilarBuilder,
+        Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>,
+    ) -> CircuitResult<Vec<<CB::SimilarBuilder as CircuitBuilder>::Register>>,
 {
     inverter_args(cb, r, |r, cb, _| f(r, cb), ())
 }

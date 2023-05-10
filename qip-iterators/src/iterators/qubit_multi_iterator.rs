@@ -1,7 +1,6 @@
-use crate::Complex;
+use num_complex::Complex;
 use num_traits::One;
-
-use crate::types::Precision;
+use qip_types::Precision;
 
 /// Iterator which provides the indices of nonzero columns for a given row for a collection of ops.
 #[derive(Debug)]
