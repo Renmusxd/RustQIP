@@ -53,12 +53,13 @@ where
 
             // Iterate through the current positions and increment when needed.
             let mut broke_early = false;
-            for (cur_pos, iter_n) in self
+            let pos_iter = self
                 .curr_poss
                 .iter_mut()
                 .rev()
-                .zip(self.iter_outputs.iter().rev())
-            {
+                .zip(self.iter_outputs.iter().rev());
+
+            for (cur_pos, iter_n) in pos_iter {
                 *cur_pos += 1;
                 if *cur_pos == iter_n.len() {
                     *cur_pos = 0;
@@ -67,6 +68,7 @@ where
                     break;
                 }
             }
+
             // If all poss overflowed, then next output should be None.
             if !broke_early {
                 self.overflow = true;

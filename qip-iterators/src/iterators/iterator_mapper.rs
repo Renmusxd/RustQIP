@@ -4,6 +4,7 @@ use std::iter::Sum;
 use std::ops::Mul;
 
 /// Like `sum_for_op_cols` but takes multiple ops at once.
+/// TODO: Clean up, remove fold_for_op_cols
 pub fn sum_for_ops_cols<P, F: Fn((usize, P)) -> P>(row: usize, ops: &[MatrixOp<P>], f: F) -> P
 where
     P: Sum + Clone + Mul + One + Zero,

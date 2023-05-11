@@ -288,4 +288,46 @@ mod tests {
             apply_ops(n, &ops, input, output, 0, 0);
         });
     }
+
+    #[bench]
+    fn bench_twelve_qip_series(b: &mut Bencher) {
+        let n = 12;
+
+        let mat = [1.0, 1.0, 1.0, 1.0];
+        let ops = (0..n)
+            .map(|i| MatrixOp::new_matrix(vec![i], mat))
+            .collect::<Vec<_>>();
+
+        let arr_input = Array1::ones(1 << n);
+        let mut arr_output = Array1::zeros(1 << n);
+
+        let input = arr_input.as_slice().unwrap();
+        let output = arr_output.as_slice_mut().unwrap();
+
+        b.iter(|| {
+            for op in &ops {
+                apply_op(n, op, input, output, 0, 0);
+            }
+        });
+    }
+
+    #[bench]
+    fn bench_twelve_qip_multi(b: &mut Bencher) {
+        let n = 12;
+
+        let mat = [1.0, 1.0, 1.0, 1.0];
+        let ops = (0..n)
+            .map(|i| MatrixOp::new_matrix(vec![i], mat))
+            .collect::<Vec<_>>();
+
+        let arr_input = Array1::ones(1 << n);
+        let mut arr_output = Array1::zeros(1 << n);
+
+        let input = arr_input.as_slice().unwrap();
+        let output = arr_output.as_slice_mut().unwrap();
+
+        b.iter(|| {
+            apply_ops(n, &ops, input, output, 0, 0);
+        });
+    }
 }
