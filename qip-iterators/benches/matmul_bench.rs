@@ -11,7 +11,7 @@ mod tests {
     use ndarray::linalg::{general_mat_vec_mul, Dot};
     use ndarray::{Array1, Array2};
     use qip_iterators::iterators::MatrixOp;
-    use qip_iterators::matrix_ops::apply_op;
+    use qip_iterators::matrix_ops::{apply_op, apply_ops};
     use sprs::{kronecker_product, CsMat, TriMat};
     use test::Bencher;
 
@@ -149,7 +149,7 @@ mod tests {
     }
 
     #[bench]
-    fn bench_ones_qip_large(b: &mut Bencher) {
+    fn bench_large_ones_qip(b: &mut Bencher) {
         let n = 20;
 
         let mat = [1.0, 1.0, 1.0, 1.0];
@@ -165,7 +165,7 @@ mod tests {
     }
 
     #[bench]
-    fn bench_ones_sprs_reuse_large(b: &mut Bencher) {
+    fn bench_large_ones_sprs_reuse(b: &mut Bencher) {
         let n = 20;
         let mut a = TriMat::new((2, 2));
         a.add_triplet(0, 0, 1.0f64);
@@ -185,7 +185,7 @@ mod tests {
     }
 
     #[bench]
-    fn bench_ones_sprs_build_each_large(b: &mut Bencher) {
+    fn bench_large_ones_sprs_build_each(b: &mut Bencher) {
         let n = 20;
 
         let input = Array1::ones(1 << n);
@@ -203,6 +203,89 @@ mod tests {
                 acc = kronecker_product(acc.view(), eye.view());
             }
             acc.dot(&input)
+        });
+    }
+
+    #[bench]
+    fn bench_two_qip_series(b: &mut Bencher) {
+        let n = 12;
+
+        let mat = [1.0, 1.0, 1.0, 1.0];
+        let op1 = MatrixOp::new_matrix(vec![0], mat);
+        let op2 = MatrixOp::new_matrix(vec![1], mat);
+
+        let arr_input = Array1::ones(1 << n);
+        let mut arr_output = Array1::zeros(1 << n);
+
+        let input = arr_input.as_slice().unwrap();
+        let output = arr_output.as_slice_mut().unwrap();
+
+        b.iter(|| {
+            apply_op(n, &op1, input, output, 0, 0);
+            apply_op(n, &op2, input, output, 0, 0);
+        });
+    }
+
+    #[bench]
+    fn bench_two_qip_multi(b: &mut Bencher) {
+        let n = 12;
+
+        let mat = [1.0, 1.0, 1.0, 1.0];
+        let op1 = MatrixOp::new_matrix(vec![0], mat);
+        let op2 = MatrixOp::new_matrix(vec![1], mat);
+        let ops = [op1, op2];
+
+        let arr_input = Array1::ones(1 << n);
+        let mut arr_output = Array1::zeros(1 << n);
+
+        let input = arr_input.as_slice().unwrap();
+        let output = arr_output.as_slice_mut().unwrap();
+
+        b.iter(|| {
+            apply_ops(n, &ops, input, output, 0, 0);
+        });
+    }
+
+    #[bench]
+    fn bench_three_qip_series(b: &mut Bencher) {
+        let n = 12;
+
+        let mat = [1.0, 1.0, 1.0, 1.0];
+        let op1 = MatrixOp::new_matrix(vec![0], mat);
+        let op2 = MatrixOp::new_matrix(vec![1], mat);
+        let op3 = MatrixOp::new_matrix(vec![2], mat);
+
+        let arr_input = Array1::ones(1 << n);
+        let mut arr_output = Array1::zeros(1 << n);
+
+        let input = arr_input.as_slice().unwrap();
+        let output = arr_output.as_slice_mut().unwrap();
+
+        b.iter(|| {
+            apply_op(n, &op1, input, output, 0, 0);
+            apply_op(n, &op2, input, output, 0, 0);
+            apply_op(n, &op3, input, output, 0, 0);
+        });
+    }
+
+    #[bench]
+    fn bench_three_qip_multi(b: &mut Bencher) {
+        let n = 12;
+
+        let mat = [1.0, 1.0, 1.0, 1.0];
+        let op1 = MatrixOp::new_matrix(vec![0], mat);
+        let op2 = MatrixOp::new_matrix(vec![1], mat);
+        let op3 = MatrixOp::new_matrix(vec![2], mat);
+        let ops = [op1, op2, op3];
+
+        let arr_input = Array1::ones(1 << n);
+        let mut arr_output = Array1::zeros(1 << n);
+
+        let input = arr_input.as_slice().unwrap();
+        let output = arr_output.as_slice_mut().unwrap();
+
+        b.iter(|| {
+            apply_ops(n, &ops, input, output, 0, 0);
         });
     }
 }
