@@ -4,17 +4,12 @@ use crate::types::Representation;
 use crate::utils::*;
 use crate::{Complex, Precision};
 use num_traits::One;
-use qip_iterators::iterators::UnitaryOp;
 use qip_iterators::iterators::*;
-use qip_iterators::utils::{flip_bits, get_flat_index};
-use qip_iterators::{iter, iter_mut};
-use std::cmp::{max, min};
+use qip_iterators::matrix_ops::{apply_op, get_index};
+use qip_iterators::utils::{flip_bits, get_bit, get_flat_index, set_bit};
 
-/// Make a Matrix UnitaryOp
-pub fn make_matrix_op<P: Precision>(
-    indices: Vec<usize>,
-    dat: Vec<Complex<P>>,
-) -> CircuitResult<UnitaryOp<Complex<P>>> {
+/// Make a Matrix MatrixOp
+pub fn make_matrix_op<P>(indices: Vec<usize>, dat: Vec<P>) -> CircuitResult<MatrixOp<P>> {
     let n = indices.len();
     let expected_mat_size = 1 << (2 * n);
     if indices.is_empty() {
@@ -27,18 +22,18 @@ pub fn make_matrix_op<P: Precision>(
         );
         Err(CircuitError::new(message))
     } else {
-        Ok(UnitaryOp::Matrix(indices, dat))
+        Ok(MatrixOp::Matrix(indices, dat))
     }
 }
 
-/// Make a SparseMatrix UnitaryOp from a vector of rows (with `(column, value)`).
+/// Make a SparseMatrix MatrixOp from a vector of rows (with `(column, value)`).
 /// natural_order indicates that the lowest indexed qubit is the least significant bit in `column`
 /// and `row` where `row` is the index of `dat`.
-pub fn make_sparse_matrix_op<P: Precision>(
+pub fn make_sparse_matrix_op<P>(
     indices: Vec<usize>,
-    dat: Vec<Vec<(usize, Complex<P>)>>,
+    dat: Vec<Vec<(usize, P)>>,
     order: Representation,
-) -> CircuitResult<UnitaryOp<Complex<P>>> {
+) -> CircuitResult<MatrixOp<P>> {
     let n = indices.len();
     let expected_mat_size = 1 << n;
     if indices.is_empty() {
@@ -81,7 +76,44 @@ pub fn make_sparse_matrix_op<P: Precision>(
             Representation::BigEndian => dat,
         };
 
-        Ok(UnitaryOp::SparseMatrix(indices, dat))
+        Ok(MatrixOp::SparseMatrix(indices, dat))
+    }
+}
+
+/// Make a Swap MatrixOp
+pub fn make_swap_op<P>(a_indices: Vec<usize>, b_indices: Vec<usize>) -> CircuitResult<MatrixOp<P>> {
+    if a_indices.is_empty() || b_indices.is_empty() {
+        Err(CircuitError::new("Need at least 1 swap index for a and b"))
+    } else if a_indices.len() != b_indices.len() {
+        let message = format!(
+            "Swap must be performed on two sets of indices of equal length, found {:?} vs {:?}",
+            a_indices.len(),
+            b_indices.len()
+        );
+        Err(CircuitError::new(message))
+    } else {
+        Ok(MatrixOp::Swap(a_indices, b_indices))
+    }
+}
+
+/// Make a Control MatrixOp
+pub fn make_control_op<P>(
+    mut c_indices: Vec<usize>,
+    op: MatrixOp<P>,
+) -> CircuitResult<MatrixOp<P>> {
+    if c_indices.is_empty() {
+        Err(CircuitError::new("Must supply at least one control index"))
+    } else {
+        match op {
+            MatrixOp::Control(oc_indices, oo_indices, op) => {
+                c_indices.extend(oc_indices);
+                Ok(MatrixOp::Control(c_indices, oo_indices, op))
+            }
+            op => {
+                let o_indices = (0..num_indices(&op)).map(|i| get_index(&op, i)).collect();
+                Ok(MatrixOp::Control(c_indices, o_indices, Box::new(op)))
+            }
+        }
     }
 }
 
@@ -89,11 +121,11 @@ pub fn make_sparse_matrix_op<P: Precision>(
 /// `f` which takes row numbers.
 /// natural_order indicates that the lowest indexed qubit is the least significant bit in `row` and
 /// the output `column` from `f`
-pub fn make_sparse_matrix_from_function<P: Precision, F: Fn(usize) -> Vec<(usize, Complex<P>)>>(
+pub fn make_sparse_matrix_from_function<P, F: Fn(usize) -> Vec<(usize, P)>>(
     n: usize,
     f: F,
     order: Representation,
-) -> Vec<Vec<(usize, Complex<P>)>> {
+) -> Vec<Vec<(usize, P)>> {
     (0..1 << n)
         .map(|indx| {
             let indx = match order {
@@ -112,59 +144,19 @@ pub fn make_sparse_matrix_from_function<P: Precision, F: Fn(usize) -> Vec<(usize
         .collect()
 }
 
-/// Make a Swap UnitaryOp
-pub fn make_swap_op<P: Precision>(
-    a_indices: Vec<usize>,
-    b_indices: Vec<usize>,
-) -> CircuitResult<UnitaryOp<Complex<P>>> {
-    if a_indices.is_empty() || b_indices.is_empty() {
-        Err(CircuitError::new("Need at least 1 swap index for a and b"))
-    } else if a_indices.len() != b_indices.len() {
-        let message = format!(
-            "Swap must be performed on two sets of indices of equal length, found {:?} vs {:?}",
-            a_indices.len(),
-            b_indices.len()
-        );
-        Err(CircuitError::new(message))
-    } else {
-        Ok(UnitaryOp::Swap(a_indices, b_indices))
-    }
-}
-
-/// Make a Control UnitaryOp
-pub fn make_control_op<P: Precision>(
-    mut c_indices: Vec<usize>,
-    op: UnitaryOp<Complex<P>>,
-) -> CircuitResult<UnitaryOp<Complex<P>>> {
-    if c_indices.is_empty() {
-        Err(CircuitError::new("Must supply at least one control index"))
-    } else {
-        match op {
-            UnitaryOp::Control(oc_indices, oo_indices, op) => {
-                c_indices.extend(oc_indices);
-                Ok(UnitaryOp::Control(c_indices, oo_indices, op))
-            }
-            op => {
-                let o_indices = (0..num_indices(&op)).map(|i| get_index(&op, i)).collect();
-                Ok(UnitaryOp::Control(c_indices, o_indices, Box::new(op)))
-            }
-        }
-    }
-}
-
 /// Invert a unitary op (equivalent to conjugate transpose).
-pub fn invert_op<P: Precision>(op: UnitaryOp<Complex<P>>) -> UnitaryOp<Complex<P>> {
+pub fn invert_op<P: Precision>(op: MatrixOp<Complex<P>>) -> MatrixOp<Complex<P>> {
     conj_op(transpose_op(op))
 }
 
 /// Get conjugate of op.
-pub fn conj_op<P: Precision>(op: UnitaryOp<Complex<P>>) -> UnitaryOp<Complex<P>> {
+pub fn conj_op<P: Precision>(op: MatrixOp<Complex<P>>) -> MatrixOp<Complex<P>> {
     match op {
-        UnitaryOp::Matrix(indices, mat) => {
+        MatrixOp::Matrix(indices, mat) => {
             let mat = mat.into_iter().map(|v| v.conj()).collect();
-            UnitaryOp::Matrix(indices, mat)
+            MatrixOp::Matrix(indices, mat)
         }
-        UnitaryOp::SparseMatrix(indices, mat) => {
+        MatrixOp::SparseMatrix(indices, mat) => {
             let mat = mat
                 .into_iter()
                 .map(|v| {
@@ -173,33 +165,33 @@ pub fn conj_op<P: Precision>(op: UnitaryOp<Complex<P>>) -> UnitaryOp<Complex<P>>
                         .collect()
                 })
                 .collect();
-            UnitaryOp::SparseMatrix(indices, mat)
+            MatrixOp::SparseMatrix(indices, mat)
         }
-        UnitaryOp::Swap(a_indices, b_indices) => UnitaryOp::Swap(a_indices, b_indices),
-        UnitaryOp::Control(c_indices, op_indices, op) => {
-            UnitaryOp::Control(c_indices, op_indices, Box::new(conj_op(*op)))
+        MatrixOp::Swap(a_indices, b_indices) => MatrixOp::Swap(a_indices, b_indices),
+        MatrixOp::Control(c_indices, op_indices, op) => {
+            MatrixOp::Control(c_indices, op_indices, Box::new(conj_op(*op)))
         }
     }
 }
 
 /// Invert a unitary op (equivalent to conjugate transpose).
-pub fn transpose_op<P: Precision>(op: UnitaryOp<Complex<P>>) -> UnitaryOp<Complex<P>> {
+pub fn transpose_op<P: Precision>(op: MatrixOp<Complex<P>>) -> MatrixOp<Complex<P>> {
     match op {
-        UnitaryOp::Matrix(indices, mut mat) => {
+        MatrixOp::Matrix(indices, mut mat) => {
             let n = indices.len();
             (0..1 << n).for_each(|row| {
                 (0..row).for_each(|col| {
                     mat.swap(get_flat_index(n, row, col), get_flat_index(n, col, row));
                 })
             });
-            UnitaryOp::Matrix(indices, mat)
+            MatrixOp::Matrix(indices, mat)
         }
-        UnitaryOp::SparseMatrix(indices, mat) => {
-            UnitaryOp::SparseMatrix(indices, transpose_sparse(mat))
+        MatrixOp::SparseMatrix(indices, mat) => {
+            MatrixOp::SparseMatrix(indices, transpose_sparse(mat))
         }
-        UnitaryOp::Swap(a_indices, b_indices) => UnitaryOp::Swap(a_indices, b_indices),
-        UnitaryOp::Control(c_indices, op_indices, op) => {
-            UnitaryOp::Control(c_indices, op_indices, Box::new(transpose_op(*op)))
+        MatrixOp::Swap(a_indices, b_indices) => MatrixOp::Swap(a_indices, b_indices),
+        MatrixOp::Control(c_indices, op_indices, op) => {
+            MatrixOp::Control(c_indices, op_indices, Box::new(transpose_op(*op)))
         }
     }
 }
@@ -245,157 +237,9 @@ pub fn select_matrix_coords(
     })
 }
 
-/// Get the index for a submatrix indexed by `indices` given the `full_index` for the larger 2^n by 2^n matrix.
-pub fn full_to_sub(n: usize, mat_indices: &[usize], full_index: usize) -> usize {
-    let nindices = mat_indices.len();
-    mat_indices
-        .iter()
-        .enumerate()
-        .fold(0, |acc, (j, indx)| -> usize {
-            let bit = get_bit(full_index, n - 1 - *indx);
-            set_bit(acc, nindices - 1 - j, bit)
-        })
-}
-
-/// Given the `sub_index` for the submatrix, and a base to overwrite values, get the full index for the 2^n by 2^n matrix.
-pub fn sub_to_full(n: usize, mat_indices: &[usize], sub_index: usize, base: usize) -> usize {
-    let nindices = mat_indices.len();
-    mat_indices.iter().enumerate().fold(base, |acc, (j, indx)| {
-        let bit = get_bit(sub_index, nindices - 1 - j);
-        set_bit(acc, n - 1 - *indx, bit)
-    })
-}
-
-/// Get the `i`th qubit index for `op`
-pub fn get_index<P>(op: &UnitaryOp<P>, i: usize) -> usize {
-    match &op {
-        UnitaryOp::Matrix(indices, _) => indices[i],
-        UnitaryOp::SparseMatrix(indices, _) => indices[i],
-        UnitaryOp::Swap(a, b) => {
-            if i < a.len() {
-                a[i]
-            } else {
-                b[i - a.len()]
-            }
-        }
-        UnitaryOp::Control(cs, os, _) => {
-            if i < cs.len() {
-                cs[i]
-            } else {
-                os[i - cs.len()]
-            }
-        }
-    }
-}
-
-/// Apply `op` to the `input`, storing the results in `output`. If either start at a nonzero state
-/// index in their 0th index, use `input/output_offset`.
-pub fn apply_op<P: Precision>(
-    n: usize,
-    op: &UnitaryOp<Complex<P>>,
-    input: &[Complex<P>],
-    output: &mut [Complex<P>],
-    input_offset: usize,
-    output_offset: usize,
-) {
-    let mat_indices: Vec<usize> = (0..num_indices(op)).map(|i| get_index(op, i)).collect();
-    let nindices = mat_indices.len();
-
-    let row_fn = |(outputrow, outputloc): (usize, &mut Complex<P>)| {
-        let row = output_offset + (outputrow);
-        let matrow = full_to_sub(n, &mat_indices, row);
-        // Maps from a op matrix column (from 0 to 2^nindices) to the value at that column
-        // for the row calculated above.
-        let f = |(i, val): (usize, Complex<P>)| -> Complex<P> {
-            let colbits = sub_to_full(n, &mat_indices, i, row);
-            if colbits < input_offset {
-                Complex::default()
-            } else {
-                let vecrow = colbits - input_offset;
-                if vecrow >= input.len() {
-                    Complex::default()
-                } else {
-                    val * input[vecrow]
-                }
-            }
-        };
-
-        // Get value for row and assign
-        *outputloc = sum_for_op_cols(nindices, matrow, op, f);
-    };
-
-    // Generate output for each output row
-    iter_mut!(output).enumerate().for_each(row_fn);
-}
-
-/// Apply `ops` to the `input`, storing the results in `output`. If either start at a nonzero state
-/// index in their 0th index, use `input/output_offset`.
-/// This is much less efficient as compared to repeated applications of `apply_op`, if your ops can
-/// be applied in sequence, do so with `apply_op`.
-pub fn apply_ops<P: Precision>(
-    n: usize,
-    ops: &[UnitaryOp<Complex<P>>],
-    input: &[Complex<P>],
-    output: &mut [Complex<P>],
-    input_offset: usize,
-    output_offset: usize,
-) {
-    match ops {
-        [op] => apply_op(n, op, input, output, input_offset, output_offset),
-        [] => {
-            let lower = max(input_offset, output_offset);
-            let upper = min(input_offset + input.len(), output_offset + output.len());
-            let input_lower = lower - input_offset;
-            let input_upper = upper - input_offset;
-            let output_lower = lower - output_offset;
-            let output_upper = upper - output_offset;
-
-            let input_iter = iter!(input[input_lower..input_upper]);
-            let output_iter = iter_mut!(output[output_lower..output_upper]);
-            input_iter
-                .zip(output_iter)
-                .for_each(|(input, out)| *out = *input);
-        }
-        _ => {
-            let mat_indices: Vec<usize> = ops
-                .iter()
-                .flat_map(|op| -> Vec<usize> {
-                    (0..num_indices(op)).map(|i| get_index(op, i)).collect()
-                })
-                .collect();
-
-            let row_fn = |(outputrow, outputloc): (usize, &mut Complex<P>)| {
-                let row = output_offset + (outputrow);
-                let matrow = full_to_sub(n, &mat_indices, row);
-                // Maps from a op matrix column (from 0 to 2^nindices) to the value at that column
-                // for the row calculated above.
-                let f = |(i, val): (usize, Complex<P>)| -> Complex<P> {
-                    let colbits = sub_to_full(n, &mat_indices, i, row);
-                    if colbits < input_offset {
-                        Complex::default()
-                    } else {
-                        let vecrow = colbits - input_offset;
-                        if vecrow >= input.len() {
-                            Complex::default()
-                        } else {
-                            val * input[vecrow]
-                        }
-                    }
-                };
-
-                // Get value for row and assign
-                *outputloc = sum_for_ops_cols(matrow, ops, f);
-            };
-
-            // Generate output for each output row
-            iter_mut!(output).enumerate().for_each(row_fn);
-        }
-    }
-}
-
 /// Make the full op matrix from `ops`.
 /// Not very efficient, use only for debugging.
-pub fn make_op_matrix<P: Precision>(n: usize, op: &UnitaryOp<Complex<P>>) -> Vec<Vec<Complex<P>>> {
+pub fn make_op_matrix<P: Precision>(n: usize, op: &MatrixOp<Complex<P>>) -> Vec<Vec<Complex<P>>> {
     let zeros: Vec<P> = (0..1 << n).map(|_| P::zero()).collect();
     (0..1 << n)
         .map(|i| {
@@ -426,7 +270,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_get_index_simple() {
-        let op = UnitaryOp::<Complex<f64>>::Matrix(vec![0, 1, 2], vec![]);
+        let op = MatrixOp::<Complex<f64>>::Matrix(vec![0, 1, 2], vec![]);
         assert_eq!(num_indices(&op), 3);
         assert_eq!(get_index(&op, 0), 0);
         assert_eq!(get_index(&op, 1), 1);
@@ -435,7 +279,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_get_index_condition() {
-        let mop = UnitaryOp::<Complex<f64>>::Matrix(vec![2, 3], vec![]);
+        let mop = MatrixOp::<Complex<f64>>::Matrix(vec![2, 3], vec![]);
         let op = make_control_op(vec![0, 1], mop).unwrap();
         assert_eq!(num_indices(&op), 4);
         assert_eq!(get_index(&op, 0), 0);
@@ -446,7 +290,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_get_index_swap() {
-        let op = UnitaryOp::<Complex<f64>>::Swap(vec![0, 1], vec![2, 3]);
+        let op = MatrixOp::<Complex<f64>>::Swap(vec![0, 1], vec![2, 3]);
         assert_eq!(num_indices(&op), 4);
         assert_eq!(get_index(&op, 0), 0);
         assert_eq!(get_index(&op, 1), 1);
@@ -456,7 +300,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_apply_identity() {
-        let op = UnitaryOp::<Complex<f64>>::Matrix(vec![0], from_reals(&[1.0, 0.0, 0.0, 1.0]));
+        let op = MatrixOp::<Complex<f64>>::Matrix(vec![0], from_reals(&[1.0, 0.0, 0.0, 1.0]));
         let input = from_reals(&[1.0, 0.0]);
         let mut output = from_reals(&[0.0, 0.0]);
         apply_op(1, &op, &input, &mut output, 0, 0);
@@ -466,7 +310,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_apply_swap_mat() {
-        let op = UnitaryOp::<Complex<f64>>::Matrix(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
+        let op = MatrixOp::<Complex<f64>>::Matrix(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
         let mut input = from_reals(&[1.0, 0.0]);
         let mut output = from_reals(&[0.0, 0.0]);
         apply_op(1, &op, &input, &mut output, 0, 0);
@@ -477,7 +321,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_apply_swap_mat_first() {
-        let op = UnitaryOp::<Complex<f64>>::Matrix(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
+        let op = MatrixOp::<Complex<f64>>::Matrix(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
 
         let input = from_reals(&[1.0, 0.0, 0.0, 0.0]);
         let mut output = from_reals(&[0.0, 0.0, 0.0, 0.0]);
@@ -486,7 +330,7 @@ mod state_ops_tests {
         let expected = from_reals(&[0.0, 0.0, 1.0, 0.0]);
         assert_eq!(expected, output);
 
-        let op = UnitaryOp::<Complex<f64>>::Matrix(vec![1], from_reals(&[0.0, 1.0, 1.0, 0.0]));
+        let op = MatrixOp::<Complex<f64>>::Matrix(vec![1], from_reals(&[0.0, 1.0, 1.0, 0.0]));
         let mut output = from_reals(&[0.0, 0.0, 0.0, 0.0]);
         apply_op(2, &op, &input, &mut output, 0, 0);
 
@@ -519,10 +363,10 @@ mod state_ops_tests {
         .unwrap();
 
         // Both should not be in natural order.
-        if let UnitaryOp::SparseMatrix(_, data) = op1 {
+        if let MatrixOp::SparseMatrix(_, data) = op1 {
             assert_eq!(data, expected_dat);
         }
-        if let UnitaryOp::SparseMatrix(_, data) = op2 {
+        if let MatrixOp::SparseMatrix(_, data) = op2 {
             assert_eq!(data, expected_dat);
         }
     }

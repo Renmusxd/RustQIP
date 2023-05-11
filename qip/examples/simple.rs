@@ -34,4 +34,6 @@ fn main() -> Result<(), CircuitError> {
 }
 
 #[cfg(not(feature = "macros"))]
-fn main() {}
+fn main() {
+    panic!("Macros not enabled.")
+}

@@ -1,12 +1,13 @@
 #![feature(test)]
 
 use num_complex::Complex;
-use qip::state_ops::matrix_ops::{apply_op, from_reals};
-use qip_iterators::iterators::UnitaryOp;
+use qip::state_ops::matrix_ops::from_reals;
+use qip_iterators::iterators::MatrixOp;
+use qip_iterators::matrix_ops::apply_op;
 
 /// Make the full op matrix from `ops`.
 /// Not very efficient, use only for debugging.
-fn make_ops_matrix(n: usize, ops: &[&UnitaryOp<Complex<f64>>]) -> Vec<Vec<Complex<f64>>> {
+fn make_ops_matrix(n: usize, ops: &[&MatrixOp<Complex<f64>>]) -> Vec<Vec<Complex<f64>>> {
     let zeros: Vec<f64> = (0..1 << n).map(|_| 0.0).collect();
     (0..1 << n)
         .map(|i| {
@@ -28,8 +29,9 @@ mod tests {
 
     extern crate test;
 
-    use qip::state_ops::matrix_ops::{apply_ops, make_control_op, make_matrix_op};
-    use qip_iterators::iterators::UnitaryOp::{Matrix, SparseMatrix};
+    use qip::state_ops::matrix_ops::{make_control_op, make_matrix_op};
+    use qip_iterators::iterators::MatrixOp::{Matrix, SparseMatrix};
+    use qip_iterators::matrix_ops::apply_ops;
     use test::Bencher;
 
     #[bench]

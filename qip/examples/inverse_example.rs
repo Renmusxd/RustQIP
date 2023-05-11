@@ -27,7 +27,7 @@ fn main() -> CircuitResult<()> {
     let rb = b.register(n);
 
     let (ra, rb) = program!(&mut b; ra, rb;
-        // gamma ra[0..2], ra[2];
+        gamma ra[0..2], ra[2];
         gamma_inv ra[0..2], ra[2];
     )?;
     let _r = b.merge_two_registers(ra, rb);
@@ -36,4 +36,6 @@ fn main() -> CircuitResult<()> {
 }
 
 #[cfg(not(feature = "macros"))]
-fn main() {}
+fn main() {
+    panic!("Macros not enabled.")
+}
