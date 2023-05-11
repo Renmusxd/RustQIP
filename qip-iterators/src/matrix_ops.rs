@@ -51,6 +51,63 @@ pub fn get_index<P>(op: &MatrixOp<P>, i: usize) -> usize {
     }
 }
 
+pub fn apply_op_row<P>(
+    n: usize,
+    op: &MatrixOp<P>,
+    input: &[P],
+    outputrow: usize,
+    input_offset: usize,
+    output_offset: usize,
+) -> P
+where
+    P: Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
+{
+    let mat_indices: Vec<usize> = (0..num_indices(op)).map(|i| get_index(op, i)).collect();
+    apply_op_row_indices(
+        n,
+        op,
+        input,
+        outputrow,
+        input_offset,
+        output_offset,
+        &mat_indices,
+    )
+}
+
+pub fn apply_op_row_indices<P>(
+    n: usize,
+    op: &MatrixOp<P>,
+    input: &[P],
+    outputrow: usize,
+    input_offset: usize,
+    output_offset: usize,
+    mat_indices: &[usize],
+) -> P
+where
+    P: Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
+{
+    let row = output_offset + (outputrow);
+    let matrow = full_to_sub(n, mat_indices, row);
+    // Maps from a op matrix column (from 0 to 2^nindices) to the value at that column
+    // for the row calculated above.
+    let f = |(i, val): (usize, P)| -> P {
+        let colbits = sub_to_full(n, mat_indices, i, row);
+        if colbits < input_offset {
+            P::zero()
+        } else {
+            let vecrow = colbits - input_offset;
+            if vecrow >= input.len() {
+                P::zero()
+            } else {
+                val * input[vecrow].clone()
+            }
+        }
+    };
+
+    // Get value for row
+    op.sum_for_op_cols(mat_indices.len(), matrow, f)
+}
+
 /// Apply `op` to the `input`, storing the results in `output`. If either start at a nonzero state
 /// index in their 0th index, use `input/output_offset`.
 pub fn apply_op<P>(
@@ -157,5 +214,161 @@ pub fn apply_ops<P>(
             // Generate output for each output row
             iter_mut!(output).enumerate().for_each(row_fn);
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use ndarray::{Array2, ShapeError};
+    use std::ops::{Add, Div, Sub};
+
+    /// Make the full op matrix from `ops`.
+    /// Not very efficient, use only for debugging.
+    fn make_op_matrix<P>(n: usize, op: &MatrixOp<P>) -> Vec<Vec<P>>
+    where
+        P: Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
+    {
+        let zeros: Vec<P> = (0..1 << n).map(|_| P::zero()).collect();
+        (0..1 << n)
+            .map(|i| {
+                let mut input = zeros.clone();
+                let mut output = zeros.clone();
+                input[i] = P::one();
+                apply_op(n, op, &input, &mut output, 0, 0);
+                output
+            })
+            .collect()
+    }
+
+    fn make_op_flat_matrix<P>(n: usize, op: &MatrixOp<P>) -> Result<Array2<P>, ShapeError>
+    where
+        P: Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
+    {
+        let v = make_op_matrix(n, op)
+            .into_iter()
+            .flat_map(|v| v.into_iter())
+            .collect::<Vec<_>>();
+        let arr = Array2::from_shape_vec((1 << n, 1 << n), v)?;
+        Ok(arr.reversed_axes())
+    }
+
+    fn ndarray_kron_helper<P>(before: usize, mut mat: Array2<P>, after: usize) -> Array2<P>
+    where
+        P: Copy + One + Zero + Add<Output = P> + Sub<Output = P> + Div<Output = P> + 'static,
+    {
+        let eye = Array2::eye(2);
+        for _ in 0..before {
+            mat = ndarray::linalg::kron(&eye, &mat);
+        }
+        for _ in 0..after {
+            mat = ndarray::linalg::kron(&mat, &eye);
+        }
+        mat
+    }
+
+    #[test]
+    fn test_ident() -> Result<(), String> {
+        let n = 3;
+        let data = [1, 0, 0, 1];
+        let op = MatrixOp::new_matrix([0], data);
+        let arr = Array2::from_shape_vec((2, 2), data.into()).map_err(|e| format!("{:?}", e))?;
+        let mat = make_op_flat_matrix(n, &op).map_err(|e| format!("{:?}", e))?;
+        let comp_mat = ndarray_kron_helper(0, arr, n - 1);
+
+        debug_assert_eq!(mat, comp_mat);
+        Ok(())
+    }
+
+    #[test]
+    fn test_flip() -> Result<(), String> {
+        let n = 3;
+        let data = [0, 1, 1, 0];
+        let op = MatrixOp::new_matrix([0], data);
+        let arr = Array2::from_shape_vec((2, 2), data.into()).map_err(|e| format!("{:?}", e))?;
+        let mat = make_op_flat_matrix(n, &op).map_err(|e| format!("{:?}", e))?;
+        let comp_mat = ndarray_kron_helper(0, arr, n - 1);
+
+        debug_assert_eq!(mat, comp_mat);
+        Ok(())
+    }
+
+    #[test]
+    fn test_flip_mid() -> Result<(), String> {
+        let n = 3;
+        let data = [0, 1, 1, 0];
+        let op = MatrixOp::new_matrix([1], data);
+        let arr = Array2::from_shape_vec((2, 2), data.into()).map_err(|e| format!("{:?}", e))?;
+        let mat = make_op_flat_matrix(n, &op).map_err(|e| format!("{:?}", e))?;
+        let comp_mat = ndarray_kron_helper(1, arr, n - 2);
+
+        debug_assert_eq!(mat, comp_mat);
+        Ok(())
+    }
+
+    #[test]
+    fn test_flip_end() -> Result<(), String> {
+        let n = 3;
+        let data = [0, 1, 1, 0];
+        let op = MatrixOp::new_matrix([2], data);
+        let arr = Array2::from_shape_vec((2, 2), data.into()).map_err(|e| format!("{:?}", e))?;
+        let mat = make_op_flat_matrix(n, &op).map_err(|e| format!("{:?}", e))?;
+        let comp_mat = ndarray_kron_helper(2, arr, n - 3);
+
+        debug_assert_eq!(mat, comp_mat);
+        Ok(())
+    }
+
+    #[test]
+    fn test_flip_mid_twobody() -> Result<(), String> {
+        let n = 4;
+        // Hopping with number conservation
+        let data = [1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1];
+        let op = MatrixOp::new_matrix([1, 2], data);
+        let arr = Array2::from_shape_vec((4, 4), data.into()).map_err(|e| format!("{:?}", e))?;
+        let mat = make_op_flat_matrix(n, &op).map_err(|e| format!("{:?}", e))?;
+        let comp_mat = ndarray_kron_helper(1, arr, 1);
+
+        debug_assert_eq!(mat, comp_mat);
+        Ok(())
+    }
+
+    #[test]
+    fn test_counting() -> Result<(), String> {
+        let n = 3;
+        let data = [1, 2, 3, 4];
+        let op = MatrixOp::new_matrix([0], data);
+        let arr = Array2::from_shape_vec((2, 2), data.into()).map_err(|e| format!("{:?}", e))?;
+        let mat = make_op_flat_matrix(n, &op).map_err(|e| format!("{:?}", e))?;
+        let comp_mat = ndarray_kron_helper(0, arr, n - 1);
+
+        debug_assert_eq!(mat, comp_mat);
+        Ok(())
+    }
+
+    #[test]
+    fn test_counting_order() -> Result<(), String> {
+        let n = 2;
+        let data = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        let op = MatrixOp::new_matrix([0, 1], data);
+        let comp_mat = Array2::from_shape_vec((1 << n, 1 << n), data.into())
+            .map_err(|e| format!("{:?}", e))?;
+        let mat = make_op_flat_matrix(n, &op).map_err(|e| format!("{:?}", e))?;
+
+        debug_assert_eq!(mat, comp_mat);
+        Ok(())
+    }
+
+    #[test]
+    fn test_counting_order_flipped() -> Result<(), String> {
+        let n = 2;
+        let data = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        let op = MatrixOp::new_matrix([1, 0], data);
+        let comp_mat = Array2::from_shape_vec((1 << n, 1 << n), data.into())
+            .map_err(|e| format!("{:?}", e))?;
+        let mat = make_op_flat_matrix(n, &op).map_err(|e| format!("{:?}", e))?;
+
+        debug_assert_ne!(mat, comp_mat);
+        Ok(())
     }
 }
