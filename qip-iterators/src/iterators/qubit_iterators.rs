@@ -277,7 +277,7 @@ mod iterator_tests {
     use num_traits::One;
 
     /// Make a vector of complex numbers whose reals are given by `data`
-    pub fn from_reals<P: Zero + Clone>(data: &[P]) -> Vec<Complex<P>> {
+    fn from_reals<P: Zero + Clone>(data: &[P]) -> Vec<Complex<P>> {
         data.iter()
             .map(|x| Complex::<P> {
                 re: x.clone(),

@@ -20,12 +20,40 @@ pub enum MatrixOp<P> {
 }
 
 impl<P> MatrixOp<P> {
+    /// Make a new dense matrix op
     pub fn new_matrix<Indx, Dat>(indices: Indx, data: Dat) -> Self
     where
         Indx: Into<Vec<usize>>,
         Dat: Into<Vec<P>>,
     {
         Self::Matrix(indices.into(), data.into())
+    }
+
+    /// Make a new sparse matrix op
+    pub fn new_sparse<Indx, Dat>(indices: Indx, data: Dat) -> Self
+    where
+        Indx: Into<Vec<usize>>,
+        Dat: Into<Vec<Vec<(usize, P)>>>,
+    {
+        Self::SparseMatrix(indices.into(), data.into())
+    }
+
+    /// Make a new swap matrix op
+    pub fn new_swap<IndxA, IndxB>(a: IndxA, b: IndxB) -> Self
+    where
+        IndxA: Into<Vec<usize>>,
+        IndxB: Into<Vec<usize>>,
+    {
+        Self::Swap(a.into(), b.into())
+    }
+
+    /// Make a new control matrix op
+    pub fn new_control<IndxA, IndxB>(c: IndxA, r: IndxB, op: MatrixOp<P>) -> Self
+    where
+        IndxA: Into<Vec<usize>>,
+        IndxB: Into<Vec<usize>>,
+    {
+        Self::Control(c.into(), r.into(), Box::new(op))
     }
 }
 

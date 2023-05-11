@@ -51,6 +51,7 @@ pub fn get_index<P>(op: &MatrixOp<P>, i: usize) -> usize {
     }
 }
 
+/// Compute vector element at a given row from op applied to input.
 pub fn apply_op_row<P>(
     n: usize,
     op: &MatrixOp<P>,
@@ -74,6 +75,7 @@ where
     )
 }
 
+/// Compute vector element at a given row from op applied to input.
 pub fn apply_op_row_indices<P>(
     n: usize,
     op: &MatrixOp<P>,
@@ -121,29 +123,16 @@ pub fn apply_op<P>(
     P: Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
 {
     let mat_indices: Vec<usize> = (0..num_indices(op)).map(|i| get_index(op, i)).collect();
-    let nindices = mat_indices.len();
-
     let row_fn = |(outputrow, outputloc): (usize, &mut P)| {
-        let row = output_offset + (outputrow);
-        let matrow = full_to_sub(n, &mat_indices, row);
-        // Maps from a op matrix column (from 0 to 2^nindices) to the value at that column
-        // for the row calculated above.
-        let f = |(i, val): (usize, P)| -> P {
-            let colbits = sub_to_full(n, &mat_indices, i, row);
-            if colbits < input_offset {
-                P::zero()
-            } else {
-                let vecrow = colbits - input_offset;
-                if vecrow >= input.len() {
-                    P::zero()
-                } else {
-                    val * input[vecrow].clone()
-                }
-            }
-        };
-
-        // Get value for row and assign
-        *outputloc = op.sum_for_op_cols(nindices, matrow, f);
+        *outputloc = apply_op_row_indices(
+            n,
+            op,
+            input,
+            outputrow,
+            input_offset,
+            output_offset,
+            &mat_indices,
+        );
     };
 
     // Generate output for each output row
