@@ -1,9 +1,12 @@
-use num_traits::Float;
+use num_traits::{Float, NumAssign};
 use std::fmt::{Debug, Display};
 use std::iter::{Product, Sum};
 
 /// The float precision of the circuit.
-pub trait Precision: Default + Float + Sum + Send + Sync + Display + Product + Debug {}
+pub trait Precision:
+    Default + NumAssign + Float + Sum + Send + Sync + Display + Product + Debug
+{
+}
 
 impl Precision for f64 {}
 

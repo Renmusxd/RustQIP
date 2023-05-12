@@ -3,7 +3,7 @@ use crate::utils::{get_bit, set_bit};
 use crate::{iter, iter_mut};
 use num_traits::{One, Zero};
 use std::iter::Sum;
-use std::ops::Mul;
+use std::ops::{AddAssign, Mul};
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -110,7 +110,7 @@ where
     op.sum_for_op_cols(mat_indices.len(), matrow, f)
 }
 
-/// Apply `op` to the `input`, storing the results in `output`. If either start at a nonzero state
+/// Apply `op` to the `input`, adding the results to `output`. If either start at a nonzero state
 /// index in their 0th index, use `input/output_offset`.
 pub fn apply_op<P>(
     n: usize,
@@ -120,7 +120,36 @@ pub fn apply_op<P>(
     input_offset: usize,
     output_offset: usize,
 ) where
-    P: Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
+    P: AddAssign + Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
+{
+    let mat_indices: Vec<usize> = (0..num_indices(op)).map(|i| get_index(op, i)).collect();
+    let row_fn = |(outputrow, outputloc): (usize, &mut P)| {
+        *outputloc += apply_op_row_indices(
+            n,
+            op,
+            input,
+            outputrow,
+            input_offset,
+            output_offset,
+            &mat_indices,
+        );
+    };
+
+    // Generate output for each output row
+    iter_mut!(output).enumerate().for_each(row_fn);
+}
+
+/// Apply `op` to the `input`, adding the results to `output`. If either start at a nonzero state
+/// index in their 0th index, use `input/output_offset`.
+pub fn apply_op_overwrite<P>(
+    n: usize,
+    op: &MatrixOp<P>,
+    input: &[P],
+    output: &mut [P],
+    input_offset: usize,
+    output_offset: usize,
+) where
+    P: AddAssign + Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
 {
     let mat_indices: Vec<usize> = (0..num_indices(op)).map(|i| get_index(op, i)).collect();
     let row_fn = |(outputrow, outputloc): (usize, &mut P)| {
@@ -139,7 +168,7 @@ pub fn apply_op<P>(
     iter_mut!(output).enumerate().for_each(row_fn);
 }
 
-/// Apply `ops` to the `input`, storing the results in `output`. If either start at a nonzero state
+/// Apply `ops` to the `input`, adding the results to `output`. If either start at a nonzero state
 /// index in their 0th index, use `input/output_offset`.
 /// This is much less efficient as compared to repeated applications of `apply_op`, if your ops can
 /// be applied in sequence, do so with `apply_op`.
@@ -151,7 +180,7 @@ pub fn apply_ops<P>(
     input_offset: usize,
     output_offset: usize,
 ) where
-    P: Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
+    P: AddAssign + Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
 {
     match ops {
         [op] => apply_op(n, op, input, output, input_offset, output_offset),
@@ -197,7 +226,7 @@ pub fn apply_ops<P>(
                 };
 
                 // Get value for row and assign
-                *outputloc = sum_for_ops_cols(matrow, ops, f);
+                *outputloc += sum_for_ops_cols(matrow, ops, f);
             };
 
             // Generate output for each output row
@@ -216,7 +245,7 @@ mod test {
     /// Not very efficient, use only for debugging.
     fn make_op_matrix<P>(n: usize, op: &MatrixOp<P>) -> Vec<Vec<P>>
     where
-        P: Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
+        P: AddAssign + Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
     {
         let zeros: Vec<P> = (0..1 << n).map(|_| P::zero()).collect();
         (0..1 << n)
@@ -232,7 +261,7 @@ mod test {
 
     fn make_op_flat_matrix<P>(n: usize, op: &MatrixOp<P>) -> Result<Array2<P>, ShapeError>
     where
-        P: Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
+        P: AddAssign + Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
     {
         let v = make_op_matrix(n, op)
             .into_iter()
