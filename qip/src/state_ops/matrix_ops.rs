@@ -110,7 +110,7 @@ pub fn make_control_op<P>(
                 Ok(MatrixOp::Control(c_indices, oo_indices, op))
             }
             op => {
-                let o_indices = (0..num_indices(&op)).map(|i| get_index(&op, i)).collect();
+                let o_indices = (0..op.num_indices()).map(|i| get_index(&op, i)).collect();
                 Ok(MatrixOp::Control(c_indices, o_indices, Box::new(op)))
             }
         }

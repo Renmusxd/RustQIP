@@ -20,6 +20,16 @@ pub enum MatrixOp<P> {
 }
 
 impl<P> MatrixOp<P> {
+    /// Get the number of indices represented by `op`
+    pub fn num_indices(&self) -> usize {
+        match self {
+            MatrixOp::Matrix(indices, _) => indices.len(),
+            MatrixOp::SparseMatrix(indices, _) => indices.len(),
+            MatrixOp::Swap(a, b) => a.len() + b.len(),
+            MatrixOp::Control(cs, os, _) => cs.len() + os.len(),
+        }
+    }
+
     /// Make a new dense matrix op
     pub fn new_matrix<Indx, Dat>(indices: Indx, data: Dat) -> Self
     where
@@ -147,15 +157,5 @@ impl<P> fmt::Debug for MatrixOp<P> {
             .collect::<Vec<String>>();
 
         write!(f, "{}[{}]", name, int_strings.join(", "))
-    }
-}
-
-/// Get the number of indices represented by `op`
-pub fn num_indices<P>(op: &MatrixOp<P>) -> usize {
-    match &op {
-        MatrixOp::Matrix(indices, _) => indices.len(),
-        MatrixOp::SparseMatrix(indices, _) => indices.len(),
-        MatrixOp::Swap(a, b) => a.len() + b.len(),
-        MatrixOp::Control(cs, os, _) => cs.len() + os.len(),
     }
 }

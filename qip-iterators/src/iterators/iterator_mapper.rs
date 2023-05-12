@@ -9,7 +9,7 @@ pub fn sum_for_ops_cols<P, F: Fn((usize, P)) -> P>(row: usize, ops: &[MatrixOp<P
 where
     P: Sum + Clone + Mul + One + Zero,
 {
-    let ns = ops.iter().map(num_indices).collect::<Vec<_>>();
+    let ns = ops.iter().map(MatrixOp::num_indices).collect::<Vec<_>>();
     let (v, _) =
         ops.iter()
             .zip(ns.iter())

@@ -1,4 +1,4 @@
-use crate::iterators::{num_indices, sum_for_ops_cols, MatrixOp};
+use crate::iterators::{sum_for_ops_cols, MatrixOp};
 use crate::utils::{get_bit, set_bit};
 use crate::{iter, iter_mut};
 use num_traits::{One, Zero};
@@ -63,7 +63,7 @@ pub fn apply_op_row<P>(
 where
     P: Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
 {
-    let mat_indices: Vec<usize> = (0..num_indices(op)).map(|i| get_index(op, i)).collect();
+    let mat_indices: Vec<usize> = (0..op.num_indices()).map(|i| get_index(op, i)).collect();
     apply_op_row_indices(
         n,
         op,
@@ -122,7 +122,7 @@ pub fn apply_op<P>(
 ) where
     P: AddAssign + Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
 {
-    let mat_indices: Vec<usize> = (0..num_indices(op)).map(|i| get_index(op, i)).collect();
+    let mat_indices: Vec<usize> = (0..op.num_indices()).map(|i| get_index(op, i)).collect();
     let row_fn = |(outputrow, outputloc): (usize, &mut P)| {
         *outputloc += apply_op_row_indices(
             n,
@@ -151,7 +151,7 @@ pub fn apply_op_overwrite<P>(
 ) where
     P: AddAssign + Clone + One + Zero + Sum + Mul<Output = P> + Send + Sync,
 {
-    let mat_indices: Vec<usize> = (0..num_indices(op)).map(|i| get_index(op, i)).collect();
+    let mat_indices: Vec<usize> = (0..op.num_indices()).map(|i| get_index(op, i)).collect();
     let row_fn = |(outputrow, outputloc): (usize, &mut P)| {
         *outputloc = apply_op_row_indices(
             n,
@@ -202,7 +202,7 @@ pub fn apply_ops<P>(
             let mat_indices: Vec<usize> = ops
                 .iter()
                 .flat_map(|op| -> Vec<usize> {
-                    (0..num_indices(op)).map(|i| get_index(op, i)).collect()
+                    (0..op.num_indices()).map(|i| get_index(op, i)).collect()
                 })
                 .collect();
 
