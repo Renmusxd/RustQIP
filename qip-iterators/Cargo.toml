@@ -1,6 +1,6 @@
 [package]
 name = "qip-iterators"
-version = "1.3.0"
+version = "1.4.0"
 authors = ["Sumner Hearth <sumnernh@gmail.com>"]
 description = "Iterators for tensor product matrix multiplication"
 repository = "https://github.com/Renmusxd/RustQIP"
