@@ -9,11 +9,12 @@ mod tests {
     use faer_core::mul::matmul;
     use faer_core::{Mat, Parallelism};
     use ndarray::linalg::{general_mat_vec_mul, Dot};
-    use ndarray::{Array1, Array2};
+    use ndarray::{Array1, Array2, LinalgScalar};
     use qip_iterators::iterators::MatrixOp;
     use qip_iterators::matrix_ops::{apply_op, apply_ops};
     use sprs::{kronecker_product, CsMat, TriMat};
     use test::Bencher;
+    use num_traits::{Num, One, Zero};
 
     #[bench]
     fn bench_ones_qip(b: &mut Bencher) {
@@ -73,18 +74,22 @@ mod tests {
         });
     }
 
+    fn make_ones_mat<P: LinalgScalar>(n: usize) -> Array2<P> {
+        let mut acc = Array2::from_shape_vec((2, 2), vec![P::one(); 4])
+            .expect("Could not make 2x2 matrix.");
+        for _ in 1..n {
+            acc = ndarray::linalg::kron(&acc, &Array2::eye(2));
+        }
+        acc
+    }
+
     #[bench]
     fn bench_ones_ndarray_build_each(b: &mut Bencher) {
         let n = 12;
-
         let input = Array1::ones(1 << n);
 
         b.iter(|| {
-            let mut acc = Array2::from_shape_vec((2, 2), vec![1.0, 1.0, 1.0, 1.0])
-                .expect("Could not make 2x2 matrix.");
-            for _ in 1..n {
-                acc = ndarray::linalg::kron(&acc, &Array2::eye(2));
-            }
+            let acc = make_ones_mat::<f64>(n);
             acc.dot(&input)
         });
     }
@@ -92,27 +97,39 @@ mod tests {
     #[bench]
     fn bench_ones_ndarray_reuse(b: &mut Bencher) {
         let n = 12;
-
-        let mut acc = Array2::from_shape_vec((2, 2), vec![1.0, 1.0, 1.0, 1.0])
-            .expect("Could not make 2x2 matrix.");
-        for _ in 1..n {
-            acc = ndarray::linalg::kron(&acc, &Array2::eye(2));
-        }
-
+        let acc = make_ones_mat::<f64>(n);
         let input = Array1::ones(1 << n);
 
         b.iter(|| acc.dot(&input));
     }
 
     #[bench]
-    fn bench_ones_faer_reuse_arena(b: &mut Bencher) {
+    fn bench_ones_faer_reuse_arena_singlethread(b: &mut Bencher) {
         let n = 12;
+        let acc = make_ones_mat::<f64>(n);
+        let acc = Mat::<f64>::with_dims(1 << n, 1 << n, |i, j| acc[(i, j)]);
 
-        let mut acc = Array2::from_shape_vec((2, 2), vec![1.0, 1.0, 1.0, 1.0])
-            .expect("Could not make 2x2 matrix.");
-        for _ in 1..n {
-            acc = ndarray::linalg::kron(&acc, &Array2::eye(2));
-        }
+        let input = Mat::<f64>::zeros(1 << n, 1);
+        let mut output = Mat::<f64>::zeros(1 << n, 1);
+
+        b.iter(|| {
+            matmul(
+                output.as_mut(),
+                acc.as_ref(),
+                input.as_ref(),
+                None,
+                0.0,
+                Parallelism::Rayon(1),
+            )
+        });
+    }
+
+
+    #[bench]
+    fn bench_ones_faer_reuse_arena(b: &mut Bencher) {
+        // At the time of writing faer doesn't parallelize vector multiplication.
+        let n = 12;
+        let acc = make_ones_mat::<f64>(n);
         let acc = Mat::<f64>::with_dims(1 << n, 1 << n, |i, j| acc[(i, j)]);
 
         let input = Mat::<f64>::zeros(1 << n, 1);
@@ -133,12 +150,7 @@ mod tests {
     #[bench]
     fn bench_ones_ndarray_reuse_arena(b: &mut Bencher) {
         let n = 12;
-
-        let mut acc = Array2::from_shape_vec((2, 2), vec![1.0, 1.0, 1.0, 1.0])
-            .expect("Could not make 2x2 matrix.");
-        for _ in 1..n {
-            acc = ndarray::linalg::kron(&acc, &Array2::eye(2));
-        }
+        let acc = make_ones_mat(n);
 
         let input = Array1::ones(1 << n);
         let mut output = Array1::zeros(1 << n);
