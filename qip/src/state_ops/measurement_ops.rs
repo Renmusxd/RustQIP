@@ -165,7 +165,7 @@ pub fn soft_measure<P: Precision>(
         };
     let mut measured_indx = 0;
     for (i, c) in input.iter().enumerate() {
-        r = r - c.norm_sqr();
+        r -= c.norm_sqr();
         if r <= P::zero() {
             measured_indx = i + input_offset;
             break;

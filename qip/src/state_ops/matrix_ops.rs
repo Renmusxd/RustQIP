@@ -5,7 +5,7 @@ use crate::utils::*;
 use crate::{Complex, Precision};
 use num_traits::One;
 use qip_iterators::iterators::*;
-use qip_iterators::matrix_ops::{apply_op, get_index};
+use qip_iterators::matrix_ops::apply_op;
 use qip_iterators::utils::{flip_bits, get_bit, get_flat_index, set_bit};
 
 /// Make a Matrix MatrixOp
@@ -258,6 +258,7 @@ pub fn make_op_matrix<P: Precision>(n: usize, op: &MatrixOp<Complex<P>>) -> Vec<
 
 #[cfg(test)]
 mod state_ops_tests {
+    use qip_iterators::matrix_ops::get_index;
     use super::*;
 
     #[test]

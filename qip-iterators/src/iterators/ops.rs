@@ -29,7 +29,7 @@ impl<P> MatrixOp<P> {
                 debug_assert_eq!(b.len(), a*2);
                 a*2
             },
-            MatrixOp::Control(cs, os, _) => {
+            MatrixOp::Control(_, os, _) => {
                 os.len()
             },
         }
@@ -161,7 +161,7 @@ impl<P> fmt::Debug for MatrixOp<P> {
         let (name, indices) = match self {
             MatrixOp::Matrix(indices, _) => ("Matrix".to_string(), indices.clone()),
             MatrixOp::SparseMatrix(indices, _) => ("SparseMatrix".to_string(), indices.clone()),
-            MatrixOp::Swap(n, indices) => {
+            MatrixOp::Swap(_n, indices) => {
                 ("Swap".to_string(), indices.clone())
             }
             MatrixOp::Control(num_c_indices, indices, op) => {
