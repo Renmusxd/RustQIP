@@ -13,10 +13,10 @@ pub enum MatrixOp<P> {
     Matrix(Vec<usize>, Vec<P>),
     /// Indices, per row [(col, value)]
     SparseMatrix(Vec<usize>, Vec<Vec<(usize, P)>>),
-    /// A indices, B indices
-    Swap(Vec<usize>, Vec<usize>),
-    /// Control indices, Op indices, Op
-    Control(Vec<usize>, Vec<usize>, Box<MatrixOp<P>>),
+    /// A indices, B indices, each with n entries
+    Swap(usize, Vec<usize>),
+    /// (n) Control indices, Op indices, Op
+    Control(usize, Vec<usize>, Box<MatrixOp<P>>),
 }
 
 impl<P> MatrixOp<P> {
@@ -25,8 +25,23 @@ impl<P> MatrixOp<P> {
         match self {
             MatrixOp::Matrix(indices, _) => indices.len(),
             MatrixOp::SparseMatrix(indices, _) => indices.len(),
-            MatrixOp::Swap(a, b) => a.len() + b.len(),
-            MatrixOp::Control(cs, os, _) => cs.len() + os.len(),
+            MatrixOp::Swap(a, b) => {
+                debug_assert_eq!(b.len(), a*2);
+                a*2
+            },
+            MatrixOp::Control(cs, os, _) => {
+                os.len()
+            },
+        }
+    }
+
+    /// Get the indices acted on by this op
+    pub fn indices(&self) -> &[usize] {
+        match self {
+            MatrixOp::Matrix(i, _) => i,
+            MatrixOp::SparseMatrix(i, _) => i,
+            MatrixOp::Swap(_, i) => i,
+            MatrixOp::Control(_, i, _) => i,
         }
     }
 
@@ -54,7 +69,12 @@ impl<P> MatrixOp<P> {
         IndxA: Into<Vec<usize>>,
         IndxB: Into<Vec<usize>>,
     {
-        Self::Swap(a.into(), b.into())
+        let mut a = a.into();
+        let n = a.len();
+        let b = b.into();
+        debug_assert_eq!(a.len(), b.len());
+        a.extend(b);
+        Self::Swap(n, a)
     }
 
     /// Make a new control matrix op
@@ -63,7 +83,11 @@ impl<P> MatrixOp<P> {
         IndxA: Into<Vec<usize>>,
         IndxB: Into<Vec<usize>>,
     {
-        Self::Control(c.into(), r.into(), Box::new(op))
+        let mut c = c.into();
+        let cn = c.len();
+        let r = r.into();
+        c.extend(r);
+        Self::Control(cn, c, Box::new(op))
     }
 }
 
@@ -84,10 +108,9 @@ where
                 .map(f)
                 .sum(),
             MatrixOp::Swap(_, _) => SwapOpIterator::new(row, nindices).map(f).sum(),
-            MatrixOp::Control(c_indices, o_indices, op) => {
-                let n_control_indices = c_indices.len();
-                let n_op_indices = o_indices.len();
-                op.sum_for_control_iterator(row, n_control_indices, n_op_indices, f)
+            MatrixOp::Control(n_control_indices, o_indices, op) => {
+                let n_op_indices = o_indices.len() - n_control_indices;
+                op.sum_for_control_iterator(row, *n_control_indices, n_op_indices, f)
             }
         }
     }
@@ -124,9 +147,9 @@ where
             }
             // Control ops are automatically collapsed if made with helper, but implement this anyway
             // just to account for the possibility.
-            MatrixOp::Control(c_indices, o_indices, op) => {
-                let n_control_indices = n_control_indices + c_indices.len();
-                let n_op_indices = o_indices.len();
+            MatrixOp::Control(new_n_control_indices, o_indices, op) => {
+                let n_control_indices = n_control_indices + new_n_control_indices;
+                let n_op_indices = o_indices.len() - new_n_control_indices;
                 op.sum_for_control_iterator(row, n_control_indices, n_op_indices, f)
             }
         }
@@ -138,17 +161,12 @@ impl<P> fmt::Debug for MatrixOp<P> {
         let (name, indices) = match self {
             MatrixOp::Matrix(indices, _) => ("Matrix".to_string(), indices.clone()),
             MatrixOp::SparseMatrix(indices, _) => ("SparseMatrix".to_string(), indices.clone()),
-            MatrixOp::Swap(a_indices, b_indices) => {
-                let indices: Vec<_> = a_indices
-                    .iter()
-                    .cloned()
-                    .chain(b_indices.iter().cloned())
-                    .collect();
-                ("Swap".to_string(), indices)
+            MatrixOp::Swap(n, indices) => {
+                ("Swap".to_string(), indices.clone())
             }
-            MatrixOp::Control(indices, _, op) => {
+            MatrixOp::Control(num_c_indices, indices, op) => {
                 let name = format!("C({:?})", *op);
-                (name, indices.clone())
+                (name, indices[..*num_c_indices].to_vec())
             }
         };
         let int_strings = indices

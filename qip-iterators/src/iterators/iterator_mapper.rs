@@ -56,10 +56,9 @@ where
             f(&mut SparseMatrixOpIterator::new(row, data.as_slice()))
         }
         MatrixOp::Swap(_, _) => f(&mut SwapOpIterator::new(row, nindices)),
-        MatrixOp::Control(c_indices, o_indices, op) => {
-            let n_control_indices = c_indices.len();
-            let n_op_indices = o_indices.len();
-            act_on_control_iterator(row, op, n_control_indices, n_op_indices, f)
+        MatrixOp::Control(n_control_indices, o_indices, op) => {
+            let n_op_indices = o_indices.len() - n_control_indices;
+            act_on_control_iterator(row, op, *n_control_indices, n_op_indices, f)
         }
     }
 }
@@ -105,9 +104,9 @@ where
         }
         // Control ops are automatically collapsed if made with helper, but implement this anyway
         // just to account for the possibility.
-        MatrixOp::Control(c_indices, o_indices, op) => {
-            let n_control_indices = n_control_indices + c_indices.len();
-            let n_op_indices = o_indices.len();
+        MatrixOp::Control(new_n_control_indices, o_indices, op) => {
+            let n_control_indices = n_control_indices + new_n_control_indices;
+            let n_op_indices = o_indices.len() - new_n_control_indices;
             act_on_control_iterator(row, op, n_control_indices, n_op_indices, f)
         }
     }

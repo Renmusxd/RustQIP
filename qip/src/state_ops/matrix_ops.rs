@@ -92,7 +92,10 @@ pub fn make_swap_op<P>(a_indices: Vec<usize>, b_indices: Vec<usize>) -> CircuitR
         );
         Err(CircuitError::new(message))
     } else {
-        Ok(MatrixOp::Swap(a_indices, b_indices))
+        let n = a_indices.len();
+        let mut indices = a_indices;
+        indices.extend(b_indices);
+        Ok(MatrixOp::Swap(n, indices))
     }
 }
 
@@ -104,14 +107,15 @@ pub fn make_control_op<P>(
     if c_indices.is_empty() {
         Err(CircuitError::new("Must supply at least one control index"))
     } else {
+        let num_c_indices = c_indices.len();
         match op {
-            MatrixOp::Control(oc_indices, oo_indices, op) => {
-                c_indices.extend(oc_indices);
-                Ok(MatrixOp::Control(c_indices, oo_indices, op))
+            MatrixOp::Control(num_oc_indices, oo_indices, op) => {
+                c_indices.extend(oo_indices);
+                Ok(MatrixOp::Control(num_c_indices + num_oc_indices, c_indices, op))
             }
             op => {
-                let o_indices = (0..op.num_indices()).map(|i| get_index(&op, i)).collect();
-                Ok(MatrixOp::Control(c_indices, o_indices, Box::new(op)))
+                c_indices.extend(op.indices());
+                Ok(MatrixOp::Control(num_c_indices, c_indices, Box::new(op)))
             }
         }
     }
@@ -270,8 +274,8 @@ mod state_ops_tests {
 
     #[test]
     fn test_get_index_simple() {
-        let op = MatrixOp::<Complex<f64>>::Matrix(vec![0, 1, 2], vec![]);
-        assert_eq!(num_indices(&op), 3);
+        let op = MatrixOp::<Complex<f64>>::new_matrix(vec![0, 1, 2], vec![]);
+        assert_eq!(op.num_indices(), 3);
         assert_eq!(get_index(&op, 0), 0);
         assert_eq!(get_index(&op, 1), 1);
         assert_eq!(get_index(&op, 2), 2);
@@ -279,9 +283,9 @@ mod state_ops_tests {
 
     #[test]
     fn test_get_index_condition() {
-        let mop = MatrixOp::<Complex<f64>>::Matrix(vec![2, 3], vec![]);
+        let mop = MatrixOp::<Complex<f64>>::new_matrix(vec![2, 3], vec![]);
         let op = make_control_op(vec![0, 1], mop).unwrap();
-        assert_eq!(num_indices(&op), 4);
+        assert_eq!(op.num_indices(), 4);
         assert_eq!(get_index(&op, 0), 0);
         assert_eq!(get_index(&op, 1), 1);
         assert_eq!(get_index(&op, 2), 2);
@@ -290,8 +294,8 @@ mod state_ops_tests {
 
     #[test]
     fn test_get_index_swap() {
-        let op = MatrixOp::<Complex<f64>>::Swap(vec![0, 1], vec![2, 3]);
-        assert_eq!(num_indices(&op), 4);
+        let op = MatrixOp::<Complex<f64>>::new_swap(vec![0, 1], vec![2, 3]);
+        assert_eq!(op.num_indices(), 4);
         assert_eq!(get_index(&op, 0), 0);
         assert_eq!(get_index(&op, 1), 1);
         assert_eq!(get_index(&op, 2), 2);
@@ -300,7 +304,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_apply_identity() {
-        let op = MatrixOp::<Complex<f64>>::Matrix(vec![0], from_reals(&[1.0, 0.0, 0.0, 1.0]));
+        let op = MatrixOp::<Complex<f64>>::new_matrix(vec![0], from_reals(&[1.0, 0.0, 0.0, 1.0]));
         let input = from_reals(&[1.0, 0.0]);
         let mut output = from_reals(&[0.0, 0.0]);
         apply_op(1, &op, &input, &mut output, 0, 0);
@@ -310,7 +314,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_apply_swap_mat() {
-        let op = MatrixOp::<Complex<f64>>::Matrix(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
+        let op = MatrixOp::<Complex<f64>>::new_matrix(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
         let mut input = from_reals(&[1.0, 0.0]);
         let mut output = from_reals(&[0.0, 0.0]);
         apply_op(1, &op, &input, &mut output, 0, 0);
@@ -321,7 +325,7 @@ mod state_ops_tests {
 
     #[test]
     fn test_apply_swap_mat_first() {
-        let op = MatrixOp::<Complex<f64>>::Matrix(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
+        let op = MatrixOp::<Complex<f64>>::new_matrix(vec![0], from_reals(&[0.0, 1.0, 1.0, 0.0]));
 
         let input = from_reals(&[1.0, 0.0, 0.0, 0.0]);
         let mut output = from_reals(&[0.0, 0.0, 0.0, 0.0]);
@@ -330,7 +334,7 @@ mod state_ops_tests {
         let expected = from_reals(&[0.0, 0.0, 1.0, 0.0]);
         assert_eq!(expected, output);
 
-        let op = MatrixOp::<Complex<f64>>::Matrix(vec![1], from_reals(&[0.0, 1.0, 1.0, 0.0]));
+        let op = MatrixOp::<Complex<f64>>::new_matrix(vec![1], from_reals(&[0.0, 1.0, 1.0, 0.0]));
         let mut output = from_reals(&[0.0, 0.0, 0.0, 0.0]);
         apply_op(2, &op, &input, &mut output, 0, 0);
 

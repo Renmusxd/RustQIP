@@ -31,24 +31,7 @@ pub fn sub_to_full(n: usize, mat_indices: &[usize], sub_index: usize, base: usiz
 
 /// Get the `i`th qubit index for `op`
 pub fn get_index<P>(op: &MatrixOp<P>, i: usize) -> usize {
-    match &op {
-        MatrixOp::Matrix(indices, _) => indices[i],
-        MatrixOp::SparseMatrix(indices, _) => indices[i],
-        MatrixOp::Swap(a, b) => {
-            if i < a.len() {
-                a[i]
-            } else {
-                b[i - a.len()]
-            }
-        }
-        MatrixOp::Control(cs, os, _) => {
-            if i < cs.len() {
-                cs[i]
-            } else {
-                os[i - cs.len()]
-            }
-        }
-    }
+    op.indices()[i]
 }
 
 /// Compute vector element at a given row from op applied to input.
