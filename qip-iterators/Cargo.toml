@@ -24,7 +24,7 @@ num-complex = "^0.4"
 blas = "^0.22"
 openblas-src = "^0.10"
 sprs = "^0.11"
-faer-core = "^0.8"
+faer-core = "^0.9"
 
 [dev-dependencies.ndarray]
 version = "^0.15"
