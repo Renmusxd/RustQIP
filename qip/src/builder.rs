@@ -1,3 +1,11 @@
+use std::hash::{Hash, Hasher};
+use std::num::NonZeroUsize;
+use std::ops::Neg;
+
+use num_rational::{Ratio, Rational64};
+use num_traits::{One, ToPrimitive, Zero};
+use qip_iterators::matrix_ops::apply_op_overwrite;
+
 use crate::builder_traits::*;
 use crate::conditioning::{Conditionable, ConditionableSubcircuit};
 use crate::errors::{CircuitError, CircuitResult};
@@ -7,12 +15,6 @@ use crate::state_ops::matrix_ops::{make_control_op, make_matrix_op, make_swap_op
 use crate::state_ops::measurement_ops::{measure, measure_probs};
 use crate::types::Precision;
 use crate::Complex;
-use num_rational::{Ratio, Rational64};
-use num_traits::{One, ToPrimitive, Zero};
-use qip_iterators::matrix_ops::apply_op_overwrite;
-use std::hash::{Hash, Hasher};
-use std::num::NonZeroUsize;
-use std::ops::Neg;
 
 /// A local circuit builder for constructing circuits out of standard gates.
 /// LocalBuilder breaks complicated multi-register gates, like toffoli, into combinations of simple
@@ -325,7 +327,7 @@ impl<P: Precision> CircuitBuilder for LocalBuilder<P> {
     }
 
     fn merge_two_registers(&mut self, r1: Self::Register, r2: Self::Register) -> Self::Register {
-        Self::Register::new_from_iter(r1.indices.into_iter().chain(r2.indices.into_iter())).unwrap()
+        Self::Register::new_from_iter(r1.indices.into_iter().chain(r2.indices)).unwrap()
     }
 
     fn split_register_relative<It>(
@@ -370,7 +372,7 @@ impl<P: Precision> CircuitBuilder for LocalBuilder<P> {
                 let rs = self.split_all_register(r);
                 rs.iter()
                     .for_each(|r| self.pipeline.push((r.indices.clone(), c.clone())));
-                Ok(self.merge_registers(rs.into_iter()).unwrap())
+                Ok(self.merge_registers(rs).unwrap())
             } else {
                 // Normal application.
                 self.pipeline.push((r.indices.clone(), c));
@@ -570,7 +572,7 @@ impl<P: Precision> TemporaryRegisterBuilder for LocalBuilder<P> {
 
     fn return_zeroed_temp_register(&mut self, r: Self::Register) {
         let rs = self.split_all_register(r);
-        self.zeroed_qubits.extend(rs.into_iter());
+        self.zeroed_qubits.extend(rs);
     }
 }
 
@@ -734,9 +736,7 @@ impl<P: Precision> Conditionable for LocalBuilder<P> {
                             Ok((cr, ras, rbs))
                         },
                     )?;
-                    let r = self
-                        .merge_registers(ras.into_iter().chain(rbs.into_iter()))
-                        .unwrap();
+                    let r = self.merge_registers(ras.into_iter().chain(rbs)).unwrap();
                     Ok((cr, r))
                 }
                 UnitaryMatrixObject::CNOT => {
@@ -882,7 +882,7 @@ where
     // Need temp qubits for excess.
     if let Some(temp_n) = NonZeroUsize::new(1 + max_r_index - rn) {
         let temp = cb.make_zeroed_temp_register(temp_n);
-        rs.extend(cb.split_all_register(temp).into_iter());
+        rs.extend(cb.split_all_register(temp));
     }
     let mut rs = rs.into_iter().map(Some).collect::<Vec<_>>();
     sc.into_iter().try_for_each(|(indices, co)| {
@@ -904,7 +904,7 @@ where
     if let Some(tr) = cb.merge_registers(trs) {
         cb.return_zeroed_temp_register(tr);
     }
-    let r = cb.merge_registers(rs.into_iter()).unwrap();
+    let r = cb.merge_registers(rs).unwrap();
     Ok(r)
 }
 

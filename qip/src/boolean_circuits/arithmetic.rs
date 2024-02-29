@@ -1,3 +1,6 @@
+//! A collection of circuits from chapter 6.4 of "Quantum Computing: A gentle introduction"
+//! by Eleanor Rieffle and Wolfgang Polak.
+
 extern crate self as qip;
 
 use crate::errors::CircuitError;
@@ -7,8 +10,18 @@ use crate::prelude::*;
 use qip_macros::*;
 use std::num::NonZeroUsize;
 
-/// A collection of circuits from chapter 6.4 of "Quantum Computing: A gentle introduction"
-/// by Eleanor Rieffle and Wolfgang Polak.
+macro_rules! register_tuple {
+    ($($T:ident),*) => {
+        (
+            $(<$T as CircuitBuilder>::Register,)*
+        )
+    }
+}
+
+type R2<CB> = register_tuple!(CB, CB);
+type R3<CB> = register_tuple!(CB, CB, CB);
+type R4<CB> = register_tuple!(CB, CB, CB, CB);
+type R5<CB> = register_tuple!(CB, CB, CB, CB, CB);
 
 /// Add together ra and rb using rc as carry, result is in rb.
 /// This works when the highest order bit of rb and rc are both |0>. Undefined behavior otherwise.
@@ -19,7 +32,7 @@ pub fn add<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     rc: CB::Register,
     ra: CB::Register,
     rb: CB::Register,
-) -> CircuitResult<(CB::Register, CB::Register, CB::Register)> {
+) -> CircuitResult<R3<CB>> {
     match (rc.n(), ra.n(), rb.n()) {
         (1, 1, 2) => {
             let (rc, ra, rb) = program!(&mut *b; rc, ra, rb;
@@ -50,7 +63,7 @@ fn sum<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     rc: CB::Register,
     ra: CB::Register,
     rb: CB::Register,
-) -> CircuitResult<(CB::Register, CB::Register, CB::Register)> {
+) -> CircuitResult<R3<CB>> {
     program!(&mut *b; rc, ra, rb;
         control x ra, rb;
         control x rc, rb;
@@ -64,7 +77,7 @@ fn carry<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     ra: CB::Register,
     rb: CB::Register,
     rcp: CB::Register,
-) -> CircuitResult<(CB::Register, CB::Register, CB::Register, CB::Register)> {
+) -> CircuitResult<R4<CB>> {
     let (rc, ra, rb, rcp) = program!(&mut *b; rc, ra, rb, rcp;
         control x [ra, rb] rcp;
         control x ra, rb;
@@ -83,7 +96,7 @@ pub fn add_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     ra: CB::Register,
     rb: CB::Register,
     rm: CB::Register,
-) -> CircuitResult<(CB::Register, CB::Register, CB::Register)> {
+) -> CircuitResult<R3<CB>> {
     if ra.n() != rm.n() {
         Err(CircuitError::new(format!(
             "Expected rm.n == ra.n == {}, found rm.n={}.",
@@ -127,7 +140,7 @@ pub fn times_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     rb: CB::Register,
     rm: CB::Register,
     rp: CB::Register,
-) -> CircuitResult<(CB::Register, CB::Register, CB::Register, CB::Register)> {
+) -> CircuitResult<R4<CB>> {
     let n = rm.n();
     let k = rb.n();
     if ra.n() != n + 1 {
@@ -210,7 +223,7 @@ pub fn copy<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     b: &mut CB,
     ra: CB::Register,
     rb: CB::Register,
-) -> CircuitResult<(CB::Register, CB::Register)> {
+) -> CircuitResult<R2<CB>> {
     if ra.n() != rb.n() {
         Err(CircuitError::new(format!(
             "Expected ra.n = rb.n, but found {} and {}",
@@ -243,7 +256,7 @@ pub fn square_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     ra: CB::Register,
     rm: CB::Register,
     rs: CB::Register,
-) -> CircuitResult<(CB::Register, CB::Register, CB::Register)> {
+) -> CircuitResult<R3<CB>> {
     let n = rm.n();
     if ra.n() != n + 1 {
         Err(CircuitError::new(format!(
@@ -279,13 +292,7 @@ pub fn exp_mod<P: Precision, CB: RecursiveCircuitBuilder<P>>(
     rm: CB::Register,
     rp: CB::Register,
     re: CB::Register,
-) -> CircuitResult<(
-    CB::Register,
-    CB::Register,
-    CB::Register,
-    CB::Register,
-    CB::Register,
-)> {
+) -> CircuitResult<R5<CB>> {
     let n = rm.n();
     let k = rb.n();
     if ra.n() != n + 1 {
