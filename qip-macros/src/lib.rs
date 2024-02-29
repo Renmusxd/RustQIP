@@ -489,17 +489,17 @@ pub fn invert(attr: TokenStream, input_stream: TokenStream) -> TokenStream {
         output
     });
 
-    let new_regs_args = Some(format!("&mut {new_builder}"))
-        .into_iter()
-        .chain(function_args[1..].iter().map(|s| {
-            if !skip_args.contains(s) {
-                format!("_{s}_new")
-            } else {
-                s.clone()
-            }
-        }))
-        .collect::<Vec<String>>()
-        .join(",");
+    let new_regs_args =
+        function_args[1..]
+            .iter()
+            .fold(format!("&mut {new_builder}"), |mut output, s| {
+                let _ = if !skip_args.contains(s) {
+                    write!(output, ", _{s}_new")
+                } else {
+                    write!(output, ", {s}")
+                };
+                output
+            });
 
     let pop_regs = regs_only.iter().rev().fold(String::new(), |mut output, s| {
         let _ = write!(
