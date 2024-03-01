@@ -461,7 +461,7 @@ pub trait CliffordTBuilder<P: Precision>: UnitaryBuilder<P> {
             let rbs = self.split_all_register(rb);
             let (ras, rbs): (Vec<_>, Vec<_>) = ras
                 .into_iter()
-                .zip(rbs.into_iter())
+                .zip(rbs)
                 .map(|(ra, rb)| {
                     assert_eq!(ra.n(), 1);
                     assert_eq!(rb.n(), 1);

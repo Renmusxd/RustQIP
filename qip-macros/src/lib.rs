@@ -1,9 +1,11 @@
 extern crate proc_macro;
 
-use proc_macro::{Delimiter, Spacing, TokenStream, TokenTree};
 use std::collections::HashSet;
+use std::fmt::Write;
 use std::iter::Peekable;
 use std::str::FromStr;
+
+use proc_macro::{Delimiter, Spacing, TokenStream, TokenTree};
 
 /// Eats a ident <Group>
 fn parse_register_and_indices<It: Iterator<Item = TokenTree>>(
@@ -458,8 +460,7 @@ pub fn invert(attr: TokenStream, input_stream: TokenStream) -> TokenStream {
     let builder = function_args[0].clone();
     let new_builder = format!("_{builder}_new");
 
-    let mut skip_args = HashSet::new();
-    skip_args.extend(non_register_args.into_iter());
+    let skip_args = HashSet::<String>::from_iter(non_register_args);
 
     let regs_only = function_args[1..]
         .iter()
@@ -480,30 +481,33 @@ pub fn invert(attr: TokenStream, input_stream: TokenStream) -> TokenStream {
         .collect::<Vec<String>>()
         .join(",");
 
-    let make_new_regs = regs_only
-        .iter()
-        .map(|s| format!("let _{s}_new = {new_builder}.register({s}.n_nonzero());"))
-        .collect::<String>();
+    let make_new_regs = regs_only.iter().fold(String::new(), |mut output, s| {
+        let _ = write!(
+            output,
+            "let _{s}_new = {new_builder}.register({s}.n_nonzero());"
+        );
+        output
+    });
 
-    let new_regs_args = Some(format!("&mut {new_builder}"))
-        .into_iter()
-        .chain(function_args[1..].iter().map(|s| {
-            if !skip_args.contains(s) {
-                format!("_{s}_new")
-            } else {
-                s.clone()
-            }
-        }))
-        .collect::<Vec<String>>()
-        .join(",");
+    let new_regs_args =
+        function_args[1..]
+            .iter()
+            .fold(format!("&mut {new_builder}"), |mut output, s| {
+                let _ = if !skip_args.contains(s) {
+                    write!(output, ", _{s}_new")
+                } else {
+                    write!(output, ", {s}")
+                };
+                output
+            });
 
-    let pop_regs = regs_only
-        .iter()
-        .rev()
-        .map(|s| {
-            format!("let {s} = _selected_vec.pop().expect(&format!(\"Register {s} is missing!\"));")
-        })
-        .collect::<String>();
+    let pop_regs = regs_only.iter().rev().fold(String::new(), |mut output, s| {
+        let _ = write!(
+            output,
+            "let {s} = _selected_vec.pop().expect(&format!(\"Register {s} is missing!\"));"
+        );
+        output
+    });
 
     let to_add = TokenStream::from(TokenTree::Group(proc_macro::Group::new(Delimiter::Brace, TokenStream::from_str(&format!("
         let _register_sizes = [{regs_sizes}];
