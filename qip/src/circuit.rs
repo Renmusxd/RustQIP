@@ -1,15 +1,18 @@
 use std::fmt;
 use std::iter;
-use std::mem;
 use std::rc::Rc;
 
 use crate::builder_traits::CircuitBuilder;
 use crate::errors::CircuitResult;
 
+type Registers<CB, const N: usize> = [<CB as CircuitBuilder>::Register; N];
+type CircuitFunction<CB, const N: usize> =
+    dyn Fn(&mut CB, Registers<CB, N>) -> CircuitResult<Registers<CB, N>>;
+
 /// A circuit described by a function
 #[derive(Clone)]
 pub struct Circuit<CB: CircuitBuilder, const N: usize> {
-    func: Rc<dyn Fn(&mut CB, [CB::Register; N]) -> CircuitResult<[CB::Register; N]>>,
+    func: Rc<CircuitFunction<CB, N>>,
 }
 
 impl<CB: CircuitBuilder, const N: usize> std::fmt::Debug for Circuit<CB, N> {
@@ -28,10 +31,18 @@ impl<CB: CircuitBuilder, const N: usize> Default for Circuit<CB, N> {
 }
 
 impl<CB: CircuitBuilder + 'static, const N: usize> Circuit<CB, N> {
+    /// From a function
+    pub fn from<F>(f: F) -> Self
+    where
+        F: Fn(&mut CB, Registers<CB, N>) -> CircuitResult<Registers<CB, N>> + 'static,
+    {
+        Self::default().apply(f, core::array::from_fn(|i| i))
+    }
+
     /// Apply a function to part of this circuit
     pub fn apply<F, const L: usize>(self, f: F, indices: [usize; L]) -> Self
     where
-        F: Fn(&mut CB, [CB::Register; L]) -> CircuitResult<[CB::Register; L]> + 'static,
+        F: Fn(&mut CB, Registers<CB, L>) -> CircuitResult<Registers<CB, L>> + 'static,
     {
         let func = self.func.clone();
         Self {
@@ -49,86 +60,77 @@ impl<CB: CircuitBuilder + 'static, const N: usize> Circuit<CB, N> {
     }
 
     /// Apply a sub circuit for specific qubits under some new indices combine
-    pub fn under_new_indices<const L: usize>(
+    pub fn apply_subcircuit<MAP, const L: usize>(
         self,
-        new_indices: [&[(usize, usize)]; L],
-        sub_circuit: Circuit<CB, L>,
-    ) -> Self {
+        indices_map: MAP,
+        sub_circuit: &Circuit<CB, L>,
+    ) -> Self
+    where
+        MAP: Fn([Vec<(usize, usize)>; N]) -> [Vec<(usize, usize)>; L] + 'static,
+    {
         let func = self.func.clone();
-        let new_indices = new_indices.map(|idx_pairs| idx_pairs.to_vec());
+        let sub_func = sub_circuit.func.clone();
 
         Self {
             func: Rc::new(move |cb, rs| {
                 let out = (*func)(cb, rs)?;
-                let mut out = out.map(RegisterRepr::Origin);
 
-                // combine to new  registers
-                let f_input = new_indices.clone().map(|idx_pairs| {
-                    let rs = idx_pairs
-                        .iter()
-                        .map(|&(reg_idx, idx)| {
-                            if matches!(out[reg_idx], RegisterRepr::Origin(_)) {
-                                let r =
-                                    mem::replace(out.get_mut(reg_idx).unwrap(), RegisterRepr::Tmp);
-                                let RegisterRepr::Origin(r) = r else {
-                                    unreachable!()
-                                };
-                                let qubits = cb.split_all_register(r);
-                                out[reg_idx] =
-                                    RegisterRepr::Splited(qubits.into_iter().map(Some).collect());
-                            }
-
-                            let RegisterRepr::Splited(rs) = out.get_mut(reg_idx).unwrap() else {
-                                unreachable!()
-                            };
-                            rs[idx].take().unwrap()
-                        })
-                        .collect::<Vec<_>>();
-
-                    cb.merge_registers(rs).unwrap()
+                //split
+                let mut out = out.map(|r| {
+                    let qubits = cb.split_all_register(r);
+                    qubits.into_iter().map(Some).collect::<Vec<_>>()
                 });
 
-                let f_output = (*sub_circuit.func)(cb, f_input)?;
+                // combine to new registers
+                let init_indices: [Vec<(usize, usize)>; N] = out
+                    .iter()
+                    .enumerate()
+                    .map(|(reg_idx, qubits)| {
+                        (0..qubits.len())
+                            .map(|idx| (reg_idx, idx))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap();
+                let new_indices = indices_map(init_indices);
+
+                let f_input = new_indices.clone().map(|qubit_positions| {
+                    cb.merge_registers(
+                        qubit_positions
+                            .iter()
+                            .map(|&(reg_idx, idx)| out[reg_idx][idx].take().unwrap()),
+                    )
+                    .unwrap()
+                });
+
+                let f_output = (*sub_func)(cb, f_input)?;
                 let f_output_qubits = f_output.map(|r| cb.split_all_register(r));
 
                 // restore
-                iter::zip(new_indices.clone(), f_output_qubits).for_each(|(idx_pairs, qubits)| {
-                    iter::zip(idx_pairs, qubits).for_each(|((reg_idx, idx), qubit)| {
-                        let RegisterRepr::Splited(rs) = out.get_mut(reg_idx).unwrap() else {
-                            unreachable!()
-                        };
-                        rs[idx] = Some(qubit);
-                    });
-                });
+                iter::zip(new_indices, f_output_qubits).for_each(
+                    |(qubit_positions, out_qubits)| {
+                        iter::zip(qubit_positions, out_qubits).for_each(
+                            |((reg_idx, idx), qubit)| {
+                                out[reg_idx][idx] = Some(qubit);
+                            },
+                        );
+                    },
+                );
 
-                Ok(out.map(|rr| rr.into_origin(cb)))
+                Ok(out.map(|qubits| {
+                    cb.merge_registers(qubits.into_iter().map(|qubit| qubit.unwrap()))
+                        .unwrap()
+                }))
             }),
         }
     }
 
     /// Set input for circuit
-    pub fn input(self, input: [CB::Register; N]) -> CircuitWithInput<CB, N> {
+    pub fn input(self, input: Registers<CB, N>) -> CircuitWithInput<CB, N> {
         CircuitWithInput {
             circuit: self,
             input,
-        }
-    }
-}
-
-enum RegisterRepr<CB: CircuitBuilder> {
-    Origin(CB::Register),
-    Splited(Vec<Option<CB::Register>>),
-    Tmp,
-}
-
-impl<CB: CircuitBuilder> RegisterRepr<CB> {
-    fn into_origin(self, cb: &mut CB) -> CB::Register {
-        match self {
-            Self::Origin(r) => r,
-            Self::Splited(qubits) => cb
-                .merge_registers(qubits.into_iter().map(|r| r.unwrap()))
-                .unwrap(),
-            Self::Tmp => unreachable!(),
         }
     }
 }
@@ -137,12 +139,12 @@ impl<CB: CircuitBuilder> RegisterRepr<CB> {
 #[derive(Debug)]
 pub struct CircuitWithInput<CB: CircuitBuilder, const N: usize> {
     circuit: Circuit<CB, N>,
-    input: [CB::Register; N],
+    input: Registers<CB, N>,
 }
 
 impl<CB: CircuitBuilder, const N: usize> CircuitWithInput<CB, N> {
     /// Run the circuit
-    pub fn run(self, cb: &mut CB) -> CircuitResult<[CB::Register; N]> {
+    pub fn run(self, cb: &mut CB) -> CircuitResult<Registers<CB, N>> {
         (*self.circuit.func)(cb, self.input)
     }
 }
@@ -168,14 +170,17 @@ mod tests {
         let ra = b.try_register(3).unwrap();
         let rb = b.try_register(3).unwrap();
 
+        let gamma_circuit = Circuit::from(gamma);
+
         let [ra, rb] = Circuit::default()
             // Applies gamma to |ra>|rb>
             .apply(gamma, [0, 1])
             // Applies gamma to |ra[0] ra[1]>|ra[2]>
-            .under_new_indices(
-                [&[(0, 0), (0, 1)], &[(0, 2)]],
-                Circuit::default().apply(gamma, [0, 1]),
-            )
+            .apply_subcircuit(|[ra, _]| [ra[0..=1].to_vec(), vec![ra[2]]], &gamma_circuit)
+            // Applies gamma to |ra[0] rb[0]>|ra[2]>
+            .apply_subcircuit(|[ra, rb]| [vec![ra[0], rb[0]], vec![ra[2]]], &gamma_circuit)
+            // Applies gamma to |ra[0]>|rb[0] ra[2]>
+            .apply_subcircuit(|[ra, rb]| [vec![ra[0]], vec![rb[0], ra[2]]], &gamma_circuit)
             .input([ra, rb])
             .run(&mut b)?;
 
