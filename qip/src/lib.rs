@@ -240,6 +240,8 @@ pub mod boolean_circuits;
 pub mod builder;
 /// Standard traits for circuit builders.
 pub mod builder_traits;
+/// Circuit
+pub mod circuit;
 /// Traits for constructing conditioned circuit builders.
 pub mod conditioning;
 /// Circuit builder error types.

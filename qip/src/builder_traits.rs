@@ -1,10 +1,12 @@
-use crate::errors::{CircuitError, CircuitResult};
-use crate::types::Precision;
+use std::fmt::Debug;
+use std::num::NonZeroUsize;
+
 use num_complex::Complex;
 use num_rational::Rational64;
 use num_traits::{One, Zero};
-use std::fmt::Debug;
-use std::num::NonZeroUsize;
+
+use crate::errors::{CircuitError, CircuitResult};
+use crate::types::Precision;
 
 /// Standard functions needed by registers containing multiple qubits.
 pub trait QubitRegister {
@@ -60,7 +62,7 @@ impl<R: QubitRegister + Debug> SplitManyResult<R> {
 /// and end-result quantum state.
 pub trait CircuitBuilder {
     /// The register type used for the circuit.
-    type Register: QubitRegister + Debug;
+    type Register: QubitRegister + Debug + 'static;
     /// The struct used to represent circuit objects.
     type CircuitObject;
     /// Return type for state calculations.
