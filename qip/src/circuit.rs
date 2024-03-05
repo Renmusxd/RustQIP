@@ -207,6 +207,20 @@ impl<CB: CircuitBuilder + 'static, const N: usize> Circuit<CB, N> {
         }
     }
 
+    /// Apply a function to part of this circuit when flag is true
+    pub fn apply_when<const L: usize>(
+        self,
+        flag: bool,
+        subcircuit: impl AsSubcircuit<CB, L>,
+        indices: impl IndicesInfo<CB, N, L>,
+    ) -> Self {
+        if flag {
+            self.apply(subcircuit, indices)
+        } else {
+            self
+        }
+    }
+
     /// Set input for circuit
     pub fn input(self, input: Registers<CB, N>) -> CircuitWithInput<CB, N> {
         CircuitWithInput {
@@ -255,13 +269,15 @@ mod tests {
 
         let gamma_circuit = Circuit::from(gamma);
 
+        let measure_result_0 = 1;
+
         let [ra, rb] = Circuit::default()
             // Applies gamma to |ra>|rb>
             .apply(gamma, [0, 1])
+            // Applies gamma to |rb>|ra> when measure_result_0 = 1
+            .apply_when(measure_result_0 == 1, gamma, [1, 0])
             // Applies gamma to |ra[0] ra[1]>|ra[2]>
-            .apply(gamma, |[ra, _]: Idx<2>| {
-                [ra[0..=1].to_vec(), vec![ra[2]]]
-            })
+            .apply(gamma, |[ra, _]: Idx<2>| [ra[0..=1].to_vec(), vec![ra[2]]])
             // Applies gamma to |ra[0] rb[0]>|ra[2]>
             .apply(&gamma_circuit, |[ra, rb]: Idx<2>| {
                 [vec![ra[0], rb[0]], vec![ra[2]]]
