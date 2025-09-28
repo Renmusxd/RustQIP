@@ -1,3 +1,5 @@
+use std::mem::size_of;
+
 /// Get the index into an Op matrix
 #[inline]
 pub fn get_flat_index(nindices: usize, i: usize, j: usize) -> usize {
@@ -18,7 +20,7 @@ pub fn get_flat_index(nindices: usize, i: usize, j: usize) -> usize {
 /// ```
 #[inline]
 pub fn flip_bits(n: usize, num: usize) -> usize {
-    let leading_zeros = 8 * std::mem::size_of::<usize>() - n;
+    let leading_zeros = 8 * size_of::<usize>() - n;
     num.reverse_bits() >> leading_zeros
 }
 
