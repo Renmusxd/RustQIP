@@ -10,11 +10,11 @@ mod tests {
     use faer_core::{Mat, Parallelism};
     use ndarray::linalg::{general_mat_vec_mul, Dot};
     use ndarray::{Array1, Array2, LinalgScalar};
+    use num_traits::{Num, One, Zero};
     use qip_iterators::iterators::MatrixOp;
     use qip_iterators::matrix_ops::{apply_op, apply_ops};
     use sprs::{kronecker_product, CsMat, TriMat};
     use test::Bencher;
-    use num_traits::{Num, One, Zero};
 
     #[bench]
     fn bench_ones_qip(b: &mut Bencher) {
@@ -75,8 +75,8 @@ mod tests {
     }
 
     fn make_ones_mat<P: LinalgScalar>(n: usize) -> Array2<P> {
-        let mut acc = Array2::from_shape_vec((2, 2), vec![P::one(); 4])
-            .expect("Could not make 2x2 matrix.");
+        let mut acc =
+            Array2::from_shape_vec((2, 2), vec![P::one(); 4]).expect("Could not make 2x2 matrix.");
         for _ in 1..n {
             acc = ndarray::linalg::kron(&acc, &Array2::eye(2));
         }
@@ -123,7 +123,6 @@ mod tests {
             )
         });
     }
-
 
     #[bench]
     fn bench_ones_faer_reuse_arena(b: &mut Bencher) {

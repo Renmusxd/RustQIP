@@ -19,7 +19,7 @@ pub trait Conditionable: CircuitBuilder {
     ) -> Result<(Self::Register, Self::Register), CircuitError>;
 
     /// Construct a new circuitbuilder which conditions all unitaries with `cr`.
-    fn condition_with(&mut self, cr: Self::Register) -> Conditioned<Self> {
+    fn condition_with(&mut self, cr: Self::Register) -> Conditioned<'_, Self> {
         Conditioned::new(self, cr)
     }
 }

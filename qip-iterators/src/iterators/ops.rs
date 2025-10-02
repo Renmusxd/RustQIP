@@ -26,12 +26,10 @@ impl<P> MatrixOp<P> {
             MatrixOp::Matrix(indices, _) => indices.len(),
             MatrixOp::SparseMatrix(indices, _) => indices.len(),
             MatrixOp::Swap(a, b) => {
-                debug_assert_eq!(b.len(), a*2);
-                a*2
-            },
-            MatrixOp::Control(_, os, _) => {
-                os.len()
-            },
+                debug_assert_eq!(b.len(), a * 2);
+                a * 2
+            }
+            MatrixOp::Control(_, os, _) => os.len(),
         }
     }
 
@@ -161,9 +159,7 @@ impl<P> fmt::Debug for MatrixOp<P> {
         let (name, indices) = match self {
             MatrixOp::Matrix(indices, _) => ("Matrix".to_string(), indices.clone()),
             MatrixOp::SparseMatrix(indices, _) => ("SparseMatrix".to_string(), indices.clone()),
-            MatrixOp::Swap(_n, indices) => {
-                ("Swap".to_string(), indices.clone())
-            }
+            MatrixOp::Swap(_n, indices) => ("Swap".to_string(), indices.clone()),
             MatrixOp::Control(num_c_indices, indices, op) => {
                 let name = format!("C({:?})", *op);
                 (name, indices[..*num_c_indices].to_vec())

@@ -111,7 +111,11 @@ pub fn make_control_op<P>(
         match op {
             MatrixOp::Control(num_oc_indices, oo_indices, op) => {
                 c_indices.extend(oo_indices);
-                Ok(MatrixOp::Control(num_c_indices + num_oc_indices, c_indices, op))
+                Ok(MatrixOp::Control(
+                    num_c_indices + num_oc_indices,
+                    c_indices,
+                    op,
+                ))
             }
             op => {
                 c_indices.extend(op.indices());
@@ -258,8 +262,8 @@ pub fn make_op_matrix<P: Precision>(n: usize, op: &MatrixOp<Complex<P>>) -> Vec<
 
 #[cfg(test)]
 mod state_ops_tests {
-    use qip_iterators::matrix_ops::get_index;
     use super::*;
+    use qip_iterators::matrix_ops::get_index;
 
     #[test]
     fn test_get_bit() {
