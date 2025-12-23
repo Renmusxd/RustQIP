@@ -249,6 +249,8 @@ pub mod inverter;
 /// Types for helping procedural macros.
 #[cfg(feature = "macros")]
 pub mod macros;
+/// OpenQASM 2.0 export utilities.
+pub mod qasm;
 /// Standard quantum fourier transform implementation.
 pub mod qfft;
 /// Lower-level circuit operations.
@@ -273,4 +275,5 @@ pub mod prelude {
     pub use crate::conditioning::*;
     pub use crate::errors::*;
     pub use crate::inverter::RecursiveCircuitBuilder;
+    pub use crate::qasm::ToOpenQasm;
 }

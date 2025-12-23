@@ -105,6 +105,18 @@ pub struct BuilderCircuitObject<P: Precision> {
     object: BuilderCircuitObjectType<P>,
 }
 
+impl<P: Precision> BuilderCircuitObject<P> {
+    /// Returns the arity of this circuit object.
+    pub fn n(&self) -> usize {
+        self.n
+    }
+
+    /// Returns the inner circuit object.
+    pub fn object(&self) -> &BuilderCircuitObjectType<P> {
+        &self.object
+    }
+}
+
 /// The type of pipeline object for LocalBuilder.
 #[derive(Debug, Clone)]
 pub enum BuilderCircuitObjectType<P: Precision> {
