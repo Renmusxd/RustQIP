@@ -1,3 +1,5 @@
+use std::mem::size_of;
+
 /// Get the index into an Op matrix
 #[inline]
 pub fn get_flat_index(nindices: usize, i: usize, j: usize) -> usize {
